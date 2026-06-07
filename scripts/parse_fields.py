@@ -333,6 +333,7 @@ def extract_study_fields(study: dict) -> dict | None:
         ),
         "brief_title": brief_title,
         "official_title": official_title,
+        "brief_summary": brief_summary,
         "primary_outcomes": primary_outcomes,
         "secondary_outcomes": secondary_outcomes,
         "pubmed_links": [],
