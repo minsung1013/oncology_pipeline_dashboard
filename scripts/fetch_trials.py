@@ -45,11 +45,7 @@ BASE_PARAMS = {
         "cancer OR carcinoma OR tumor OR neoplasm OR lymphoma "
         "OR leukemia OR sarcoma OR melanoma"
     ),
-    "filter.overallStatus": (
-        "RECRUITING,ACTIVE_NOT_RECRUITING,"
-        "NOT_YET_RECRUITING,ENROLLING_BY_INVITATION"
-    ),
-    # v2 API: studyType/phase/funderType 는 aggFilters 로 지정 (소문자)
+    # filter.overallStatus 제거 → 전체 상태 수집 (COMPLETED 포함)
     "aggFilters": "studyType:int,phase:1,funderType:industry",
     "fields": ",".join(FIELDS),
     "countTotal": "true",
