@@ -116,6 +116,86 @@ BIOMARKER_EXACT_KEYWORDS: list[str] = [
     "RET", "MET", "ALK", "TMB", "MSI", "TMB", "ER", "PR", "AR",
 ]
 
+# ---------------------------------------------------------------------------
+# 대표 약물 선택용 분류 (병용요법에서 주연 약물 식별)
+# ---------------------------------------------------------------------------
+
+# 지지요법/비치료 약물 — 대표가 될 수 없음 (단독일 때만 예외)
+SUPPORTIVE_AGENTS = {
+    "dexamethasone", "prednisone", "prednisolone", "methylprednisolone",
+    "hydrocortisone", "anticoagulant", "anticoagulants", "enoxaparin",
+    "aspirin", "warfarin", "filgrastim", "pegfilgrastim", "g-csf",
+    "ondansetron", "allopurinol", "folic acid", "folinic acid", "leucovorin",
+    "vitamin b12", "placebo", "saline", "normal saline", "loperamide",
+    "antihistamine", "acetaminophen", "paracetamol",
+}
+
+# 화학요법 백본 — 표적/신약이 있으면 후순위
+CHEMO_BACKBONE = {
+    "carboplatin", "cisplatin", "oxaliplatin", "cyclophosphamide", "ifosfamide",
+    "docetaxel", "paclitaxel", "nab-paclitaxel", "abraxane",
+    "doxorubicin", "epirubicin", "daunorubicin", "liposomal doxorubicin",
+    "gemcitabine", "pemetrexed", "fluorouracil", "5-fu", "5-fluorouracil",
+    "capecitabine", "etoposide", "vincristine", "vinblastine", "vinorelbine",
+    "irinotecan", "topotecan", "methotrexate", "cytarabine", "bendamustine",
+    "mitomycin", "temozolomide", "dacarbazine", "fludarabine", "melphalan",
+    "busulfan", "oxaliplatin", "nab paclitaxel",
+}
+
+# 표적/신약을 시사하는 약물명 패턴 (suffix)
+_TARGETED_SUFFIXES = (
+    "mab", "nib", "tinib", "ciclib", "parib", "lisib", "degib", "rafenib",
+    "sertib", "metinib", "demcizumab", "ndb", "dxd",
+)
+
+
+def _clean_drug_name(name: str) -> str:
+    """용량/스케줄 토큰 제거로 약물명 정규화 (병용 표시·dedup용)."""
+    s = name.strip()
+    # "Drug 100mg", "Drug 30 mg", "Drug Q3W", "Drug QD/BID" 등 제거
+    s = re.sub(r"\s+\d+(\.\d+)?\s?(mg|mcg|g|ml|mg/kg|mg/m2)\b.*", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"\s+(q\d?w|q\dd|qd|bid|tid|qw|iv|po|sc)\b.*", "", s, flags=re.IGNORECASE)
+    return s.strip()
+
+
+def _drug_score(name: str) -> int:
+    """대표 약물 점수: 높을수록 주연. 3=표적/신약, 2=일반, 1=화학백본, 0=지지요법."""
+    n = _clean_drug_name(name).lower()
+    if n in SUPPORTIVE_AGENTS:
+        return 0
+    if n in CHEMO_BACKBONE:
+        return 1
+    if n.endswith(_TARGETED_SUFFIXES):
+        return 3
+    # 코드명 패턴 (영문+숫자 조합, 예: NGM120, BL-M07D1, 7MW3711)
+    if re.search(r"[A-Za-z]+[-]?\d", name) and not n.endswith(("platin", "rubicin")):
+        return 3
+    return 2
+
+
+def select_primary_drug(drug_names: list[str]) -> tuple[str, list[str]]:
+    """
+    병용 약물 리스트에서 (대표 약물, 병용 약물 리스트) 반환.
+    점수 최고를 대표로, 동점이면 원래 순서 우선.
+    """
+    # 정규화 + 중복 제거 (순서 유지)
+    seen = set()
+    cleaned = []
+    for nm in drug_names:
+        c = _clean_drug_name(nm)
+        key = c.lower()
+        if c and key not in seen:
+            seen.add(key)
+            cleaned.append(c)
+    if not cleaned:
+        return "Unknown", []
+
+    # 점수 최고 (동점 시 첫 등장 우선)
+    best_idx = max(range(len(cleaned)), key=lambda i: (_drug_score(cleaned[i]), -i))
+    primary = cleaned[best_idx]
+    combo = [c for i, c in enumerate(cleaned) if i != best_idx]
+    return primary, combo
+
 CANCER_CATEGORY_MAP: dict[str, list[str]] = {
     "Lung":          ["lung", "NSCLC", "SCLC", "non-small cell", "small cell lung"],
     "Colorectal":    ["colorectal", "colon", "rectal", "rectum", "CRC"],
@@ -255,9 +335,19 @@ def extract_study_fields(study: dict) -> dict | None:
     if not drug_interventions:
         return None
 
-    # 대표 약물명: 첫 번째 drug intervention
-    drug_name = drug_interventions[0].get("name", "Unknown")
-    intervention_desc = " ".join(
+    # 대표 약물 선택 (병용요법에서 주연 식별) + 병용 약물 보존
+    all_names = [i.get("name", "") for i in drug_interventions if i.get("name")]
+    drug_name, combo_drugs = select_primary_drug(all_names)
+    is_combination = len(combo_drugs) > 0
+    all_drugs = [drug_name] + combo_drugs
+
+    # 모달리티 추론용 설명: 대표 약물의 intervention description 우선
+    primary_desc = ""
+    for i in drug_interventions:
+        if _clean_drug_name(i.get("name", "")).lower() == drug_name.lower():
+            primary_desc = i.get("description", "")
+            break
+    intervention_desc = primary_desc or " ".join(
         i.get("description", "") for i in drug_interventions
     )
 
@@ -307,6 +397,9 @@ def extract_study_fields(study: dict) -> dict | None:
 
     return {
         "drug_name": drug_name,
+        "combo_drugs": combo_drugs,
+        "all_drugs": all_drugs,
+        "is_combination": is_combination,
         "company": lead_sponsor,
         "collaborators": collaborators,
         "partnership_status": partnership_status,

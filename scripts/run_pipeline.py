@@ -40,10 +40,12 @@ def _entry_key(d: dict) -> tuple:
 
 def merge_existing_papers(records: list[dict], path: str) -> tuple[int, set]:
     """
-    기존 pipeline.json에서 논문 링크를 가져와 보존 (증분 매칭).
-    반환: (보존된 항목 수, 기존에 존재했던 키 집합)
-    - 기존에 논문이 있던 항목 → 그대로 복사 (재검색 안 함)
-    - 기존에 있었으나 논문이 0이던 항목 → 키만 기록 (재검색 스킵용)
+    기존 pipeline.json에서 EPMC 논문 링크를 NCT ID 기준으로 보존 (증분 매칭).
+    NCT 기반이라 약물명/dedup 변경에도 안전.
+    반환: (보존된 항목 수, 이미 검색된 NCT 집합)
+    - Stage 1(clinicaltrials) 링크는 파싱에서 재생성되므로 보존 대상 아님
+    - europepmc 링크만 NCT별로 인덱싱해 복원
+    - 기존에 등장한 모든 NCT를 'searched'로 기록 (재검색 스킵용)
     """
     if not os.path.exists(path):
         return 0, set()
@@ -53,22 +55,32 @@ def merge_existing_papers(records: list[dict], path: str) -> tuple[int, set]:
     except Exception:
         return 0, set()
 
-    links_map = {}
-    known_keys = set()
+    nct_links: dict[str, list] = {}
+    searched_ncts: set = set()
     for d in old.get("drugs", []):
-        k = _entry_key(d)
-        known_keys.add(k)
-        if d.get("pubmed_links"):
-            links_map[k] = d["pubmed_links"]
+        for n in d.get("nct_ids", []):
+            searched_ncts.add(n)
+        for link in d.get("pubmed_links", []):
+            if link.get("source", "").startswith("europepmc"):
+                n = link.get("nct")
+                if n:
+                    nct_links.setdefault(n, []).append(link)
 
     preserved = 0
     for rec in records:
-        if not rec.get("pubmed_links"):
-            k = _entry_key(rec)
-            if k in links_map:
-                rec["pubmed_links"] = links_map[k]
-                preserved += 1
-    return preserved, known_keys
+        if rec.get("pubmed_links"):
+            continue  # Stage 1에서 이미 채워짐
+        seen, merged = set(), []
+        for n in rec.get("nct_ids", []):
+            for link in nct_links.get(n, []):
+                pmid = link.get("pmid", "")
+                if pmid and pmid not in seen:
+                    seen.add(pmid)
+                    merged.append(link)
+        if merged:
+            rec["pubmed_links"] = merged[:3]
+            preserved += 1
+    return preserved, searched_ncts
 
 
 def build_pipeline_json(records: list[dict], raw_path: str) -> dict:
@@ -130,11 +142,11 @@ def main():
     print("=" * 60)
     print("STEP 2.5: Merge existing papers (incremental)")
     print("=" * 60)
-    preserved, known_keys = merge_existing_papers(records, OUTPUT_PATH)
+    preserved, searched_ncts = merge_existing_papers(records, OUTPUT_PATH)
     print(f"  Preserved papers from existing: {preserved}")
-    print(f"  Known keys: {len(known_keys)}")
+    print(f"  Already-searched NCTs: {len(searched_ncts)}")
 
-    # 3. 논문 매칭 — 신규 항목만 (기존에 검색한 키는 스킵)
+    # 3. 논문 매칭 — 신규 항목만 (모든 NCT가 이미 검색됐으면 스킵)
     if not args.skip_pubmed:
         print()
         print("=" * 60)
@@ -146,7 +158,8 @@ def main():
         else:
             new_records = [
                 r for r in records
-                if not r.get("pubmed_links") and _entry_key(r) not in known_keys
+                if not r.get("pubmed_links")
+                and not all(n in searched_ncts for n in r.get("nct_ids", []))
             ]
             print(f"  New entries to search: {len(new_records)} (incremental)")
         enrich_with_pubmed(new_records)

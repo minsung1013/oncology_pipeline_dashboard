@@ -37,6 +37,7 @@ export function applyFilters(drugs, filters) {
       const q = keyword.toLowerCase()
       const searchable = [
         drug.drug_name,
+        ...(drug.combo_drugs ?? []),
         drug.company,
         drug.target,
         drug.modality,

@@ -17,27 +17,35 @@ const COLUMNS = [
     cell: ({ row }) => {
       const d = row.original
       const url = d.clinicaltrials_url || (d.nct_ids?.[0] ? `https://clinicaltrials.gov/study/${d.nct_ids[0]}` : null)
+      const combo = d.combo_drugs ?? []
       return (
         <div>
-          {url ? (
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-600 hover:underline font-medium"
-            >
-              {d.drug_name}
-            </a>
-          ) : (
-            <span className="font-medium">{d.drug_name}</span>
-          )}
-          {d.nct_ids?.length > 1 && (
-            <span className="ml-1 text-xs text-slate-400">+{d.nct_ids.length - 1}</span>
+          <div>
+            {url ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-600 hover:underline font-medium"
+              >
+                {d.drug_name}
+              </a>
+            ) : (
+              <span className="font-medium">{d.drug_name}</span>
+            )}
+            {d.nct_ids?.length > 1 && (
+              <span className="ml-1 text-xs text-slate-400">+{d.nct_ids.length - 1} NCT</span>
+            )}
+          </div>
+          {combo.length > 0 && (
+            <div className="text-xs text-slate-400 mt-0.5" title={combo.join(', ')}>
+              + {combo.join(', ')}
+            </div>
           )}
         </div>
       )
     },
-    size: 160,
+    size: 180,
   }),
 
   col.accessor('company', {
