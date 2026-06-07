@@ -108,6 +108,14 @@ const COLUMNS = [
     size: 140,
   }),
 
+  col.accessor('start_date', {
+    header: 'Start',
+    cell: ({ getValue }) => (
+      <span className="text-sm text-slate-600">{getValue() || '—'}</span>
+    ),
+    size: 100,
+  }),
+
   col.accessor('primary_completion_date', {
     header: 'Completion',
     cell: ({ getValue }) => (
