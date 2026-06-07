@@ -95,7 +95,7 @@ def main():
     payload = build_pipeline_json(records, raw_path)
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+        json.dump(payload, f, ensure_ascii=False, separators=(',', ':'))
 
     size_mb = os.path.getsize(OUTPUT_PATH) / 1024 / 1024
     print(f"Saved -> {OUTPUT_PATH}  ({size_mb:.1f} MB)")
