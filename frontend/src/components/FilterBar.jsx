@@ -40,6 +40,7 @@ export default function FilterBar({ options, filters, onChange }) {
     filters.phases.length,
     filters.overallStatuses.length,
     filters.partnershipStatus !== 'all' ? 1 : 0,
+    filters.regimen !== 'all' ? 1 : 0,
     filters.needsReview ? 1 : 0,
     filters.startYear.from !== 'all' || filters.startYear.to !== 'all' ? 1 : 0,
     filters.completionYear.from !== 'all' || filters.completionYear.to !== 'all' ? 1 : 0,
@@ -115,6 +116,20 @@ export default function FilterBar({ options, filters, onChange }) {
         </select>
       </div>
 
+      {/* Regimen (mono / combo) */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Regimen</span>
+        <select
+          value={filters.regimen}
+          onChange={(e) => set('regimen', e.target.value)}
+          className="border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          <option value="all">All</option>
+          <option value="mono">Monotherapy</option>
+          <option value="combo">Combination</option>
+        </select>
+      </div>
+
       <Divider />
 
       {/* Start Year range */}
@@ -160,6 +175,7 @@ export default function FilterBar({ options, filters, onChange }) {
               phases: [],
               overallStatuses: [],
               partnershipStatus: 'all',
+              regimen: 'all',
               needsReview: false,
               startYear: { from: 'all', to: 'all' },
               completionYear: { from: 'all', to: 'all' },

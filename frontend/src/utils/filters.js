@@ -5,6 +5,7 @@ export function applyFilters(drugs, filters) {
     phases,
     overallStatuses,
     partnershipStatus,
+    regimen,
     needsReview,
     startYear,
     completionYear,
@@ -17,6 +18,8 @@ export function applyFilters(drugs, filters) {
     if (phases.length > 0 && !phases.some((p) => (drug.phases ?? []).includes(p))) return false
     if (overallStatuses.length > 0 && !overallStatuses.includes(drug.overall_status)) return false
     if (partnershipStatus !== 'all' && drug.partnership_status !== partnershipStatus) return false
+    if (regimen === 'mono' && drug.is_combination) return false
+    if (regimen === 'combo' && !drug.is_combination) return false
     if (needsReview && drug.target !== 'Unknown') return false
 
     if (startYear.from !== 'all' || startYear.to !== 'all') {

@@ -11,41 +11,66 @@ import { ModalityBadge, StatusDot } from './CdxBadge'
 
 const col = createColumnHelper()
 
+function DrugCell({ d }) {
+  const [expanded, setExpanded] = useState(false)
+  const ncts = d.nct_ids ?? []
+  const combo = d.combo_drugs ?? []
+  const primaryUrl = d.clinicaltrials_url || (ncts[0] ? `https://clinicaltrials.gov/study/${ncts[0]}` : null)
+
+  return (
+    <div>
+      {/* 대표 약물명 → 첫 NCT 링크 */}
+      <div>
+        {primaryUrl ? (
+          <a href={primaryUrl} target="_blank" rel="noreferrer"
+             className="text-blue-600 hover:underline font-medium">
+            {d.drug_name}
+          </a>
+        ) : (
+          <span className="font-medium">{d.drug_name}</span>
+        )}
+        {ncts.length > 1 && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="ml-1.5 text-xs text-slate-400 hover:text-blue-500"
+          >
+            {expanded ? '▲' : `+${ncts.length - 1} NCT ▼`}
+          </button>
+        )}
+      </div>
+
+      {/* 병용 약물 */}
+      {combo.length > 0 && (
+        <div className="text-xs text-slate-400 mt-0.5" title={combo.join(', ')}>
+          + {combo.join(', ')}
+        </div>
+      )}
+
+      {/* 확장 시 전체 NCT 링크 목록 */}
+      {expanded && ncts.length > 1 && (
+        <div className="mt-1 flex flex-col gap-0.5 border-l-2 border-slate-100 pl-2">
+          {ncts.map((nct) => (
+            <a
+              key={nct}
+              href={`https://clinicaltrials.gov/study/${nct}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-blue-500 hover:underline font-mono"
+            >
+              {nct}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const COLUMNS = [
   col.accessor('drug_name', {
     header: 'Drug',
-    cell: ({ row }) => {
-      const d = row.original
-      const url = d.clinicaltrials_url || (d.nct_ids?.[0] ? `https://clinicaltrials.gov/study/${d.nct_ids[0]}` : null)
-      const combo = d.combo_drugs ?? []
-      return (
-        <div>
-          <div>
-            {url ? (
-              <a
-                href={url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-blue-600 hover:underline font-medium"
-              >
-                {d.drug_name}
-              </a>
-            ) : (
-              <span className="font-medium">{d.drug_name}</span>
-            )}
-            {d.nct_ids?.length > 1 && (
-              <span className="ml-1 text-xs text-slate-400">+{d.nct_ids.length - 1} NCT</span>
-            )}
-          </div>
-          {combo.length > 0 && (
-            <div className="text-xs text-slate-400 mt-0.5" title={combo.join(', ')}>
-              + {combo.join(', ')}
-            </div>
-          )}
-        </div>
-      )
-    },
-    size: 180,
+    cell: ({ row }) => <DrugCell d={row.original} />,
+    size: 200,
   }),
 
   col.accessor('company', {

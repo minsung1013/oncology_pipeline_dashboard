@@ -16,6 +16,7 @@ const DEFAULT_FILTERS = {
   phases: [],
   overallStatuses: [],
   partnershipStatus: 'all',
+  regimen: 'all',
   needsReview: false,
   startYear: { from: 'all', to: 'all' },
   completionYear: { from: 'all', to: 'all' },
