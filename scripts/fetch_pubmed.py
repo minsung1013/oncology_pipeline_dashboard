@@ -1,199 +1,115 @@
 """
-논문 수집 스크립트.
-Stage 2: PubMed E-utilities (약물명 검색)
-Stage 3: Europe PMC (ASCO/ESMO 학회 초록 포함)
+논문 수집 — 정밀도 우선 전략.
+
+Stage 1 (parse_fields.py): ClinicalTrials.gov referencesModule (연구자 큐레이션)
+Stage 2 (이 파일):        Europe PMC를 NCT ID로 검색
+                          쿼리: "<NCT>" AND "<drug>" NOT review
+                          → 그 시험을 직접 보고한 1차 연구만, 리뷰/노이즈 배제
+                          관련 논문이 명확하지 않으면 빈 결과 (노이즈보다 공백 선호)
 """
 
-import os
 import time
 import requests
 
-# ── PubMed ──────────────────────────────────────────────────────────────────
-
-PUBMED_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
-NCBI_API_KEY = os.environ.get("NCBI_API_KEY")
-_PUBMED_SLEEP = 0.34 if not NCBI_API_KEY else 0.1
-
-# ── Europe PMC ───────────────────────────────────────────────────────────────
-
 EPMC_BASE = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
-_EPMC_SLEEP = 0.2  # 초당 5회 권장
+_EPMC_SLEEP = 0.2  # 초당 5회
+
+# 항목당 검색할 최대 NCT 수 (대표 시험 위주)
+_MAX_NCT_PER_ENTRY = 3
+# 항목당 최종 논문 링크 수
+_MAX_LINKS = 3
 
 
-# ---------------------------------------------------------------------------
-# Stage 2: PubMed
-# ---------------------------------------------------------------------------
-
-def fetch_pubmed_links(drug_name: str, max_results: int = 3, indication: str = None) -> list[dict]:
-    pmids = _esearch(drug_name, max_results, indication)
-    if not pmids:
-        # indication 조합 결과 없으면 약물명만으로 재시도
-        if indication:
-            pmids = _esearch(drug_name, max_results, indication=None)
-    if not pmids:
-        return []
-    time.sleep(_PUBMED_SLEEP)
-    return _efetch(pmids)
-
-
-def _esearch(drug_name: str, max_results: int, indication: str = None) -> list[str]:
-    if indication and indication not in ("Unknown", "Other"):
-        term = f"{drug_name}[Title/Abstract] AND {indication}[Title/Abstract] AND clinical trial[PT]"
-    else:
-        term = f"{drug_name}[Title/Abstract] AND clinical trial[PT]"
-    params = {
-        "db": "pubmed",
-        "term": term,
-        "retmax": max_results,
-        "retmode": "json",
-        "sort": "relevance",
-    }
-    if NCBI_API_KEY:
-        params["api_key"] = NCBI_API_KEY
-    try:
-        resp = requests.get(f"{PUBMED_BASE}esearch.fcgi", params=params, timeout=15)
-        resp.raise_for_status()
-        return resp.json().get("esearchresult", {}).get("idlist", [])
-    except Exception as e:
-        print(f"  [PubMed esearch] {drug_name}: {e}")
-        return []
-
-
-def _efetch(pmids: list[str]) -> list[dict]:
-    params = {
-        "db": "pubmed",
-        "id": ",".join(pmids),
-        "retmode": "json",
-        "rettype": "abstract",
-    }
-    if NCBI_API_KEY:
-        params["api_key"] = NCBI_API_KEY
-    try:
-        resp = requests.get(f"{PUBMED_BASE}esummary.fcgi", params=params, timeout=15)
-        resp.raise_for_status()
-        result = resp.json().get("result", {})
-        links = []
-        for pmid in pmids:
-            title = result.get(pmid, {}).get("title", "")
-            if title:
-                links.append({
-                    "pmid": pmid,
-                    "title": title,
-                    "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}",
-                    "source": "pubmed_search",
-                })
-        return links
-    except Exception as e:
-        print(f"  [PubMed efetch] {pmids}: {e}")
-        return []
-
-
-# ---------------------------------------------------------------------------
-# Stage 3: Europe PMC (ASCO/ESMO/AACR/ASH 초록 포함)
-# ---------------------------------------------------------------------------
-
-def fetch_europepmc_links(drug_name: str, max_results: int = 3, indication: str = None) -> list[dict]:
+def fetch_papers_by_nct(nct_id: str, drug_name: str, max_results: int = 5) -> list[dict]:
     """
-    Europe PMC 검색 — PubMed보다 넓은 범위 (학회 초록, preprint 포함).
-    ASCO/ESMO/AACR/ASH 초록도 커버.
+    정밀도 우선: 해당 NCT를 직접 언급하고 약물명도 포함하는 1차 연구 논문.
+    리뷰/메타분석 제외. 결과 없으면 빈 리스트 (노이즈 회피).
     """
-    if indication and indication not in ("Unknown", "Other"):
-        query = f'TITLE:"{drug_name}" AND (TITLE:"{indication}" OR ABSTRACT:"{indication}") AND (SRC:MED OR SRC:PPR)'
-    else:
-        query = f'TITLE:"{drug_name}" AND (SRC:MED OR SRC:PPR)'
+    if not nct_id or not drug_name or drug_name == "Unknown":
+        return []
+
+    query = f'"{nct_id}" AND "{drug_name}" NOT (PUB_TYPE:"review")'
     params = {
         "query": query,
         "resultType": "lite",
         "pageSize": max_results,
         "format": "json",
-        "sort": "P_PDATE_D desc",  # 최신순
+        "sort": "CITED desc",
     }
     try:
         resp = requests.get(EPMC_BASE, params=params, timeout=15)
         resp.raise_for_status()
         results = resp.json().get("resultList", {}).get("result", [])
-        links = []
-        for r in results:
-            pmid = r.get("pmid", "")
-            title = r.get("title", "")
-            if not title:
-                continue
-            # PMID 있으면 PubMed URL, 없으면 Europe PMC URL
-            if pmid:
-                url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}"
-            else:
-                epmc_id = r.get("id", "")
-                source = r.get("source", "PPR")
-                url = f"https://europepmc.org/article/{source}/{epmc_id}"
-
-            links.append({
-                "pmid": pmid or r.get("id", ""),
-                "title": title,
-                "url": url,
-                "source": "europepmc",
-            })
-        return links
     except Exception as e:
-        print(f"  [Europe PMC] {drug_name}: {e}")
+        print(f"  [EPMC] {nct_id}/{drug_name}: {e}")
         return []
 
+    links = []
+    for r in results:
+        title = r.get("title", "")
+        if not title:
+            continue
+        pmid = r.get("pmid", "")
+        if pmid:
+            url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}"
+        else:
+            url = f"https://europepmc.org/article/{r.get('source','PPR')}/{r.get('id','')}"
+        links.append({
+            "pmid": pmid or r.get("id", ""),
+            "title": title,
+            "url": url,
+            "source": "europepmc_nct",
+            "nct": nct_id,
+        })
+    return links
 
-# ---------------------------------------------------------------------------
-# 통합 enrich
-# ---------------------------------------------------------------------------
+
+def fetch_links_for_entry(record: dict) -> list[dict]:
+    """한 약물 항목의 NCT들을 검색해 논문 링크를 합침 (PMID 중복 제거)."""
+    drug_name = record.get("drug_name", "")
+    ncts = record.get("nct_ids", [])[:_MAX_NCT_PER_ENTRY]
+
+    seen = set()
+    merged = []
+    for nct in ncts:
+        for link in fetch_papers_by_nct(nct, drug_name):
+            pmid = link.get("pmid", "")
+            if pmid and pmid not in seen:
+                seen.add(pmid)
+                merged.append(link)
+        time.sleep(_EPMC_SLEEP)
+    return merged[:_MAX_LINKS]
+
 
 def enrich_with_pubmed(records: list[dict], delay: float = None) -> list[dict]:
     """
-    Stage 2: pubmed_links 비어있는 것만 PubMed 검색.
-    Stage 3: Stage 2 후에도 비어있는 것만 Europe PMC 검색.
+    Stage 2: Stage 1(referencesModule)에서 논문을 못 찾은 항목만
+    Europe PMC NCT 검색으로 보강. 정밀도 우선.
     """
-    pubmed_sleep = delay if delay is not None else _PUBMED_SLEEP
+    targets = [r for r in records if not r.get("pubmed_links")]
+    stage1 = len(records) - len(targets)
+    print(f"  Stage 1 filled: {stage1}  |  Stage 2 (EPMC by NCT): {len(targets)}")
 
-    # Stage 2: PubMed
-    stage2_targets = [r for r in records if not r.get("pubmed_links")]
-    stage1_count = len(records) - len(stage2_targets)
-    print(f"  Stage 1 filled: {stage1_count}  |  Stage 2 (PubMed): {len(stage2_targets)}")
-
-    for i, rec in enumerate(stage2_targets):
-        drug_name = rec.get("drug_name", "")
-        if not drug_name or drug_name == "Unknown":
-            continue
-        indication = rec.get("cancer_category", None)
-        links = fetch_pubmed_links(drug_name, indication=indication)
-        rec["pubmed_links"] = links
+    found = 0
+    for i, rec in enumerate(targets):
+        links = fetch_links_for_entry(rec)
+        if links:
+            rec["pubmed_links"] = links
+            found += 1
         if (i + 1) % 200 == 0:
-            print(f"  Stage 2 progress: {i + 1}/{len(stage2_targets)}")
-        time.sleep(pubmed_sleep)
+            print(f"  Stage 2 progress: {i + 1}/{len(targets)}  (found {found})")
 
-    # Stage 3: Europe PMC (Stage 2 후에도 비어있는 것)
-    stage3_targets = [r for r in records if not r.get("pubmed_links")]
-    print(f"  Stage 3 (Europe PMC): {len(stage3_targets)}")
-
-    for i, rec in enumerate(stage3_targets):
-        drug_name = rec.get("drug_name", "")
-        if not drug_name or drug_name == "Unknown":
-            continue
-        indication = rec.get("cancer_category", None)
-        links = fetch_europepmc_links(drug_name, indication=indication)
-        rec["pubmed_links"] = links
-        if (i + 1) % 200 == 0:
-            print(f"  Stage 3 progress: {i + 1}/{len(stage3_targets)}")
-        time.sleep(_EPMC_SLEEP)
-
+    print(f"  Stage 2 done: {found} entries newly matched")
     return records
 
 
 if __name__ == "__main__":
     import argparse, json
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Test precision-first paper search")
+    parser.add_argument("nct_id")
     parser.add_argument("drug_name")
-    parser.add_argument("--stage", choices=["pubmed", "epmc", "both"], default="both")
     args = parser.parse_args()
 
-    if args.stage in ("pubmed", "both"):
-        print("=== PubMed ===")
-        print(json.dumps(fetch_pubmed_links(args.drug_name), ensure_ascii=False, indent=2))
-    if args.stage in ("epmc", "both"):
-        print("=== Europe PMC ===")
-        print(json.dumps(fetch_europepmc_links(args.drug_name), ensure_ascii=False, indent=2))
+    links = fetch_papers_by_nct(args.nct_id, args.drug_name)
+    print(json.dumps(links, ensure_ascii=False, indent=2))
