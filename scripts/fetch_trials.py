@@ -45,8 +45,8 @@ BASE_PARAMS = {
         "cancer OR carcinoma OR tumor OR neoplasm OR lymphoma "
         "OR leukemia OR sarcoma OR melanoma"
     ),
-    # filter.overallStatus 제거 → 전체 상태 수집 (COMPLETED 포함)
-    "aggFilters": "studyType:int,phase:1,funderType:industry",
+    # phase 필터 제거 → 전체 Phase 수집 (UI에서 필터링)
+    "aggFilters": "studyType:int,funderType:industry",
     "fields": ",".join(FIELDS),
     "countTotal": "true",
     "pageSize": 100,

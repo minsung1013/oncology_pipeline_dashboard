@@ -1,3 +1,12 @@
+const PHASE_LABELS = {
+  EARLY_PHASE1: 'Early Phase 1',
+  PHASE1:       'Phase 1',
+  PHASE2:       'Phase 2',
+  PHASE3:       'Phase 3',
+  PHASE4:       'Phase 4',
+  NA:           'N/A',
+}
+
 const STATUS_LABELS = {
   RECRUITING:              '모집중',
   ACTIVE_NOT_RECRUITING:   '진행중(모집완료)',
@@ -11,7 +20,7 @@ const STATUS_LABELS = {
 }
 
 export default function FilterBar({ options, filters, onChange }) {
-  const { cancerCategories, modalities, overallStatuses, minYear, maxYear } = options
+  const { cancerCategories, modalities, phases, overallStatuses, minYear, maxYear } = options
 
   function toggle(key, value) {
     const current = filters[key]
@@ -28,6 +37,7 @@ export default function FilterBar({ options, filters, onChange }) {
   const activeCount = [
     filters.cancerCategories.length,
     filters.modalities.length,
+    filters.phases.length,
     filters.overallStatuses.length,
     filters.partnershipStatus !== 'all' ? 1 : 0,
     filters.needsReview ? 1 : 0,
@@ -68,6 +78,16 @@ export default function FilterBar({ options, filters, onChange }) {
         selected={filters.modalities}
         onToggle={(v) => toggle('modalities', v)}
         onClear={() => set('modalities', [])}
+      />
+
+      {/* Phase */}
+      <MultiSelect
+        label="Phase"
+        options={phases}
+        selected={filters.phases}
+        onToggle={(v) => toggle('phases', v)}
+        onClear={() => set('phases', [])}
+        renderOption={(opt) => PHASE_LABELS[opt] ?? opt}
       />
 
       {/* 등록 상태 */}
@@ -140,6 +160,7 @@ export default function FilterBar({ options, filters, onChange }) {
             onChange({
               cancerCategories: [],
               modalities: [],
+              phases: [],
               overallStatuses: [],
               partnershipStatus: 'all',
               needsReview: false,

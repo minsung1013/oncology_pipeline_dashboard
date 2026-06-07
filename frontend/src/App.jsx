@@ -13,6 +13,7 @@ const PIPELINE_URL =
 const DEFAULT_FILTERS = {
   cancerCategories: [],
   modalities: [],
+  phases: [],
   overallStatuses: [],
   partnershipStatus: 'all',
   needsReview: false,

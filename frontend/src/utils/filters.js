@@ -2,6 +2,7 @@ export function applyFilters(drugs, filters) {
   const {
     cancerCategories,
     modalities,
+    phases,
     overallStatuses,
     partnershipStatus,
     needsReview,
@@ -13,6 +14,8 @@ export function applyFilters(drugs, filters) {
   return drugs.filter((drug) => {
     if (cancerCategories.length > 0 && !cancerCategories.includes(drug.cancer_category)) return false
     if (modalities.length > 0 && !modalities.includes(drug.modality)) return false
+    // phases: 약물의 phases 배열 중 하나라도 선택된 phase를 포함하면 통과
+    if (phases.length > 0 && !phases.some((p) => (drug.phases ?? []).includes(p))) return false
     if (overallStatuses.length > 0 && !overallStatuses.includes(drug.overall_status)) return false
     if (partnershipStatus !== 'all' && drug.partnership_status !== partnershipStatus) return false
     if (needsReview && drug.target !== 'Unknown') return false
@@ -55,9 +58,13 @@ export function applyFilters(drugs, filters) {
   })
 }
 
+const PHASE_ORDER = ['EARLY_PHASE1','PHASE1','PHASE2','PHASE3','PHASE4','NA']
+
 export function getFilterOptions(drugs) {
   const cancerCategories = [...new Set(drugs.map((d) => d.cancer_category).filter(Boolean))].sort()
   const modalities = [...new Set(drugs.map((d) => d.modality).filter(Boolean))].sort()
+  const phases = [...new Set(drugs.flatMap((d) => d.phases ?? []).filter(Boolean))]
+    .sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b))
   const overallStatuses = [...new Set(drugs.map((d) => d.overall_status).filter(Boolean))].sort()
 
   // Completion Date 연도 범위
@@ -67,7 +74,7 @@ export function getFilterOptions(drugs) {
   const minYear = years.length ? Math.min(...years) : 2010
   const maxYear = years.length ? Math.max(...years) : 2030
 
-  return { cancerCategories, modalities, overallStatuses, minYear, maxYear }
+  return { cancerCategories, modalities, phases, overallStatuses, minYear, maxYear }
 }
 
 export function groupByCompany(drugs) {

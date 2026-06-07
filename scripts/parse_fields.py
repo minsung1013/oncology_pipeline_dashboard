@@ -250,7 +250,7 @@ def extract_study_fields(study: dict) -> dict | None:
 
     overall_status = status_mod.get("overallStatus", "")
     phase_list = proto.get("designModule", {}).get("phases", [])
-    phase = phase_list[0] if phase_list else "Phase 1"
+    phase = "/".join(phase_list) if phase_list else "UNKNOWN"
 
     lead_sponsor = sponsor_mod.get("leadSponsor", {}).get("name", "")
     collaborators = [
@@ -290,6 +290,7 @@ def extract_study_fields(study: dict) -> dict | None:
         "condition_normalized": condition_normalized,
         "cancer_category": cancer_category,
         "phase": phase,
+        "phases": phase_list,
         "overall_status": overall_status,
         "primary_completion_date": primary_completion,
         "start_date": start_date,
