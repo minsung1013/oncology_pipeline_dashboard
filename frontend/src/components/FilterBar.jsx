@@ -41,8 +41,8 @@ export default function FilterBar({ options, filters, onChange }) {
     filters.overallStatuses.length,
     filters.partnershipStatus !== 'all' ? 1 : 0,
     filters.needsReview ? 1 : 0,
-    filters.startYear !== 'all' ? 1 : 0,
-    filters.completionYear !== 'all' ? 1 : 0,
+    filters.startYear.from !== 'all' || filters.startYear.to !== 'all' ? 1 : 0,
+    filters.completionYear.from !== 'all' || filters.completionYear.to !== 'all' ? 1 : 0,
     filters.keyword ? 1 : 0,
   ].reduce((a, b) => a + b, 0)
 
@@ -117,34 +117,24 @@ export default function FilterBar({ options, filters, onChange }) {
 
       <Divider />
 
-      {/* Start Year */}
-      <div className="flex items-center gap-2">
+      {/* Start Year range */}
+      <div className="flex items-center gap-1">
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Start</span>
-        <select
+        <YearRangeSelect
+          years={startYears}
           value={filters.startYear}
-          onChange={(e) => set('startYear', e.target.value)}
-          className="border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          <option value="all">All</option>
-          {startYears.map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+          onChange={(v) => set('startYear', v)}
+        />
       </div>
 
-      {/* Completion Year */}
-      <div className="flex items-center gap-2">
+      {/* Completion Year range */}
+      <div className="flex items-center gap-1">
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Completion</span>
-        <select
+        <YearRangeSelect
+          years={completionYears}
           value={filters.completionYear}
-          onChange={(e) => set('completionYear', e.target.value)}
-          className="border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          <option value="all">All</option>
-          {completionYears.map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+          onChange={(v) => set('completionYear', v)}
+        />
       </div>
 
       <Divider />
@@ -171,8 +161,8 @@ export default function FilterBar({ options, filters, onChange }) {
               overallStatuses: [],
               partnershipStatus: 'all',
               needsReview: false,
-              startYear: 'all',
-              completionYear: 'all',
+              startYear: { from: 'all', to: 'all' },
+              completionYear: { from: 'all', to: 'all' },
               keyword: '',
             })
           }
@@ -182,6 +172,35 @@ export default function FilterBar({ options, filters, onChange }) {
           Clear filters
         </button>
       )}
+    </div>
+  )
+}
+
+function YearRangeSelect({ years, value, onChange }) {
+  const cls = "border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        value={value.from}
+        onChange={(e) => onChange({ ...value, from: e.target.value })}
+        className={cls}
+      >
+        <option value="all">From</option>
+        {years.map((y) => (
+          <option key={y} value={y}>{y}</option>
+        ))}
+      </select>
+      <span className="text-slate-400 text-xs">–</span>
+      <select
+        value={value.to}
+        onChange={(e) => onChange({ ...value, to: e.target.value })}
+        className={cls}
+      >
+        <option value="all">To</option>
+        {years.map((y) => (
+          <option key={y} value={y}>{y}</option>
+        ))}
+      </select>
     </div>
   )
 }

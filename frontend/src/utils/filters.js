@@ -19,14 +19,18 @@ export function applyFilters(drugs, filters) {
     if (partnershipStatus !== 'all' && drug.partnership_status !== partnershipStatus) return false
     if (needsReview && drug.target !== 'Unknown') return false
 
-    if (startYear !== 'all') {
+    if (startYear.from !== 'all' || startYear.to !== 'all') {
       const y = parseInt(drug.start_date?.slice(0, 4))
-      if (!y || y !== parseInt(startYear)) return false
+      if (!y) return false
+      if (startYear.from !== 'all' && y < parseInt(startYear.from)) return false
+      if (startYear.to !== 'all' && y > parseInt(startYear.to)) return false
     }
 
-    if (completionYear !== 'all') {
+    if (completionYear.from !== 'all' || completionYear.to !== 'all') {
       const y = parseInt(drug.primary_completion_date?.slice(0, 4))
-      if (!y || y !== parseInt(completionYear)) return false
+      if (!y) return false
+      if (completionYear.from !== 'all' && y < parseInt(completionYear.from)) return false
+      if (completionYear.to !== 'all' && y > parseInt(completionYear.to)) return false
     }
 
     if (keyword) {
