@@ -45,21 +45,6 @@ export default function FilterBar({ options, filters, onChange }) {
         onClear={() => set('modalities', [])}
       />
 
-      {/* CDx 기회 */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">CDx 기회</span>
-        <select
-          value={filters.cdxLevel}
-          onChange={(e) => set('cdxLevel', e.target.value)}
-          className="border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          <option value="all">전체</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </div>
-
       {/* 파트너십 */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">파트너십</span>
@@ -74,7 +59,7 @@ export default function FilterBar({ options, filters, onChange }) {
         </select>
       </div>
 
-      {/* 수동 검토 토글 */}
+      {/* 타겟 미확인 토글 */}
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <input
           type="checkbox"
@@ -82,7 +67,7 @@ export default function FilterBar({ options, filters, onChange }) {
           onChange={(e) => set('needsReview', e.target.checked)}
           className="w-4 h-4 accent-orange-500"
         />
-        <span className="text-sm text-slate-600">수동 검토 필요</span>
+        <span className="text-sm text-slate-600">타겟 미확인만</span>
       </label>
 
       {/* 필터 초기화 */}
@@ -91,7 +76,6 @@ export default function FilterBar({ options, filters, onChange }) {
           onChange({
             cancerCategories: [],
             modalities: [],
-            cdxLevel: 'all',
             partnershipStatus: 'all',
             needsReview: false,
             keyword: '',

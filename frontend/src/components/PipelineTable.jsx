@@ -7,7 +7,7 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table'
 import { useState } from 'react'
-import CdxBadge, { CdxStrategyBadge, ModalityBadge, StatusDot } from './CdxBadge'
+import { ModalityBadge, StatusDot } from './CdxBadge'
 
 const col = createColumnHelper()
 
@@ -131,18 +131,6 @@ const COLUMNS = [
       )
     },
     size: 180,
-  }),
-
-  col.accessor('cdx_strategy', {
-    header: 'CDx 전략',
-    cell: ({ getValue }) => <CdxStrategyBadge strategy={getValue()} />,
-    size: 100,
-  }),
-
-  col.accessor('cdx_opportunity_level', {
-    header: 'CDx 기회',
-    cell: ({ getValue }) => <CdxBadge level={getValue()} />,
-    size: 90,
   }),
 
   col.accessor('moa', {

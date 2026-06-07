@@ -184,30 +184,6 @@ def infer_biomarkers(eligibility_text: str, brief_summary: str) -> tuple[bool, l
     return bool(found), found
 
 
-def infer_cdx_strategy(eligibility_text: str) -> str:
-    text = eligibility_text.lower()
-
-    confirmed_patterns = [
-        "positive", "overexpression", "amplification",
-        "mutation", "high expression", "selected",
-        "must have", "required", "documented",
-    ]
-    exploratory_patterns = [
-        "exploratory", "optional", "tissue sample",
-        "correlative", "biomarker analysis", "translational",
-    ]
-
-    has_biomarker = (
-        any(b.lower() in text for b in BIOMARKER_KEYWORDS)
-        or any(_word_boundary_match(eligibility_text, b) for b in BIOMARKER_EXACT_KEYWORDS)
-    )
-
-    if has_biomarker:
-        if any(p in text for p in confirmed_patterns):
-            return "confirmed"
-        return "exploratory"
-    return "none"
-
 
 def normalize_cancer_category(condition: str) -> tuple[str, str]:
     """(cancer_category, condition_normalized) 반환."""
@@ -299,7 +275,6 @@ def extract_study_fields(study: dict) -> dict | None:
     modality = infer_modality(drug_name, intervention_desc)
     target = infer_target(drug_name, brief_summary)
     biomarker_found, biomarker_list = infer_biomarkers(eligibility_text, brief_summary)
-    cdx_strategy = infer_cdx_strategy(eligibility_text)
     cancer_category, condition_normalized = normalize_cancer_category(condition)
 
     partnership_status = "partnered" if collaborators else "solo"
@@ -326,7 +301,6 @@ def extract_study_fields(study: dict) -> dict | None:
         "moa": moa,
         "biomarker_mentioned": biomarker_found,
         "biomarker_list": biomarker_list,
-        "cdx_strategy": cdx_strategy,
         "nct_ids": [nct_id] if nct_id else [],
         "clinicaltrials_url": (
             f"https://clinicaltrials.gov/study/{nct_id}" if nct_id else ""

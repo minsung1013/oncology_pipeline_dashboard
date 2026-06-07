@@ -11,7 +11,6 @@ const PIPELINE_URL = import.meta.env.VITE_PIPELINE_URL ?? '/pipeline.json'
 const DEFAULT_FILTERS = {
   cancerCategories: [],
   modalities: [],
-  cdxLevel: 'all',
   partnershipStatus: 'all',
   needsReview: false,
   keyword: '',

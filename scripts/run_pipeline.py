@@ -1,6 +1,6 @@
 """
 전체 파이프라인 실행 스크립트.
-fetch → parse → pubmed → flag → pipeline.json 생성
+fetch -> parse -> pubmed -> pipeline.json 생성
 """
 
 import argparse
@@ -9,13 +9,11 @@ import os
 import sys
 from datetime import datetime, timezone
 
-# 스크립트 디렉토리를 path에 추가 (GitHub Actions에서도 동작)
 sys.path.insert(0, os.path.dirname(__file__))
 
 from fetch_trials import run_full, run_delta, get_latest_full_date
 from parse_fields import parse_raw_file
 from fetch_pubmed import enrich_with_pubmed
-from flag_cdx import flag_all, print_summary
 
 RAW_DIR = "data/raw"
 PARSED_DIR = "data/parsed"
@@ -38,23 +36,12 @@ def build_pipeline_json(records: list[dict], raw_path: str) -> dict:
 def main():
     parser = argparse.ArgumentParser(description="Run full oncology pipeline data update")
     parser.add_argument(
-        "--mode",
-        choices=["full", "delta", "auto"],
-        default="auto",
+        "--mode", choices=["full", "delta", "auto"], default="auto",
         help="수집 모드 (default: auto)",
     )
     parser.add_argument("--since", default=None, help="delta 기준 날짜 (YYYY-MM-DD)")
-    parser.add_argument(
-        "--skip-pubmed",
-        action="store_true",
-        help="PubMed 연동 건너뜀 (빠른 테스트용)",
-    )
-    parser.add_argument(
-        "--sample",
-        type=int,
-        default=None,
-        help="파싱 샘플 수 제한 (검증용, e.g. --sample 100)",
-    )
+    parser.add_argument("--skip-pubmed", action="store_true", help="PubMed 연동 건너뜀 (빠른 테스트용)")
+    parser.add_argument("--sample", type=int, default=None, help="파싱 샘플 수 제한 (검증용)")
     args = parser.parse_args()
 
     # 1. 수집
@@ -70,12 +57,9 @@ def main():
             print("ERROR: delta 모드에는 --since 또는 기존 full dump가 필요합니다.")
             sys.exit(1)
         raw_path = run_delta(since, RAW_DIR)
-    else:  # auto
+    else:
         latest = get_latest_full_date(RAW_DIR)
-        if latest:
-            raw_path = run_delta(latest, RAW_DIR)
-        else:
-            raw_path = run_full(RAW_DIR)
+        raw_path = run_delta(latest, RAW_DIR) if latest else run_full(RAW_DIR)
 
     # 2. 파싱
     print()
@@ -101,19 +85,10 @@ def main():
         print()
         print("STEP 3: PubMed - skipped")
 
-    # 4. CDx 플래그
+    # 4. pipeline.json 저장
     print()
     print("=" * 60)
-    print("STEP 4: Calculate CDx opportunity flags")
-    print("=" * 60)
-
-    records = flag_all(records)
-    print_summary(records)
-
-    # 5. pipeline.json 저장
-    print()
-    print("=" * 60)
-    print("STEP 5: Save pipeline.json")
+    print("STEP 4: Save pipeline.json")
     print("=" * 60)
 
     os.makedirs(PARSED_DIR, exist_ok=True)
