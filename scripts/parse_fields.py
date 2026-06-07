@@ -350,15 +350,16 @@ def _normalize_drug_name(name: str) -> str:
 
 def dedup_by_drug(records: list[dict]) -> list[dict]:
     """
-    같은 약물명 + 같은 회사 기준으로 그룹핑.
-    대표 레코드: completion_date가 가장 최근 (Phase 2 진입 타이밍 기준).
-    NCT ID는 리스트로 보존.
+    약물명 + 회사 + Phase 기준으로 그룹핑.
+    Phase별로 별도 행 유지 (Phase 1, 2, 3 각각 표시).
+    같은 Phase 내 중복만 합침 (NCT ID 리스트로 보존).
     """
     groups: dict[str, list[dict]] = {}
     for rec in records:
         key = (
             _normalize_drug_name(rec["drug_name"]),
             rec["company"].strip().lower(),
+            rec.get("phase", ""),
         )
         groups.setdefault(key, []).append(rec)
 
