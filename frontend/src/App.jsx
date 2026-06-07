@@ -4,9 +4,11 @@ import CompanyList from './components/CompanyList'
 import PipelineTable from './components/PipelineTable'
 import { applyFilters, getFilterOptions, groupByCompany } from './utils/filters'
 
-// 로컬: public/pipeline.json / Cloudflare Pages: 동일 경로
-// GitHub raw 경로로 바꾸려면 아래 환경변수를 사용
-const PIPELINE_URL = import.meta.env.VITE_PIPELINE_URL ?? '/pipeline.json'
+// 로컬: public/pipeline.json (fallback)
+// 배포: GitHub raw에서 직접 fetch (Cloudflare 25MB 파일 제한 우회)
+const PIPELINE_URL =
+  import.meta.env.VITE_PIPELINE_URL ??
+  'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/pipeline.json'
 
 const DEFAULT_FILTERS = {
   cancerCategories: [],

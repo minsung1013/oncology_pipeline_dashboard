@@ -12,6 +12,8 @@ data/raw/
 frontend/node_modules/
 frontend/dist/
 frontend/package-lock.json
+# pipeline.json은 GitHub raw에서 직접 fetch (Cloudflare 25MB 제한 초과)
+frontend/public/pipeline.json
 
 # Dev
 .env
