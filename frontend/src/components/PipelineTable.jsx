@@ -6,7 +6,7 @@ import {
   flexRender,
   createColumnHelper,
 } from '@tanstack/react-table'
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { ModalityBadge, StatusDot } from './CdxBadge'
 
 const col = createColumnHelper()
@@ -165,13 +165,6 @@ const COLUMNS = [
     size: 150,
   }),
 
-  col.accessor('brief_summary', {
-    header: 'Study Summary',
-    enableSorting: false,
-    cell: ({ getValue }) => <SummaryCell text={getValue()} />,
-    size: 240,
-  }),
-
   col.display({
     id: 'pubmed',
     header: '논문',
@@ -200,42 +193,6 @@ const COLUMNS = [
   }),
 ]
 
-function SummaryCell({ text }) {
-  const [expanded, setExpanded] = useState(false)
-  if (!text) return <span className="text-slate-300">—</span>
-
-  const SHORT_LEN = 80
-  const isLong = text.length > SHORT_LEN
-  const preview = isLong ? text.slice(0, SHORT_LEN) + '…' : text
-
-  return (
-    <div className="text-xs text-slate-600 leading-relaxed">
-      {expanded ? (
-        <>
-          <span>{text}</span>
-          <button
-            onClick={() => setExpanded(false)}
-            className="ml-1 text-blue-400 hover:text-blue-600 whitespace-nowrap font-medium"
-          >
-            접기 ▲
-          </button>
-        </>
-      ) : (
-        <>
-          <span>{preview}</span>
-          {isLong && (
-            <button
-              onClick={() => setExpanded(true)}
-              className="ml-1 text-blue-400 hover:text-blue-600 whitespace-nowrap font-medium"
-            >
-              더보기 ▼
-            </button>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
 
 export default function PipelineTable({ drugs }) {
   const [sorting, setSorting] = useState([])

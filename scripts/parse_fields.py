@@ -185,6 +185,27 @@ def infer_biomarkers(eligibility_text: str, brief_summary: str) -> tuple[bool, l
 
 
 
+def _extract_references(refs_mod: dict) -> list[dict]:
+    """referencesModule에서 PMID가 있는 논문 링크 추출."""
+    links = []
+    seen = set()
+    for ref in refs_mod.get("references", []):
+        pmid = ref.get("pmid", "").strip()
+        if not pmid or pmid in seen:
+            continue
+        seen.add(pmid)
+        citation = ref.get("citation", "")
+        # citation 첫 문장을 title로 사용
+        title = citation.split(".")[0].strip() if citation else ""
+        links.append({
+            "pmid": pmid,
+            "title": title,
+            "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}",
+            "source": "clinicaltrials",
+        })
+    return links
+
+
 def normalize_cancer_category(condition: str) -> tuple[str, str]:
     """(cancer_category, condition_normalized) 반환."""
     text = condition.lower()
@@ -220,6 +241,7 @@ def extract_study_fields(study: dict) -> dict | None:
     arms_mod = proto.get("armsInterventionsModule", {})
     outcomes_mod = proto.get("outcomesModule", {})
     conditions_mod = proto.get("conditionsModule", {})
+    refs_mod = proto.get("referencesModule", {})
 
     # 약물명 추출 (InterventionName)
     interventions = arms_mod.get("interventions", [])
@@ -278,8 +300,10 @@ def extract_study_fields(study: dict) -> dict | None:
     cancer_category, condition_normalized = normalize_cancer_category(condition)
 
     partnership_status = "partnered" if collaborators else "solo"
-
     moa = f"{modality} targeting {target}" if target != "Unknown" else modality
+
+    # Stage 1: referencesModule에서 논문 직접 추출
+    pubmed_links = _extract_references(refs_mod)
 
     return {
         "drug_name": drug_name,
@@ -308,10 +332,9 @@ def extract_study_fields(study: dict) -> dict | None:
         ),
         "brief_title": brief_title,
         "official_title": official_title,
-        "brief_summary": brief_summary,
         "primary_outcomes": primary_outcomes,
         "secondary_outcomes": secondary_outcomes,
-        "pubmed_links": [],
+        "pubmed_links": pubmed_links,
         "keyword_parsed": True,
         "parse_date": datetime.now(timezone.utc).isoformat(),
     }

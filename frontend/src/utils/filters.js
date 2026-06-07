@@ -38,7 +38,6 @@ export function applyFilters(drugs, filters) {
         drug.modality,
         drug.condition,
         drug.cancer_category,
-        drug.brief_summary,
         drug.official_title,
         drug.brief_title,
         drug.moa,

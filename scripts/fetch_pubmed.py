@@ -81,21 +81,28 @@ def _efetch(pmids: list[str]) -> list[dict]:
 
 def enrich_with_pubmed(records: list[dict], delay: float = None) -> list[dict]:
     """
-    파싱된 레코드 리스트에 pubmed_links 필드를 채움.
-    rate limit 대응을 위해 각 호출 사이에 sleep.
+    Stage 2: pubmed_links가 비어있는 레코드만 약물명으로 PubMed 검색.
+    Stage 1(referencesModule)에서 이미 채워진 것은 건너뜀.
     """
     sleep_interval = delay if delay is not None else _SLEEP
 
-    for i, rec in enumerate(records):
+    targets = [r for r in records if not r.get("pubmed_links")]
+    skipped = len(records) - len(targets)
+    print(f"  Stage 1 already filled: {skipped}  |  Stage 2 needed: {len(targets)}")
+
+    for i, rec in enumerate(targets):
         drug_name = rec.get("drug_name", "")
         if not drug_name or drug_name == "Unknown":
             continue
 
         links = fetch_pubmed_links(drug_name)
+        if links:
+            for l in links:
+                l["source"] = "pubmed_search"
         rec["pubmed_links"] = links
 
-        if (i + 1) % 50 == 0:
-            print(f"  PubMed enriched: {i + 1}/{len(records)}")
+        if (i + 1) % 100 == 0:
+            print(f"  PubMed Stage 2: {i + 1}/{len(targets)}")
 
         time.sleep(sleep_interval)
 

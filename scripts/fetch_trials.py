@@ -38,6 +38,7 @@ FIELDS = [
     "ArmGroupDescription",
     "PrimaryOutcomeMeasure",
     "SecondaryOutcomeMeasure",
+    "ReferencesModule",
 ]
 
 BASE_PARAMS = {
