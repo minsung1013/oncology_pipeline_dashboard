@@ -6,7 +6,7 @@ import {
   flexRender,
   createColumnHelper,
 } from '@tanstack/react-table'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { ModalityBadge, StatusDot } from './CdxBadge'
 
 const col = createColumnHelper()
@@ -220,13 +220,16 @@ function SummaryCell({ text }) {
 }
 
 export default function PipelineTable({ drugs }) {
-  const [sorting, setSorting] = useState([{ id: 'cdx_opportunity_level', desc: false }])
+  const [sorting, setSorting] = useState([])
+  const [columnSizing, setColumnSizing] = useState({})
 
   const table = useReactTable({
     data: drugs,
     columns: COLUMNS,
-    state: { sorting },
+    state: { sorting, columnSizing },
     onSortingChange: setSorting,
+    onColumnSizingChange: setColumnSizing,
+    columnResizeMode: 'onChange',
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -247,14 +250,17 @@ export default function PipelineTable({ drugs }) {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="overflow-auto flex-1">
-        <table className="w-full text-sm border-collapse">
+        <table
+          className="text-sm border-collapse"
+          style={{ width: table.getTotalSize() }}
+        >
           <thead className="sticky top-0 bg-slate-50 z-10">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-slate-200">
                 {hg.headers.map((header) => (
                   <th
                     key={header.id}
-                    style={{ width: header.getSize() }}
+                    style={{ width: header.getSize(), position: 'relative' }}
                     className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap"
                   >
                     {header.column.getCanSort() ? (
@@ -268,6 +274,16 @@ export default function PipelineTable({ drugs }) {
                     ) : (
                       flexRender(header.column.columnDef.header, header.getContext())
                     )}
+                    {/* 리사이즈 핸들 */}
+                    <div
+                      onMouseDown={header.getResizeHandler()}
+                      onTouchStart={header.getResizeHandler()}
+                      className={`absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none
+                        ${header.column.getIsResizing()
+                          ? 'bg-blue-400'
+                          : 'bg-transparent hover:bg-slate-300'
+                        }`}
+                    />
                   </th>
                 ))}
               </tr>
@@ -280,7 +296,11 @@ export default function PipelineTable({ drugs }) {
                 className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3 py-2 align-top">
+                  <td
+                    key={cell.id}
+                    style={{ width: cell.column.getSize() }}
+                    className="px-3 py-2 align-top overflow-hidden"
+                  >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
