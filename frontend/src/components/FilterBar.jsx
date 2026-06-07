@@ -8,15 +8,15 @@ const PHASE_LABELS = {
 }
 
 const STATUS_LABELS = {
-  RECRUITING:              '모집중',
-  ACTIVE_NOT_RECRUITING:   '진행중(모집완료)',
-  NOT_YET_RECRUITING:      '시작전',
-  ENROLLING_BY_INVITATION: '초청모집',
-  COMPLETED:               '완료',
-  TERMINATED:              '중단',
-  WITHDRAWN:               '철회',
-  SUSPENDED:               '중지',
-  UNKNOWN:                 '미확인',
+  RECRUITING:              'Recruiting',
+  ACTIVE_NOT_RECRUITING:   'Active (not recruiting)',
+  NOT_YET_RECRUITING:      'Not yet recruiting',
+  ENROLLING_BY_INVITATION: 'By invitation',
+  COMPLETED:               'Completed',
+  TERMINATED:              'Terminated',
+  WITHDRAWN:               'Withdrawn',
+  SUSPENDED:               'Suspended',
+  UNKNOWN:                 'Unknown',
 }
 
 export default function FilterBar({ options, filters, onChange }) {
@@ -48,32 +48,32 @@ export default function FilterBar({ options, filters, onChange }) {
   return (
     <div className="bg-white border-b border-slate-200 px-4 py-3 flex flex-wrap gap-x-5 gap-y-2 items-center text-sm">
 
-      {/* 키워드 검색 */}
+      {/* Keyword search */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">검색</span>
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Search</span>
         <input
           type="text"
           value={filters.keyword}
           onChange={(e) => set('keyword', e.target.value)}
-          placeholder="약물명, 회사, 타겟, 요약 전체..."
+          placeholder="Drug, company, target, MoA..."
           className="border border-slate-300 rounded px-2 py-1 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
       </div>
 
       <Divider />
 
-      {/* 암종 */}
+      {/* Indication */}
       <MultiSelect
-        label="암종"
+        label="Indication"
         options={cancerCategories}
         selected={filters.cancerCategories}
         onToggle={(v) => toggle('cancerCategories', v)}
         onClear={() => set('cancerCategories', [])}
       />
 
-      {/* 모달리티 */}
+      {/* Modality */}
       <MultiSelect
-        label="모달리티"
+        label="Modality"
         options={modalities}
         selected={filters.modalities}
         onToggle={(v) => toggle('modalities', v)}
@@ -90,25 +90,25 @@ export default function FilterBar({ options, filters, onChange }) {
         renderOption={(opt) => PHASE_LABELS[opt] ?? opt}
       />
 
-      {/* 등록 상태 */}
+      {/* Status */}
       <MultiSelect
-        label="등록 상태"
+        label="Status"
         options={overallStatuses}
         selected={filters.overallStatuses}
         onToggle={(v) => toggle('overallStatuses', v)}
         onClear={() => set('overallStatuses', [])}
-        renderOption={(opt) => STATUS_LABELS[opt] ? `${STATUS_LABELS[opt]}` : opt}
+        renderOption={(opt) => STATUS_LABELS[opt] ?? opt}
       />
 
-      {/* 파트너십 */}
+      {/* Partnership */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">파트너십</span>
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Partnership</span>
         <select
           value={filters.partnershipStatus}
           onChange={(e) => set('partnershipStatus', e.target.value)}
           className="border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         >
-          <option value="all">전체</option>
+          <option value="all">All</option>
           <option value="solo">Solo</option>
           <option value="partnered">Partnered</option>
         </select>
@@ -116,7 +116,7 @@ export default function FilterBar({ options, filters, onChange }) {
 
       <Divider />
 
-      {/* Completion Date 기간 */}
+      {/* Completion Date range */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Completion</span>
         <input
@@ -128,7 +128,7 @@ export default function FilterBar({ options, filters, onChange }) {
           max={maxYear}
           className="border border-slate-300 rounded px-2 py-1 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
-        <span className="text-slate-400 text-xs">~</span>
+        <span className="text-slate-400 text-xs">–</span>
         <input
           type="number"
           value={filters.completionYearTo}
@@ -142,7 +142,7 @@ export default function FilterBar({ options, filters, onChange }) {
 
       <Divider />
 
-      {/* 타겟 미확인 토글 */}
+      {/* Unknown target toggle */}
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <input
           type="checkbox"
@@ -150,10 +150,10 @@ export default function FilterBar({ options, filters, onChange }) {
           onChange={(e) => set('needsReview', e.target.checked)}
           className="w-4 h-4 accent-orange-500"
         />
-        <span className="text-slate-600">타겟 미확인만</span>
+        <span className="text-slate-600">Unknown target only</span>
       </label>
 
-      {/* 필터 초기화 */}
+      {/* Clear filters */}
       {activeCount > 0 && (
         <button
           onClick={() =>
@@ -172,7 +172,7 @@ export default function FilterBar({ options, filters, onChange }) {
           className="ml-auto flex items-center gap-1 text-xs text-slate-400 hover:text-red-500 transition-colors"
         >
           <span className="bg-slate-200 text-slate-600 rounded-full px-1.5 py-0.5 font-semibold text-xs">{activeCount}</span>
-          필터 초기화
+          Clear filters
         </button>
       )}
     </div>
@@ -202,7 +202,7 @@ function MultiSelect({ label, options, selected, onToggle, onClear, renderOption
             onClick={onClear}
             className="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 border-b border-slate-100"
           >
-            전체 해제
+            Clear all
           </button>
         )}
         {options.map((opt) => (

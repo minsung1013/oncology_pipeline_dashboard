@@ -66,8 +66,20 @@ const STATUS_STYLES = {
   ENROLLING_BY_INVITATION: 'text-cyan-600',
 }
 
+const STATUS_LABELS = {
+  RECRUITING:              'Recruiting',
+  ACTIVE_NOT_RECRUITING:   'Active',
+  NOT_YET_RECRUITING:      'Not yet recruiting',
+  ENROLLING_BY_INVITATION: 'By invitation',
+  COMPLETED:               'Completed',
+  TERMINATED:              'Terminated',
+  WITHDRAWN:               'Withdrawn',
+  SUSPENDED:               'Suspended',
+  UNKNOWN:                 'Unknown',
+}
+
 export function StatusDot({ status }) {
   const cls = STATUS_STYLES[status] ?? 'text-slate-400'
-  const label = status?.replace(/_/g, ' ') ?? ''
+  const label = STATUS_LABELS[status] ?? status?.replace(/_/g, ' ') ?? ''
   return <span className={`text-xs font-medium ${cls}`}>{label}</span>
 }

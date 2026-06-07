@@ -13,7 +13,7 @@ const col = createColumnHelper()
 
 const COLUMNS = [
   col.accessor('drug_name', {
-    header: '약물명',
+    header: 'Drug',
     cell: ({ row }) => {
       const d = row.original
       const url = d.clinicaltrials_url || (d.nct_ids?.[0] ? `https://clinicaltrials.gov/study/${d.nct_ids[0]}` : null)
@@ -41,7 +41,7 @@ const COLUMNS = [
   }),
 
   col.accessor('company', {
-    header: '회사',
+    header: 'Company',
     cell: ({ row }) => {
       const d = row.original
       return (
@@ -59,7 +59,7 @@ const COLUMNS = [
   }),
 
   col.accessor('target', {
-    header: '타겟',
+    header: 'Target',
     cell: ({ getValue }) => {
       const v = getValue()
       return v === 'Unknown' ? (
@@ -74,13 +74,13 @@ const COLUMNS = [
   }),
 
   col.accessor('modality', {
-    header: '모달리티',
+    header: 'Modality',
     cell: ({ getValue }) => <ModalityBadge modality={getValue()} />,
     size: 160,
   }),
 
   col.accessor('cancer_category', {
-    header: '암종',
+    header: 'Indication',
     size: 110,
   }),
 
@@ -103,7 +103,7 @@ const COLUMNS = [
   }),
 
   col.accessor('overall_status', {
-    header: '등록 상태',
+    header: 'Status',
     cell: ({ getValue }) => <StatusDot status={getValue()} />,
     size: 140,
   }),
@@ -117,7 +117,7 @@ const COLUMNS = [
   }),
 
   col.accessor('partnership_status', {
-    header: '파트너십',
+    header: 'Partnership',
     cell: ({ getValue }) => {
       const v = getValue()
       return (
@@ -130,7 +130,7 @@ const COLUMNS = [
   }),
 
   col.accessor('biomarker_list', {
-    header: '바이오마커',
+    header: 'Biomarkers',
     enableSorting: false,
     cell: ({ getValue }) => {
       const list = getValue() ?? []
@@ -167,7 +167,7 @@ const COLUMNS = [
 
   col.display({
     id: 'pubmed',
-    header: '논문',
+    header: 'Papers',
     enableSorting: false,
     cell: ({ row }) => {
       const links = row.original.pubmed_links ?? []
@@ -214,7 +214,7 @@ export default function PipelineTable({ drugs }) {
   if (drugs.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-slate-400 py-20">
-        표시할 데이터가 없습니다
+        No data to display
       </div>
     )
   }
@@ -288,7 +288,7 @@ export default function PipelineTable({ drugs }) {
       {/* 페이지네이션 */}
       <div className="border-t border-slate-200 bg-white px-4 py-2 flex items-center justify-between text-sm text-slate-500">
         <span>
-          {pageIndex * pageSize + 1}–{Math.min((pageIndex + 1) * pageSize, total)} / {total}건
+          {pageIndex * pageSize + 1}–{Math.min((pageIndex + 1) * pageSize, total)} of {total}
         </span>
         <div className="flex items-center gap-2">
           <button
@@ -314,7 +314,7 @@ export default function PipelineTable({ drugs }) {
             className="border border-slate-200 rounded px-1 py-1 text-xs"
           >
             {[25, 50, 100].map((n) => (
-              <option key={n} value={n}>{n}개씩</option>
+              <option key={n} value={n}>{n} / page</option>
             ))}
           </select>
         </div>

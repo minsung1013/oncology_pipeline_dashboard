@@ -63,7 +63,7 @@ export default function App() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-screen text-red-500">
-        데이터 로드 실패: {error}
+        Failed to load data: {error}
       </div>
     )
   }
@@ -71,7 +71,7 @@ export default function App() {
   if (!data) {
     return (
       <div className="flex items-center justify-center h-screen text-slate-400 text-sm">
-        로딩 중...
+        Loading...
       </div>
     )
   }
@@ -82,18 +82,18 @@ export default function App() {
       <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-lg font-bold text-slate-800 leading-none">
-            Oncology Pipeline Dashboard
+            Oncology Pipeline Intelligence
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            Phase 1 Industry-Funded Cancer Trials — CDx 협업 기회 탐색
+            Industry-Sponsored Cancer Trials · BD &amp; CDx Opportunity Tracker
           </p>
         </div>
         <div className="text-right text-xs text-slate-400">
           <div>
-            <span className="font-semibold text-slate-600">{metadata?.total_drugs?.toLocaleString()}</span>개 약물 ·{' '}
-            <span className="font-semibold text-slate-600">{metadata?.total_companies?.toLocaleString()}</span>개 회사
+            <span className="font-semibold text-slate-600">{metadata?.total_drugs?.toLocaleString()}</span> drugs ·{' '}
+            <span className="font-semibold text-slate-600">{metadata?.total_companies?.toLocaleString()}</span> companies
           </div>
-          <div>업데이트: {metadata?.last_updated?.slice(0, 10)}</div>
+          <div>Updated: {metadata?.last_updated?.slice(0, 10)}</div>
         </div>
       </header>
 
@@ -118,7 +118,7 @@ export default function App() {
                 onClick={() => setSelectedCompany(null)}
                 className="text-blue-500 hover:text-blue-700 text-xs"
               >
-                ✕ 전체 보기
+                ✕ Show all
               </button>
             </div>
           )}
