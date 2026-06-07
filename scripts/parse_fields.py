@@ -350,9 +350,9 @@ def _normalize_drug_name(name: str) -> str:
 
 def dedup_by_drug(records: list[dict]) -> list[dict]:
     """
-    약물명 + 회사 + Phase 기준으로 그룹핑.
-    Phase별로 별도 행 유지 (Phase 1, 2, 3 각각 표시).
-    같은 Phase 내 중복만 합침 (NCT ID 리스트로 보존).
+    약물명 + 회사 + Phase + 적응증 기준으로 그룹핑.
+    같은 약물이라도 Phase/적응증이 다르면 별도 행으로 유지.
+    완전히 동일한 조합만 합침 (NCT ID 리스트로 보존).
     """
     groups: dict[str, list[dict]] = {}
     for rec in records:
@@ -360,6 +360,7 @@ def dedup_by_drug(records: list[dict]) -> list[dict]:
             _normalize_drug_name(rec["drug_name"]),
             rec["company"].strip().lower(),
             rec.get("phase", ""),
+            rec.get("cancer_category", ""),
         )
         groups.setdefault(key, []).append(rec)
 
