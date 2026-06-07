@@ -84,6 +84,24 @@ const COLUMNS = [
     size: 110,
   }),
 
+  col.accessor('phase', {
+    header: 'Phase',
+    cell: ({ getValue }) => {
+      const v = getValue() || '—'
+      const clean = v.replace('PHASE', 'Ph').replace('EARLY_', 'Early ').replace('_', '/')
+      const colorMap = {
+        PHASE1: 'bg-blue-100 text-blue-700',
+        EARLY_PHASE1: 'bg-sky-100 text-sky-700',
+        PHASE2: 'bg-violet-100 text-violet-700',
+        PHASE3: 'bg-green-100 text-green-700',
+        PHASE4: 'bg-orange-100 text-orange-700',
+      }
+      const cls = colorMap[v] ?? 'bg-slate-100 text-slate-500'
+      return <span className={`text-xs font-semibold px-2 py-0.5 rounded ${cls}`}>{clean}</span>
+    },
+    size: 90,
+  }),
+
   col.accessor('overall_status', {
     header: '등록 상태',
     cell: ({ getValue }) => <StatusDot status={getValue()} />,
