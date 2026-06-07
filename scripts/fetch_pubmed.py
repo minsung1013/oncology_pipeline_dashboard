@@ -24,18 +24,26 @@ _EPMC_SLEEP = 0.2  # 초당 5회 권장
 # Stage 2: PubMed
 # ---------------------------------------------------------------------------
 
-def fetch_pubmed_links(drug_name: str, max_results: int = 3) -> list[dict]:
-    pmids = _esearch(drug_name, max_results)
+def fetch_pubmed_links(drug_name: str, max_results: int = 3, indication: str = None) -> list[dict]:
+    pmids = _esearch(drug_name, max_results, indication)
+    if not pmids:
+        # indication 조합 결과 없으면 약물명만으로 재시도
+        if indication:
+            pmids = _esearch(drug_name, max_results, indication=None)
     if not pmids:
         return []
     time.sleep(_PUBMED_SLEEP)
     return _efetch(pmids)
 
 
-def _esearch(drug_name: str, max_results: int) -> list[str]:
+def _esearch(drug_name: str, max_results: int, indication: str = None) -> list[str]:
+    if indication and indication not in ("Unknown", "Other"):
+        term = f"{drug_name}[Title/Abstract] AND {indication}[Title/Abstract] AND clinical trial[PT]"
+    else:
+        term = f"{drug_name}[Title/Abstract] AND clinical trial[PT]"
     params = {
         "db": "pubmed",
-        "term": f"{drug_name}[Title/Abstract] AND clinical trial[PT]",
+        "term": term,
         "retmax": max_results,
         "retmode": "json",
         "sort": "relevance",
@@ -84,13 +92,17 @@ def _efetch(pmids: list[str]) -> list[dict]:
 # Stage 3: Europe PMC (ASCO/ESMO/AACR/ASH 초록 포함)
 # ---------------------------------------------------------------------------
 
-def fetch_europepmc_links(drug_name: str, max_results: int = 3) -> list[dict]:
+def fetch_europepmc_links(drug_name: str, max_results: int = 3, indication: str = None) -> list[dict]:
     """
     Europe PMC 검색 — PubMed보다 넓은 범위 (학회 초록, preprint 포함).
     ASCO/ESMO/AACR/ASH 초록도 커버.
     """
+    if indication and indication not in ("Unknown", "Other"):
+        query = f'TITLE:"{drug_name}" AND (TITLE:"{indication}" OR ABSTRACT:"{indication}") AND (SRC:MED OR SRC:PPR)'
+    else:
+        query = f'TITLE:"{drug_name}" AND (SRC:MED OR SRC:PPR)'
     params = {
-        "query": f'TITLE:"{drug_name}" AND (SRC:MED OR SRC:PPR)',
+        "query": query,
         "resultType": "lite",
         "pageSize": max_results,
         "format": "json",
@@ -146,7 +158,8 @@ def enrich_with_pubmed(records: list[dict], delay: float = None) -> list[dict]:
         drug_name = rec.get("drug_name", "")
         if not drug_name or drug_name == "Unknown":
             continue
-        links = fetch_pubmed_links(drug_name)
+        indication = rec.get("cancer_category", None)
+        links = fetch_pubmed_links(drug_name, indication=indication)
         rec["pubmed_links"] = links
         if (i + 1) % 200 == 0:
             print(f"  Stage 2 progress: {i + 1}/{len(stage2_targets)}")
@@ -160,7 +173,8 @@ def enrich_with_pubmed(records: list[dict], delay: float = None) -> list[dict]:
         drug_name = rec.get("drug_name", "")
         if not drug_name or drug_name == "Unknown":
             continue
-        links = fetch_europepmc_links(drug_name)
+        indication = rec.get("cancer_category", None)
+        links = fetch_europepmc_links(drug_name, indication=indication)
         rec["pubmed_links"] = links
         if (i + 1) % 200 == 0:
             print(f"  Stage 3 progress: {i + 1}/{len(stage3_targets)}")

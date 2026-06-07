@@ -374,11 +374,23 @@ def dedup_by_drug(records: list[dict]) -> list[dict]:
         group.sort(key=sort_key, reverse=True)
         rep = group[0].copy()
 
-        # 모든 NCT ID 합치기
+        # 그룹 내 모든 NCT ID 합치기
         all_ncts = []
         for r in group:
             all_ncts.extend(r.get("nct_ids", []))
-        rep["nct_ids"] = list(dict.fromkeys(all_ncts))  # 순서 유지하며 중복 제거
+        rep["nct_ids"] = list(dict.fromkeys(all_ncts))
+
+        # Stage 1: 그룹 내 모든 trial의 references 합치기
+        seen_pmids = set()
+        merged_links = []
+        for r in group:
+            for link in r.get("pubmed_links", []):
+                pmid = link.get("pmid", "")
+                if pmid and pmid not in seen_pmids:
+                    seen_pmids.add(pmid)
+                    merged_links.append(link)
+        rep["pubmed_links"] = merged_links
+
         rep["drug_id"] = str(uuid.uuid4())
 
         result.append(rep)
