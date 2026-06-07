@@ -141,6 +141,13 @@ const COLUMNS = [
     size: 150,
   }),
 
+  col.accessor('brief_summary', {
+    header: 'Study Summary',
+    enableSorting: false,
+    cell: ({ getValue }) => <SummaryCell text={getValue()} />,
+    size: 240,
+  }),
+
   col.display({
     id: 'pubmed',
     header: '논문',
@@ -169,6 +176,43 @@ const COLUMNS = [
   }),
 ]
 
+function SummaryCell({ text }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!text) return <span className="text-slate-300">—</span>
+
+  const SHORT_LEN = 80
+  const isLong = text.length > SHORT_LEN
+  const preview = isLong ? text.slice(0, SHORT_LEN) + '…' : text
+
+  return (
+    <div className="text-xs text-slate-600 leading-relaxed">
+      {expanded ? (
+        <>
+          <span>{text}</span>
+          <button
+            onClick={() => setExpanded(false)}
+            className="ml-1 text-blue-400 hover:text-blue-600 whitespace-nowrap font-medium"
+          >
+            접기 ▲
+          </button>
+        </>
+      ) : (
+        <>
+          <span>{preview}</span>
+          {isLong && (
+            <button
+              onClick={() => setExpanded(true)}
+              className="ml-1 text-blue-400 hover:text-blue-600 whitespace-nowrap font-medium"
+            >
+              더보기 ▼
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function PipelineTable({ drugs }) {
   const [sorting, setSorting] = useState([{ id: 'cdx_opportunity_level', desc: false }])
 
@@ -196,7 +240,6 @@ export default function PipelineTable({ drugs }) {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      {/* 테이블 */}
       <div className="overflow-auto flex-1">
         <table className="w-full text-sm border-collapse">
           <thead className="sticky top-0 bg-slate-50 z-10">
