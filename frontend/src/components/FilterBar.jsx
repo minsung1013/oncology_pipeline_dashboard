@@ -20,7 +20,7 @@ const STATUS_LABELS = {
 }
 
 export default function FilterBar({ options, filters, onChange }) {
-  const { cancerCategories, modalities, phases, overallStatuses, minYear, maxYear } = options
+  const { cancerCategories, modalities, phases, overallStatuses, startYears, completionYears } = options
 
   function toggle(key, value) {
     const current = filters[key]
@@ -41,7 +41,8 @@ export default function FilterBar({ options, filters, onChange }) {
     filters.overallStatuses.length,
     filters.partnershipStatus !== 'all' ? 1 : 0,
     filters.needsReview ? 1 : 0,
-    filters.completionYearFrom || filters.completionYearTo ? 1 : 0,
+    filters.startYear !== 'all' ? 1 : 0,
+    filters.completionYear !== 'all' ? 1 : 0,
     filters.keyword ? 1 : 0,
   ].reduce((a, b) => a + b, 0)
 
@@ -116,28 +117,34 @@ export default function FilterBar({ options, filters, onChange }) {
 
       <Divider />
 
-      {/* Completion Date range */}
+      {/* Start Year */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Start</span>
+        <select
+          value={filters.startYear}
+          onChange={(e) => set('startYear', e.target.value)}
+          className="border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          <option value="all">All</option>
+          {startYears.map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Completion Year */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Completion</span>
-        <input
-          type="number"
-          value={filters.completionYearFrom}
-          onChange={(e) => set('completionYearFrom', e.target.value)}
-          placeholder={String(minYear)}
-          min={minYear}
-          max={maxYear}
-          className="border border-slate-300 rounded px-2 py-1 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
-        <span className="text-slate-400 text-xs">–</span>
-        <input
-          type="number"
-          value={filters.completionYearTo}
-          onChange={(e) => set('completionYearTo', e.target.value)}
-          placeholder={String(maxYear)}
-          min={minYear}
-          max={maxYear}
-          className="border border-slate-300 rounded px-2 py-1 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
+        <select
+          value={filters.completionYear}
+          onChange={(e) => set('completionYear', e.target.value)}
+          className="border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          <option value="all">All</option>
+          {completionYears.map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
       </div>
 
       <Divider />
@@ -164,8 +171,8 @@ export default function FilterBar({ options, filters, onChange }) {
               overallStatuses: [],
               partnershipStatus: 'all',
               needsReview: false,
-              completionYearFrom: '',
-              completionYearTo: '',
+              startYear: 'all',
+              completionYear: 'all',
               keyword: '',
             })
           }

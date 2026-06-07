@@ -17,8 +17,8 @@ const DEFAULT_FILTERS = {
   overallStatuses: [],
   partnershipStatus: 'all',
   needsReview: false,
-  completionYearFrom: '',
-  completionYearTo: '',
+  startYear: 'all',
+  completionYear: 'all',
   keyword: '',
 }
 
