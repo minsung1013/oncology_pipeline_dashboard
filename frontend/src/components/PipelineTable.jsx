@@ -40,6 +40,24 @@ const COLUMNS = [
     size: 160,
   }),
 
+  col.accessor('company', {
+    header: '회사',
+    cell: ({ row }) => {
+      const d = row.original
+      return (
+        <div>
+          <span className="font-medium text-slate-700">{d.company || '—'}</span>
+          {d.collaborators?.length > 0 && (
+            <div className="text-xs text-slate-400 truncate max-w-40" title={d.collaborators.join(', ')}>
+              + {d.collaborators.join(', ')}
+            </div>
+          )}
+        </div>
+      )
+    },
+    size: 170,
+  }),
+
   col.accessor('target', {
     header: '타겟',
     cell: ({ getValue }) => {

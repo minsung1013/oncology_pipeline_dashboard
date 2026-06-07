@@ -24,7 +24,8 @@ export default function App() {
   const [selectedCompany, setSelectedCompany] = useState(null)
 
   useEffect(() => {
-    fetch(PIPELINE_URL)
+    // cache: 'no-store' — 브라우저 HTTP 캐시를 우회해 항상 최신 데이터를 받음
+    fetch(PIPELINE_URL, { cache: 'no-store' })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
