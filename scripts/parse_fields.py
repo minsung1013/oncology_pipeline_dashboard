@@ -441,19 +441,26 @@ def _normalize_drug_name(name: str) -> str:
     return re.sub(r"\s+", " ", name.strip().lower())
 
 
+def _regimen_key(rec: dict) -> frozenset:
+    """병용 약물 세트 (대표+병용 전체, 정규화)."""
+    drugs = rec.get("all_drugs") or [rec.get("drug_name", "")]
+    return frozenset(_normalize_drug_name(d) for d in drugs if d)
+
+
 def dedup_by_drug(records: list[dict]) -> list[dict]:
     """
-    약물명 + 회사 + Phase + 적응증 기준으로 그룹핑.
-    같은 약물이라도 Phase/적응증이 다르면 별도 행으로 유지.
-    완전히 동일한 조합만 합침 (NCT ID 리스트로 보존).
+    약물명 + 회사 + Phase + 적응증 + 병용조합 기준으로 그룹핑.
+    병용 레지멘이 다르면 별도 행으로 유지 (단독 vs 병용 구분).
+    완전히 동일한 시험(다국가 동일 프로토콜 등)만 합침.
     """
-    groups: dict[str, list[dict]] = {}
+    groups: dict[tuple, list[dict]] = {}
     for rec in records:
         key = (
             _normalize_drug_name(rec["drug_name"]),
             rec["company"].strip().lower(),
             rec.get("phase", ""),
             rec.get("cancer_category", ""),
+            _regimen_key(rec),
         )
         groups.setdefault(key, []).append(rec)
 
