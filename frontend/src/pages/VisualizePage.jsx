@@ -8,6 +8,7 @@ import ModalityDistributionChart from '../components/visualize/ModalityDistribut
 import TargetDistributionChart from '../components/visualize/TargetDistributionChart'
 import BiomarkerChart from '../components/visualize/BiomarkerChart'
 import StatusDistributionChart from '../components/visualize/StatusDistributionChart'
+import AbstractCompanyChart from '../components/visualize/AbstractCompanyChart'
 import { statusLabel } from '../components/visualize/statusMeta'
 import {
   getVisualizeOptions,
@@ -17,9 +18,11 @@ import {
   aggregateByStatus,
   aggregateByModality,
   aggregateBiomarker,
+  aggregateAbstractsByCompany,
   getSummaryStats,
   phaseLabel,
 } from '../utils/visualizeAggregations'
+import { applyAbstractFilters } from '../utils/abstractFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 
 const EMPTY_FILTERS = {
@@ -30,6 +33,10 @@ const EMPTY_FILTERS = {
 const PIPELINE_URL =
   import.meta.env.VITE_PIPELINE_URL ??
   'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/pipeline.json'
+
+const ABSTRACTS_URL =
+  import.meta.env.VITE_ABSTRACTS_URL ??
+  'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/abstracts_asco2026.json'
 
 // 필터칩 표시용 (key → 라벨, 값 렌더러)
 const CHIP_META = {
@@ -44,6 +51,7 @@ const CHIP_META = {
 
 export default function VisualizePage() {
   const [data, setData] = useState(null)
+  const [abstractsData, setAbstractsData] = useState(null)
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(getShared)
   const [topN, setTopNState] = useState(() => getTabState('visualize')?.topN ?? 10)
@@ -70,12 +78,35 @@ export default function VisualizePage() {
       })
       .then(setData)
       .catch((e) => setError(e.message))
+
+    // ASCO 초록 (회사별 발표 차트용) — 페이지 차단 없이 별도 로드
+    fetch(ABSTRACTS_URL)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setAbstractsData)
+      .catch(() => {})
   }, [])
 
   const allDrugs = data?.drugs ?? []
 
   const options = useMemo(() => getVisualizeOptions(allDrugs), [allDrugs])
   const drugs = useMemo(() => applyVisualizeFilters(allDrugs, filters), [allDrugs, filters])
+
+  // 초록에 공유 필터(암종·단계·모달리티·회사) 적용 → 회사별 발표 수
+  const filteredAbstracts = useMemo(() => {
+    const list = abstractsData?.abstracts
+    if (!list) return null
+    return applyAbstractFilters(list, {
+      conferences: [], years: [], countries: [], affiliation: '', authorName: '',
+      keyword: '', nctId: null, showEmbargoed: false,
+      cancers: filters.cancers, phases: filters.phases,
+      modalities: filters.modalities, companies: filters.companies,
+    })
+  }, [abstractsData, filters])
+
+  const abstractCompanyData = useMemo(
+    () => (filteredAbstracts ? aggregateAbstractsByCompany(filteredAbstracts, topN) : []),
+    [filteredAbstracts, topN],
+  )
 
   // 그래프 클릭 → 해당 축 필터 토글
   const toggleFilter = (key, value) => {
@@ -222,6 +253,13 @@ export default function VisualizePage() {
             data={biomarkerData}
             selected={filters.biomarkers}
             onSelect={(v) => toggleFilter('biomarkers', v)}
+          />
+          <AbstractCompanyChart
+            data={abstractCompanyData}
+            total={filteredAbstracts?.length}
+            loading={filteredAbstracts === null}
+            selected={filters.companies}
+            onSelect={(v) => toggleFilter('companies', v)}
           />
         </div>
       </div>

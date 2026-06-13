@@ -80,6 +80,25 @@ export function aggregateByPhaseStatus(drugs) {
   )
 }
 
+// 초록(ASCO) 회사별 발표 수 — companies_normalized 리스트 평탄화 + Top N
+export function aggregateAbstractsByCompany(abstracts, topN) {
+  const counts = new Map()
+  for (const a of abstracts) {
+    for (const c of a.companies_normalized ?? []) {
+      counts.set(c, (counts.get(c) ?? 0) + 1)
+    }
+  }
+  const sorted = [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+  if (!topN || sorted.length <= topN) return sorted
+  const top = sorted.slice(0, topN)
+  const rest = sorted.slice(topN)
+  const otherCount = rest.reduce((s, r) => s + r.count, 0)
+  if (otherCount > 0) top.push({ name: `Other (${rest.length})`, count: otherCount, isOther: true })
+  return top
+}
+
 // Status: overall_status group-by count (라벨/색은 차트에서 STATUS_META로 매핑)
 export function aggregateByStatus(drugs) {
   const counts = new Map()
