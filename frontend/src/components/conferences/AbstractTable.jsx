@@ -143,7 +143,7 @@ const COLUMNS = [
   col.accessor((row) => row.authors?.[0]?.affiliation, {
     id: 'affiliation',
     header: 'Affiliation',
-    enableSorting: false,
+    sortUndefined: 'last',
     cell: ({ getValue }) => {
       const v = getValue()
       if (!v) return <span className="text-slate-300">—</span>

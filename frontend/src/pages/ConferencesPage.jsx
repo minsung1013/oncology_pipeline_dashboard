@@ -11,6 +11,9 @@ const DEFAULT_FILTERS = {
   phases: [],
   modalities: [],
   cancers: [],
+  countries: [],
+  company: '',
+  affiliation: '',
   keyword: '',
   showEmbargoed: false,
 }
@@ -178,12 +181,35 @@ export default function ConferencesPage() {
             onChange={(v) => setFilter('modalities', v)}
           />
 
+          <MultiSelect
+            label="Country"
+            options={filterOptions.countries}
+            selected={filters.countries}
+            onChange={(v) => setFilter('countries', v)}
+          />
+
+          <input
+            type="text"
+            placeholder="Company…"
+            value={filters.company}
+            onChange={(e) => setFilter('company', e.target.value)}
+            className="border border-slate-200 rounded px-3 py-1.5 text-xs w-36 focus:outline-none focus:border-blue-400"
+          />
+
+          <input
+            type="text"
+            placeholder="Affiliation…"
+            value={filters.affiliation}
+            onChange={(e) => setFilter('affiliation', e.target.value)}
+            className="border border-slate-200 rounded px-3 py-1.5 text-xs w-40 focus:outline-none focus:border-blue-400"
+          />
+
           <input
             type="text"
             placeholder="Search title, author, target, NCT…"
             value={filters.keyword}
             onChange={(e) => setFilter('keyword', e.target.value)}
-            className="border border-slate-200 rounded px-3 py-1.5 text-xs w-64 focus:outline-none focus:border-blue-400"
+            className="border border-slate-200 rounded px-3 py-1.5 text-xs w-56 focus:outline-none focus:border-blue-400"
           />
 
           <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer ml-auto">
@@ -199,6 +225,9 @@ export default function ConferencesPage() {
           {(filters.cancers.length > 0 ||
             filters.phases.length > 0 ||
             filters.modalities.length > 0 ||
+            filters.countries.length > 0 ||
+            filters.company ||
+            filters.affiliation ||
             filters.keyword ||
             nctParam) && (
             <button

@@ -1,11 +1,20 @@
 export function applyAbstractFilters(abstracts, filters) {
-  const { phases, modalities, cancers, keyword, nctId, showEmbargoed } = filters
+  const {
+    phases, modalities, cancers, countries, company, affiliation,
+    keyword, nctId, showEmbargoed,
+  } = filters
+
+  const companyQ = company?.trim().toLowerCase()
+  const affilQ = affiliation?.trim().toLowerCase()
 
   return abstracts.filter((a) => {
     if (!showEmbargoed && a.status === 'embargoed') return false
     if (phases.length > 0 && !phases.some((p) => (a.phases ?? []).includes(p))) return false
     if (modalities.length > 0 && !modalities.some((m) => (a.modality_list ?? []).includes(m))) return false
     if (cancers.length > 0 && !(a.cancer_category ?? []).some((c) => cancers.includes(c))) return false
+    if (countries?.length > 0 && !countries.includes(a.authors?.[0]?.country)) return false
+    if (companyQ && !(a.companies ?? []).join(' ').toLowerCase().includes(companyQ)) return false
+    if (affilQ && !(a.authors?.[0]?.affiliation ?? '').toLowerCase().includes(affilQ)) return false
     if (nctId && !(a.nct_ids ?? []).includes(nctId)) return false
 
     if (keyword) {
@@ -48,5 +57,9 @@ export function getAbstractFilterOptions(abstracts) {
     ...new Set(abstracts.flatMap((a) => a.cancer_category ?? []).filter(Boolean)),
   ].sort()
 
-  return { phases, modalities, cancers }
+  const countries = [
+    ...new Set(abstracts.map((a) => a.authors?.[0]?.country).filter(Boolean)),
+  ].sort()
+
+  return { phases, modalities, cancers, countries }
 }
