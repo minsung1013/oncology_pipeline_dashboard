@@ -15,7 +15,15 @@ export function applyFilters(drugs, filters) {
   return drugs.filter((drug) => {
     if (cancerCategories.length > 0 && !cancerCategories.includes(drug.cancer_category)) return false
     if (modalities.length > 0 && !modalities.includes(drug.modality)) return false
-    if (phases.length > 0 && !phases.some((p) => (drug.phases ?? []).includes(p))) return false
+    if (phases.length > 0) {
+      const drugPhases = drug.phases ?? []
+      const isUnphased = drugPhases.length === 0 || drugPhases.every((p) => p === 'UNKNOWN')
+      const hasMatch = phases.some((p) => {
+        if (p === 'NA') return isUnphased || drugPhases.includes('NA')
+        return drugPhases.includes(p)
+      })
+      if (!hasMatch) return false
+    }
     if (overallStatuses.length > 0 && !overallStatuses.includes(drug.overall_status)) return false
     if (partnershipStatus !== 'all' && drug.partnership_status !== partnershipStatus) return false
     if (regimen === 'mono' && drug.is_combination) return false
@@ -70,8 +78,13 @@ const PHASE_ORDER = ['EARLY_PHASE1', 'PHASE1', 'PHASE2', 'PHASE3', 'PHASE4', 'NA
 export function getFilterOptions(drugs) {
   const cancerCategories = [...new Set(drugs.map((d) => d.cancer_category).filter(Boolean))].sort()
   const modalities = [...new Set(drugs.map((d) => d.modality).filter(Boolean))].sort()
-  const phases = [...new Set(drugs.flatMap((d) => d.phases ?? []).filter(Boolean))]
-    .sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b))
+  const rawPhases = new Set(drugs.flatMap((d) => d.phases ?? []).filter((p) => p && p !== 'UNKNOWN'))
+  const hasUnphased = drugs.some((d) => {
+    const p = d.phases ?? []
+    return p.length === 0 || p.every((v) => v === 'UNKNOWN')
+  })
+  if (hasUnphased) rawPhases.add('NA')
+  const phases = [...rawPhases].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b))
   const overallStatuses = [...new Set(drugs.map((d) => d.overall_status).filter(Boolean))].sort()
 
   const startYears = [...new Set(
