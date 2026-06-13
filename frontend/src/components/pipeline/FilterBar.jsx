@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 const PHASE_LABELS = {
   EARLY_PHASE1: 'Early Phase 1',
   PHASE1:       'Phase 1',
@@ -226,42 +228,59 @@ function Divider() {
 }
 
 function MultiSelect({ label, options, selected, onToggle, onClear, renderOption }) {
+  const [open, setOpen] = useState(false)
   const render = renderOption ?? ((v) => v)
+
   return (
-    <div className="relative group">
-      <button className="flex items-center gap-1 border border-slate-300 rounded px-2 py-1 text-sm bg-white hover:bg-slate-50">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{label}</span>
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-1 border rounded px-2 py-1 text-sm transition-colors ${
+          selected.length > 0
+            ? 'border-blue-400 bg-blue-50'
+            : 'border-slate-300 bg-white hover:bg-slate-50'
+        }`}
+      >
+        <span className={`text-xs font-semibold uppercase tracking-wide ${selected.length > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+          {label}
+        </span>
         {selected.length > 0 && (
-          <span className="bg-blue-100 text-blue-700 text-xs font-semibold rounded-full px-1.5">
+          <span className="bg-blue-500 text-white text-xs font-semibold rounded-full px-1.5">
             {selected.length}
           </span>
         )}
-        <span className="text-slate-400 ml-1">▾</span>
+        <span className="text-slate-400 ml-1">{open ? '▴' : '▾'}</span>
       </button>
-      <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-20 min-w-52 max-h-72 overflow-y-auto hidden group-focus-within:block group-hover:block">
-        {selected.length > 0 && (
-          <button
-            onClick={onClear}
-            className="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 border-b border-slate-100"
-          >
-            Clear all
-          </button>
-        )}
-        {options.map((opt) => (
-          <label
-            key={opt}
-            className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              checked={selected.includes(opt)}
-              onChange={() => onToggle(opt)}
-              className="w-3.5 h-3.5 accent-blue-500"
-            />
-            <span className="text-sm text-slate-700">{render(opt)}</span>
-          </label>
-        ))}
-      </div>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-20 min-w-52 max-h-72 overflow-y-auto">
+            {selected.length > 0 && (
+              <button
+                onClick={() => { onClear(); }}
+                className="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 border-b border-slate-100"
+              >
+                Clear all
+              </button>
+            )}
+            {options.map((opt) => (
+              <label
+                key={opt}
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(opt)}
+                  onChange={() => onToggle(opt)}
+                  className="w-3.5 h-3.5 accent-blue-500"
+                />
+                <span className="text-sm text-slate-700">{render(opt)}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
