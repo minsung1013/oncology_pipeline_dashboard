@@ -136,6 +136,32 @@ export default function VisualizeFilterBar({ options, filters, onChange, topN, o
         onChange={(v) => set('biomarkers', v)}
       />
 
+      {/* Start year range */}
+      <div className="flex items-center gap-1 text-xs text-slate-500">
+        <span className="font-semibold uppercase tracking-wide text-slate-400">Start</span>
+        <select
+          value={filters.startYear.from}
+          onChange={(e) => set('startYear', { ...filters.startYear, from: e.target.value })}
+          className="border border-slate-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:border-blue-400"
+        >
+          <option value="all">From</option>
+          {options.startYears.map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+        <span className="text-slate-300">–</span>
+        <select
+          value={filters.startYear.to}
+          onChange={(e) => set('startYear', { ...filters.startYear, to: e.target.value })}
+          className="border border-slate-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:border-blue-400"
+        >
+          <option value="all">To</option>
+          {options.startYears.map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex items-center gap-1.5 text-xs text-slate-500">
         <span>Top N</span>
         <select

@@ -134,24 +134,36 @@ export function getVisualizeOptions(drugs) {
   const modalities = [...new Set(drugs.map((d) => d.modality).filter(Boolean))].sort()
   const targets = [...new Set(drugs.map((d) => d.target).filter(Boolean))].sort()
   const biomarkers = [...new Set(drugs.flatMap((d) => d.biomarker_list ?? []).filter(Boolean))].sort()
-  return { companies, cancerCategories, phases, modalities, targets, biomarkers }
+  const startYears = [...new Set(
+    drugs.map((d) => parseInt(d.start_date?.slice(0, 4))).filter((y) => y > 2000 && y < 2040),
+  )].sort((a, b) => a - b)
+  return { companies, cancerCategories, phases, modalities, targets, biomarkers, startYears }
 }
 
 export function applyVisualizeFilters(drugs, filters) {
-  const { companies, cancers, phases, modalities, targets, biomarkers } = filters
+  const { companies, cancers, phases, modalities, targets, biomarkers, startYear } = filters
   const compSet = new Set(companies)
   const cancerSet = new Set(cancers)
   const phaseSet = new Set(phases)
   const modSet = new Set(modalities)
   const targetSet = new Set(targets)
   const bioSet = new Set(biomarkers)
+  const from = startYear && startYear.from !== 'all' ? parseInt(startYear.from) : null
+  const to = startYear && startYear.to !== 'all' ? parseInt(startYear.to) : null
 
-  return drugs.filter((d) =>
-    (compSet.size === 0 || compSet.has(d.company)) &&
-    (cancerSet.size === 0 || cancerSet.has(d.cancer_category)) &&
-    (phaseSet.size === 0 || phaseSet.has(d.phase)) &&
-    (modSet.size === 0 || modSet.has(d.modality)) &&
-    (targetSet.size === 0 || targetSet.has(d.target)) &&
-    (bioSet.size === 0 || (d.biomarker_list ?? []).some((b) => bioSet.has(b))),
-  )
+  return drugs.filter((d) => {
+    if (compSet.size > 0 && !compSet.has(d.company)) return false
+    if (cancerSet.size > 0 && !cancerSet.has(d.cancer_category)) return false
+    if (phaseSet.size > 0 && !phaseSet.has(d.phase)) return false
+    if (modSet.size > 0 && !modSet.has(d.modality)) return false
+    if (targetSet.size > 0 && !targetSet.has(d.target)) return false
+    if (bioSet.size > 0 && !(d.biomarker_list ?? []).some((b) => bioSet.has(b))) return false
+    if (from !== null || to !== null) {
+      const y = parseInt(d.start_date?.slice(0, 4))
+      if (!y) return false
+      if (from !== null && y < from) return false
+      if (to !== null && y > to) return false
+    }
+    return true
+  })
 }

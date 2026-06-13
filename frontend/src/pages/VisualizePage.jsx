@@ -25,6 +25,7 @@ const PIPELINE_URL =
 
 const DEFAULT_FILTERS = {
   companies: [], cancers: [], phases: [], modalities: [], targets: [], biomarkers: [],
+  startYear: { from: 'all', to: 'all' },
 }
 
 // 필터칩 표시용 (key → 라벨, 값 렌더러)
@@ -78,10 +79,12 @@ export default function VisualizePage() {
     })
   }
 
-  const activeChips = Object.entries(filters).flatMap(([key, vals]) =>
-    vals.map((v) => ({ key, value: v })),
-  )
-  const hasActive = activeChips.length > 0
+  const activeChips = Object.entries(filters)
+    .filter(([, vals]) => Array.isArray(vals))
+    .flatMap(([key, vals]) => vals.map((v) => ({ key, value: v })))
+  const yearActive = filters.startYear.from !== 'all' || filters.startYear.to !== 'all'
+  const activeCount = activeChips.length + (yearActive ? 1 : 0)
+  const hasActive = activeCount > 0
 
   const stats = useMemo(() => getSummaryStats(drugs), [drugs])
   const companyData = useMemo(() => aggregateByField(drugs, 'company', topN), [drugs, topN])
@@ -108,8 +111,10 @@ export default function VisualizePage() {
   }
 
   const summary = hasActive
-    ? `${drugs.length.toLocaleString()} records match ${activeChips.length} filter${activeChips.length > 1 ? 's' : ''}`
+    ? `${drugs.length.toLocaleString()} records match ${activeCount} filter${activeCount > 1 ? 's' : ''}`
     : `All trials — ${drugs.length.toLocaleString()} records`
+
+  const yearChipLabel = `${filters.startYear.from === 'all' ? '…' : filters.startYear.from}–${filters.startYear.to === 'all' ? '…' : filters.startYear.to}`
 
   function applyToPipeline() {
     const pipelineFilters = {
@@ -119,6 +124,7 @@ export default function VisualizePage() {
       companies: filters.companies,
       targets: filters.targets,
       biomarkers: filters.biomarkers,
+      startYear: filters.startYear,
     }
     navigate('/', { state: { pipelineFilters } })
   }
@@ -170,6 +176,17 @@ export default function VisualizePage() {
                 <span className="text-blue-400">✕</span>
               </button>
             ))}
+            {yearActive && (
+              <button
+                onClick={() => setFilters((prev) => ({ ...prev, startYear: { from: 'all', to: 'all' } }))}
+                className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                title="Remove filter"
+              >
+                <span className="text-blue-400">Start:</span>
+                {yearChipLabel}
+                <span className="text-blue-400">✕</span>
+              </button>
+            )}
             <button
               onClick={() => setFilters(DEFAULT_FILTERS)}
               className="text-xs text-slate-400 hover:text-slate-600 ml-1"
