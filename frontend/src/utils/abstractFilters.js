@@ -1,6 +1,6 @@
 export function applyAbstractFilters(abstracts, filters) {
   const {
-    phases, modalities, cancers, countries, company, affiliation,
+    conferences, years, phases, modalities, cancers, countries, company, affiliation,
     keyword, nctId, showEmbargoed,
   } = filters
 
@@ -9,6 +9,8 @@ export function applyAbstractFilters(abstracts, filters) {
 
   return abstracts.filter((a) => {
     if (!showEmbargoed && a.status === 'embargoed') return false
+    if (conferences?.length > 0 && !conferences.includes(a.conference)) return false
+    if (years?.length > 0 && !years.includes(String(a.year))) return false
     if (phases.length > 0 && !phases.some((p) => (a.phases ?? []).includes(p))) return false
     if (modalities.length > 0 && !modalities.some((m) => (a.modality_list ?? []).includes(m))) return false
     if (cancers.length > 0 && !(a.cancer_category ?? []).some((c) => cancers.includes(c))) return false
@@ -45,6 +47,14 @@ export function applyAbstractFilters(abstracts, filters) {
 const PHASE_ORDER = ['EARLY_PHASE1', 'PHASE1', 'PHASE2', 'PHASE3', 'PHASE4', 'NA']
 
 export function getAbstractFilterOptions(abstracts) {
+  const conferences = [
+    ...new Set(abstracts.map((a) => a.conference).filter(Boolean)),
+  ].sort()
+
+  const years = [
+    ...new Set(abstracts.map((a) => a.year).filter(Boolean)),
+  ].sort((a, b) => b - a).map(String)
+
   const phases = [
     ...new Set(abstracts.flatMap((a) => a.phases ?? []).filter(Boolean)),
   ].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b))
@@ -61,5 +71,5 @@ export function getAbstractFilterOptions(abstracts) {
     ...new Set(abstracts.map((a) => a.authors?.[0]?.country).filter(Boolean)),
   ].sort()
 
-  return { phases, modalities, cancers, countries }
+  return { conferences, years, phases, modalities, cancers, countries }
 }

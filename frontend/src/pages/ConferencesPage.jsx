@@ -8,6 +8,8 @@ const ABSTRACTS_URL =
   'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/abstracts_asco2026.json'
 
 const DEFAULT_FILTERS = {
+  conferences: [],
+  years: [],
   phases: [],
   modalities: [],
   cancers: [],
@@ -161,6 +163,20 @@ export default function ConferencesPage() {
           )}
 
           <MultiSelect
+            label="Source"
+            options={filterOptions.conferences}
+            selected={filters.conferences}
+            onChange={(v) => setFilter('conferences', v)}
+          />
+
+          <MultiSelect
+            label="Year"
+            options={filterOptions.years}
+            selected={filters.years}
+            onChange={(v) => setFilter('years', v)}
+          />
+
+          <MultiSelect
             label="Cancer"
             options={filterOptions.cancers}
             selected={filters.cancers}
@@ -222,7 +238,9 @@ export default function ConferencesPage() {
             Show embargoed
           </label>
 
-          {(filters.cancers.length > 0 ||
+          {(filters.conferences.length > 0 ||
+            filters.years.length > 0 ||
+            filters.cancers.length > 0 ||
             filters.phases.length > 0 ||
             filters.modalities.length > 0 ||
             filters.countries.length > 0 ||

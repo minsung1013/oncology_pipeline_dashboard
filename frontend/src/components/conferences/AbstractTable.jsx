@@ -103,6 +103,28 @@ function NctCell({ ncts }) {
 }
 
 const COLUMNS = [
+  col.accessor('conference', {
+    header: 'Source',
+    cell: ({ getValue }) => {
+      const v = getValue()
+      if (!v) return <span className="text-slate-300">—</span>
+      return (
+        <span className="inline-block text-xs font-semibold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+          {v}
+        </span>
+      )
+    },
+    size: 80,
+  }),
+
+  col.accessor('year', {
+    header: 'Year',
+    cell: ({ getValue }) => (
+      <span className="text-xs font-medium text-slate-600">{getValue() ?? '—'}</span>
+    ),
+    size: 70,
+  }),
+
   col.accessor('abstract_id', {
     header: '#',
     cell: ({ row }) => {
