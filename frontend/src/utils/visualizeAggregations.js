@@ -161,10 +161,22 @@ export function getSummaryStats(drugs) {
   }
 }
 
+// 빈도순 옵션 목록 (값/배열값 모두 지원)
+function byFrequency(drugs, extract) {
+  const counts = new Map()
+  for (const d of drugs) {
+    const v = extract(d)
+    const arr = Array.isArray(v) ? v : v ? [v] : []
+    for (const x of arr) if (x) counts.set(x, (counts.get(x) ?? 0) + 1)
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k)
+}
+
 // 필터 옵션: 각 축의 고유값
 export function getVisualizeOptions(drugs) {
   const companies = [...new Set(drugs.map((d) => d.company_normalized).filter(Boolean))].sort()
-  const drugNames = [...new Set(drugs.map((d) => d.drug_name).filter(Boolean))].sort()
+  // drug/target/biomarker는 빈도순 (가장 흔한 것부터) — 스펙
+  const drugNames = byFrequency(drugs, (d) => d.drug_name)
   const cancerCategories = [...new Set(drugs.map((d) => d.cancer_category).filter(Boolean))].sort()
   const phaseSet = new Set(drugs.flatMap((d) => d.phases ?? []).filter((p) => p && p !== 'UNKNOWN'))
   if (drugs.some((d) => { const p = d.phases ?? []; return p.length === 0 || p.every((v) => v === 'UNKNOWN') })) {
@@ -174,8 +186,8 @@ export function getVisualizeOptions(drugs) {
     (a, b) => (PHASE_ENUM_ORDER.indexOf(a) + 1 || 99) - (PHASE_ENUM_ORDER.indexOf(b) + 1 || 99),
   )
   const modalities = [...new Set(drugs.map((d) => d.modality).filter(Boolean))].sort()
-  const targets = [...new Set(drugs.map((d) => d.target).filter(Boolean))].sort()
-  const biomarkers = [...new Set(drugs.flatMap((d) => d.biomarker_list ?? []).filter(Boolean))].sort()
+  const targets = byFrequency(drugs, (d) => (d.target && d.target !== 'Unknown' ? d.target : null))
+  const biomarkers = byFrequency(drugs, (d) => d.biomarker_list ?? [])
   const statuses = [...new Set(drugs.map((d) => d.overall_status).filter(Boolean))]
   const startYears = [...new Set(
     drugs.map((d) => parseInt(d.start_date?.slice(0, 4))).filter((y) => y > 2000 && y < 2040),

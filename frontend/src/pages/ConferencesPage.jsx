@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import AbstractTable from '../components/conferences/AbstractTable'
 import { applyAbstractFilters, getAbstractFilterOptions } from '../utils/abstractFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
@@ -92,6 +92,14 @@ export default function ConferencesPage() {
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(buildFilters)
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+
+  // NCT 클릭 → Pipeline 탭으로 이동, 해당 NCT로 키워드 필터(포커스)
+  function focusInPipeline(nct) {
+    const cur = getTabState('pipeline') ?? {}
+    setTabState('pipeline', { ...cur, keyword: nct })
+    navigate('/')
+  }
 
   const nctParam = searchParams.get('nct')
 
@@ -321,6 +329,7 @@ export default function ConferencesPage() {
       <AbstractTable
         abstracts={filtered}
         onAuthorClick={(name) => setFilter('authorName', name)}
+        onNctClick={focusInPipeline}
       />
     </div>
   )

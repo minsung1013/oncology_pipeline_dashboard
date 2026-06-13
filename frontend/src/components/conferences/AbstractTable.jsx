@@ -80,20 +80,30 @@ function TitleCell({ a }) {
   )
 }
 
-function NctCell({ ncts }) {
+function NctCell({ ncts, onPipeline }) {
   if (!ncts?.length) return <span className="text-slate-300">—</span>
   return (
     <div className="flex flex-col gap-0.5">
       {ncts.slice(0, 3).map((nct) => (
-        <a
-          key={nct}
-          href={`https://clinicaltrials.gov/study/${nct}`}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs text-blue-500 hover:underline font-mono"
-        >
-          {nct}
-        </a>
+        <div key={nct} className="flex items-center gap-1">
+          {/* NCT 클릭 → Pipeline 탭에서 해당 시험 필터 */}
+          <button
+            onClick={() => onPipeline?.(nct)}
+            title="View this trial in the Pipeline tab"
+            className="text-xs text-blue-600 hover:underline font-mono"
+          >
+            {nct}
+          </button>
+          <a
+            href={`https://clinicaltrials.gov/study/${nct}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Open on ClinicalTrials.gov"
+            className="text-slate-300 hover:text-blue-500 text-[10px]"
+          >
+            ↗
+          </a>
+        </div>
       ))}
       {ncts.length > 3 && (
         <span className="text-xs text-slate-400">+{ncts.length - 3}</span>
@@ -275,14 +285,17 @@ const COLUMNS = [
   }),
 
   col.accessor('nct_ids', {
+    id: 'nct_ids',
     header: 'NCT IDs',
     enableSorting: false,
-    cell: ({ getValue }) => <NctCell ncts={getValue()} />,
+    cell: ({ getValue, table }) => (
+      <NctCell ncts={getValue()} onPipeline={table.options.meta?.onNctClick} />
+    ),
     size: 130,
   }),
 ]
 
-export default function AbstractTable({ abstracts, onAuthorClick }) {
+export default function AbstractTable({ abstracts, onAuthorClick, onNctClick }) {
   const [sorting, setSorting] = useState([])
   const [columnSizing, setColumnSizing] = useState({})
 
@@ -290,7 +303,7 @@ export default function AbstractTable({ abstracts, onAuthorClick }) {
     data: abstracts,
     columns: COLUMNS,
     state: { sorting, columnSizing },
-    meta: { onAuthorClick },
+    meta: { onAuthorClick, onNctClick },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
     columnResizeMode: 'onChange',
