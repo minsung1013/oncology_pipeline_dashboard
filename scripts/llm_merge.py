@@ -21,6 +21,9 @@ import re
 
 PIPELINE = "data/parsed/pipeline.json"
 DRUG_CACHE = "data/cache/llm_drug_cache.json"
+ABSTRACTS = "data/parsed/abstracts_asco2026.json"
+ABSTRACT_CACHE = "data/cache/llm_abstract_cache.json"
+ABS_CONF = 0.6  # 초록: LLM 리스트 채택 최소 신뢰도
 
 FILL_CONF = 0.6       # Unknown 채우기 최소 신뢰도
 CONFLICT_CONF = 0.8   # 충돌 인식 최소 신뢰도
@@ -121,8 +124,49 @@ def merge(write: bool) -> None:
         print("\n(미리보기 — 저장하려면 --write)")
 
 
+def merge_abstracts(write: bool) -> None:
+    data = json.load(open(ABSTRACTS, encoding="utf-8"))
+    abstracts = data["abstracts"]
+    cache = json.load(open(ABSTRACT_CACHE, encoding="utf-8"))
+    stats = {"total": len(abstracts), "have_llm": 0, "applied": 0}
+
+    for a in abstracts:
+        # 원본 규칙 리스트 보존
+        a.setdefault("modality_list_rule", a.get("modality_list", []))
+        a.setdefault("target_list_rule", a.get("target_list", []))
+        a.setdefault("biomarker_list_rule", a.get("biomarker_list", []))
+        llm = cache.get(a["uid"])
+        src = "rule"
+        if llm and llm.get("confidence", 0) >= ABS_CONF:
+            stats["have_llm"] += 1
+            a["modality_list"] = llm.get("modality_list") or ["Unknown"]
+            a["target_list"] = llm.get("target_list") or ["Unknown"]
+            a["biomarker_list"] = llm.get("biomarkers") or []
+            a["biomarker_mentioned"] = len(a["biomarker_list"]) > 0
+            src = "llm"
+            stats["applied"] += 1
+        a["enrich_src"] = src
+        a["llm_confidence"] = llm.get("confidence") if llm else None
+
+    print("=== 초록 병합 통계 ===")
+    for k, v in stats.items():
+        print(f"  {k}: {v}")
+    bm = sum(1 for a in abstracts if a.get("biomarker_mentioned"))
+    print(f"  biomarker_mentioned: {bm}/{len(abstracts)}")
+    if write:
+        with open(ABSTRACTS, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"\n저장 완료 -> {ABSTRACTS}")
+    else:
+        print("\n(미리보기 — 저장하려면 --write)")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
+    ap.add_argument("--mode", choices=["drugs", "abstracts"], default="drugs")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
-    merge(args.write)
+    if args.mode == "abstracts":
+        merge_abstracts(args.write)
+    else:
+        merge(args.write)

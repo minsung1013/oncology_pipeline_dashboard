@@ -12,6 +12,18 @@ import { ModalityBadge, StatusDot } from './CdxBadge'
 
 const col = createColumnHelper()
 
+// LLM 보강 출처 표시 (rule 원본을 툴팁으로)
+function AiTag({ ruleValue }) {
+  return (
+    <span
+      title={`AI-enriched (qwen3)${ruleValue && ruleValue !== 'Unknown' ? ` · rule said: ${ruleValue}` : ' · rule had no value'}`}
+      className="ml-1 align-middle text-[9px] font-bold bg-violet-100 text-violet-600 px-1 rounded cursor-help"
+    >
+      AI
+    </span>
+  )
+}
+
 function DrugCell({ d, nctIndex }) {
   const [expanded, setExpanded] = useState(false)
   const ncts = d.nct_ids ?? []
@@ -105,14 +117,15 @@ function makeColumns(nctIndex) {
 
   col.accessor('target', {
     header: 'Target',
-    cell: ({ getValue }) => {
+    cell: ({ getValue, row }) => {
       const v = getValue()
+      const ai = row.original.target_src === 'llm'
       return v === 'Unknown' ? (
         <span className="text-orange-500 font-medium flex items-center gap-1">
           <span>🔍</span> Unknown
         </span>
       ) : (
-        <span className="font-medium">{v}</span>
+        <span className="font-medium">{v}{ai && <AiTag ruleValue={row.original.target_rule} />}</span>
       )
     },
     size: 110,
@@ -120,7 +133,12 @@ function makeColumns(nctIndex) {
 
   col.accessor('modality', {
     header: 'Modality',
-    cell: ({ getValue }) => <ModalityBadge modality={getValue()} />,
+    cell: ({ getValue, row }) => (
+      <span className="inline-flex items-center">
+        <ModalityBadge modality={getValue()} />
+        {row.original.modality_src === 'llm' && <AiTag ruleValue={row.original.modality_rule} />}
+      </span>
+    ),
     size: 160,
   }),
 

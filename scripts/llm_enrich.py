@@ -24,6 +24,8 @@ MODEL = "qwen3:30b-a3b-q4_K_M"
 
 PIPELINE = "data/parsed/pipeline.json"
 DRUG_CACHE = "data/cache/llm_drug_cache.json"
+ABSTRACTS = "data/parsed/abstracts_asco2026.json"
+ABSTRACT_CACHE = "data/cache/llm_abstract_cache.json"
 
 MODALITIES = [
     "ADC", "Bispecific Antibody", "CAR-T", "Monoclonal Antibody", "Small Molecule",
@@ -82,6 +84,38 @@ def classify_drug(drug_name: str, combo: list, condition: str, title: str) -> di
         "modality": normalize_modality(data.get("modality")),
         "target": (data.get("target") or "Unknown").strip() or "Unknown",
         "biomarkers": data.get("biomarkers") if isinstance(data.get("biomarkers"), list) else [],
+        "confidence": float(data.get("confidence", 0.0)) if isinstance(data.get("confidence", 0.0), (int, float)) else 0.0,
+    }
+
+
+SYSTEM_ABS = (
+    "You are an oncology conference abstract classifier. From the abstract text, extract STRICT JSON:\n"
+    '{"modality_list": <list from: ADC, Bispecific Antibody, CAR-T, Monoclonal Antibody, Small Molecule, '
+    "mRNA, Peptide, Cell Therapy, Oncolytic Virus, Radiopharmaceutical (only those actually studied; [] if none)>, "
+    '"target_list": <list of molecular target gene/protein symbols studied (e.g. ["HER2","EGFR"]) or []>, '
+    '"biomarkers": <list of patient-selection / stratification biomarkers (e.g. ["PD-L1","MSI-H","ctDNA"]) or []>, '
+    '"confidence": <0.0-1.0>}\n'
+    "Extract only what the abstract actually investigates. Do not invent."
+)
+
+
+def classify_abstract(title: str, body: str) -> dict:
+    txt = f"Title: {title or 'n/a'}\nAbstract: {(body or '')[:3000]}"
+    raw = ollama(f"{SYSTEM_ABS}\n\n{txt}\n\nJSON:", timeout=180)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {"_error": "parse"}
+
+    def _clean_list(v):
+        return [str(x).strip() for x in v if str(x).strip()] if isinstance(v, list) else []
+
+    mods = [normalize_modality(m) for m in _clean_list(data.get("modality_list"))]
+    mods = [m for m in mods if m != "Unknown"]
+    return {
+        "modality_list": list(dict.fromkeys(mods)),
+        "target_list": list(dict.fromkeys(_clean_list(data.get("target_list")))),
+        "biomarkers": list(dict.fromkeys(_clean_list(data.get("biomarkers")))),
         "confidence": float(data.get("confidence", 0.0)) if isinstance(data.get("confidence", 0.0), (int, float)) else 0.0,
     }
 
@@ -150,6 +184,38 @@ def run_drugs(only_unknown: bool, limit: int | None) -> None:
     print(f"완료. 캐시 총 {len(cache)}개 -> {DRUG_CACHE}")
 
 
+def run_abstracts(limit: int | None) -> None:
+    abstracts = json.load(open(ABSTRACTS, encoding="utf-8"))["abstracts"]
+    cache = {}
+    if os.path.exists(ABSTRACT_CACHE):
+        cache = json.load(open(ABSTRACT_CACHE, encoding="utf-8"))
+
+    todo = [a for a in abstracts if a["uid"] not in cache and (a.get("title") or a.get("abstract_text"))]
+    if limit:
+        todo = todo[:limit]
+    print(f"초록 {len(abstracts)}개 중 이번 실행 {len(todo)}개 (캐시됨 {len(cache)})")
+
+    t0 = time.time()
+    for i, a in enumerate(todo, 1):
+        try:
+            res = classify_abstract(a.get("title"), a.get("abstract_text"))
+        except Exception as e:
+            res = {"_error": str(e)[:80]}
+        if "_error" in res:
+            print(f"  [skip] {a['uid']}: {res['_error']}")
+            continue
+        cache[a["uid"]] = res
+        if i % 10 == 0 or i == len(todo):
+            tmp = ABSTRACT_CACHE + ".tmp"
+            os.makedirs(os.path.dirname(ABSTRACT_CACHE), exist_ok=True)
+            json.dump(cache, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+            os.replace(tmp, ABSTRACT_CACHE)
+            rate = i / (time.time() - t0)
+            eta = (len(todo) - i) / rate if rate else 0
+            print(f"  {i}/{len(todo)}  {rate:.2f}/s  ETA {eta/60:.1f}min | {a['abstract_id']} -> {res['modality_list']}/{res['biomarkers']}")
+    print(f"완료. 캐시 총 {len(cache)} -> {ABSTRACT_CACHE}")
+
+
 def run_eval(limit: int) -> None:
     """규칙기반 vs LLM 비교 (현재 Unknown이 아닌 것 포함, 무작위)."""
     import random
@@ -179,11 +245,13 @@ def run_eval(limit: int) -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=["drugs", "eval"], default="eval")
+    ap.add_argument("--mode", choices=["drugs", "abstracts", "eval"], default="eval")
     ap.add_argument("--only-unknown", action="store_true")
     ap.add_argument("--limit", type=int, default=None)
     args = ap.parse_args()
     if args.mode == "eval":
         run_eval(args.limit or 60)
+    elif args.mode == "abstracts":
+        run_abstracts(args.limit)
     else:
         run_drugs(args.only_unknown, args.limit)
