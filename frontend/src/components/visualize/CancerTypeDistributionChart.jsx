@@ -1,9 +1,12 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import ChartCard, { EmptyHint } from './ChartCard'
 
-export default function CancerTypeDistributionChart({ data }) {
+export default function CancerTypeDistributionChart({ data, onSelect, selected = [] }) {
+  const handleClick = (entry) => {
+    if (entry && !entry.isOther && onSelect) onSelect(entry.name)
+  }
   return (
-    <ChartCard title="③ Cancer Type Distribution" subtitle="Trials per cancer category (Top N)" height={320}>
+    <ChartCard title="③ Cancer Type Distribution" subtitle="Trials per cancer category — click a bar to filter" height={320}>
       {data.length === 0 ? (
         <EmptyHint message="No data." />
       ) : (
@@ -12,9 +15,12 @@ export default function CancerTypeDistributionChart({ data }) {
             <XAxis type="number" tick={{ fontSize: 11 }} />
             <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} interval={0} />
             <Tooltip formatter={(v) => v.toLocaleString()} />
-            <Bar dataKey="count" radius={[0, 3, 3, 0]}>
+            <Bar dataKey="count" radius={[0, 3, 3, 0]} onClick={handleClick} cursor="pointer">
               {data.map((d, i) => (
-                <Cell key={i} fill={d.isOther ? '#cbd5e1' : '#14b8a6'} />
+                <Cell
+                  key={i}
+                  fill={d.isOther ? '#cbd5e1' : selected.includes(d.name) ? '#0f766e' : '#14b8a6'}
+                />
               ))}
             </Bar>
           </BarChart>

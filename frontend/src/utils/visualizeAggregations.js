@@ -107,19 +107,33 @@ export function getSummaryStats(drugs) {
   }
 }
 
-// 필터 옵션: 회사·암종 고유값
+// 필터 옵션: 각 축의 고유값
 export function getVisualizeOptions(drugs) {
   const companies = [...new Set(drugs.map((d) => d.company).filter(Boolean))].sort()
   const cancerCategories = [...new Set(drugs.map((d) => d.cancer_category).filter(Boolean))].sort()
-  return { companies, cancerCategories }
+  const phases = [...new Set(drugs.map((d) => d.phase).filter(Boolean))]
+    .sort((a, b) => (PHASE_ORDER.indexOf(a) + 1 || 99) - (PHASE_ORDER.indexOf(b) + 1 || 99))
+  const modalities = [...new Set(drugs.map((d) => d.modality).filter(Boolean))].sort()
+  const targets = [...new Set(drugs.map((d) => d.target).filter(Boolean))].sort()
+  const biomarkers = [...new Set(drugs.flatMap((d) => d.biomarker_list ?? []).filter(Boolean))].sort()
+  return { companies, cancerCategories, phases, modalities, targets, biomarkers }
 }
 
-export function applyVisualizeFilters(drugs, { companies, cancers }) {
-  if (companies.length === 0 && cancers.length === 0) return drugs
+export function applyVisualizeFilters(drugs, filters) {
+  const { companies, cancers, phases, modalities, targets, biomarkers } = filters
   const compSet = new Set(companies)
   const cancerSet = new Set(cancers)
+  const phaseSet = new Set(phases)
+  const modSet = new Set(modalities)
+  const targetSet = new Set(targets)
+  const bioSet = new Set(biomarkers)
+
   return drugs.filter((d) =>
-    (companies.length === 0 || compSet.has(d.company)) &&
-    (cancers.length === 0 || cancerSet.has(d.cancer_category)),
+    (compSet.size === 0 || compSet.has(d.company)) &&
+    (cancerSet.size === 0 || cancerSet.has(d.cancer_category)) &&
+    (phaseSet.size === 0 || phaseSet.has(d.phase)) &&
+    (modSet.size === 0 || modSet.has(d.modality)) &&
+    (targetSet.size === 0 || targetSet.has(d.target)) &&
+    (bioSet.size === 0 || (d.biomarker_list ?? []).some((b) => bioSet.has(b))),
   )
 }

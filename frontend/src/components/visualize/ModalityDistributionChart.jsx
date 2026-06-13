@@ -14,7 +14,7 @@ function colorFor(name, mutedIdx) {
   return EMPHASIS_COLORS[name] ?? MUTED[mutedIdx % MUTED.length]
 }
 
-export default function ModalityDistributionChart({ data }) {
+export default function ModalityDistributionChart({ data, onSelect, selected = [] }) {
   let mutedIdx = 0
   const colored = data.map((d) => {
     const isEmphasis = d.name in EMPHASIS_COLORS
@@ -22,8 +22,12 @@ export default function ModalityDistributionChart({ data }) {
     return { ...d, fill }
   })
 
+  const handleClick = (entry) => {
+    if (entry && entry.name && onSelect) onSelect(entry.name)
+  }
+
   return (
-    <ChartCard title="④ Modality Distribution" subtitle="CDx-synergistic modalities highlighted" height={320}>
+    <ChartCard title="④ Modality Distribution" subtitle="CDx-synergistic modalities highlighted — click a slice to filter" height={320}>
       {data.length === 0 ? (
         <EmptyHint message="No data." />
       ) : (
@@ -37,9 +41,16 @@ export default function ModalityDistributionChart({ data }) {
               cy="50%"
               outerRadius={95}
               innerRadius={0}
+              onClick={handleClick}
+              cursor="pointer"
             >
               {colored.map((d, i) => (
-                <Cell key={i} fill={d.fill} />
+                <Cell
+                  key={i}
+                  fill={d.fill}
+                  stroke={selected.includes(d.name) ? '#0f172a' : '#fff'}
+                  strokeWidth={selected.includes(d.name) ? 2.5 : 1}
+                />
               ))}
             </Pie>
             <Tooltip formatter={(v) => v.toLocaleString()} />

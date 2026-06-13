@@ -1,9 +1,12 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import ChartCard, { EmptyHint } from './ChartCard'
 
-export default function CompanyDistributionChart({ data }) {
+export default function CompanyDistributionChart({ data, onSelect, selected = [] }) {
+  const handleClick = (entry) => {
+    if (entry && !entry.isOther && onSelect) onSelect(entry.name)
+  }
   return (
-    <ChartCard title="① Company Distribution" subtitle="Trials per lead sponsor (Top N)" height={320}>
+    <ChartCard title="① Company Distribution" subtitle="Trials per lead sponsor — click a bar to filter" height={320}>
       {data.length === 0 ? (
         <EmptyHint message="No data." />
       ) : (
@@ -18,9 +21,12 @@ export default function CompanyDistributionChart({ data }) {
               interval={0}
             />
             <Tooltip formatter={(v) => v.toLocaleString()} />
-            <Bar dataKey="count" radius={[0, 3, 3, 0]}>
+            <Bar dataKey="count" radius={[0, 3, 3, 0]} onClick={handleClick} cursor="pointer">
               {data.map((d, i) => (
-                <Cell key={i} fill={d.isOther ? '#cbd5e1' : '#3b82f6'} />
+                <Cell
+                  key={i}
+                  fill={d.isOther ? '#cbd5e1' : selected.includes(d.name) ? '#1d4ed8' : '#3b82f6'}
+                />
               ))}
             </Bar>
           </BarChart>

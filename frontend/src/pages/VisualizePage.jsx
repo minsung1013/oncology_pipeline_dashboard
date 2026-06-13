@@ -15,13 +15,26 @@ import {
   aggregateByModality,
   aggregateBiomarker,
   getSummaryStats,
+  phaseLabel,
 } from '../utils/visualizeAggregations'
 
 const PIPELINE_URL =
   import.meta.env.VITE_PIPELINE_URL ??
   'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/pipeline.json'
 
-const DEFAULT_FILTERS = { companies: [], cancers: [] }
+const DEFAULT_FILTERS = {
+  companies: [], cancers: [], phases: [], modalities: [], targets: [], biomarkers: [],
+}
+
+// 필터칩 표시용 (key → 라벨, 값 렌더러)
+const CHIP_META = {
+  companies: { label: 'Company', render: (v) => v },
+  cancers: { label: 'Cancer', render: (v) => v },
+  phases: { label: 'Phase', render: phaseLabel },
+  modalities: { label: 'Modality', render: (v) => v },
+  targets: { label: 'Target', render: (v) => v },
+  biomarkers: { label: 'Biomarker', render: (v) => v },
+}
 
 export default function VisualizePage() {
   const [data, setData] = useState(null)
@@ -44,6 +57,20 @@ export default function VisualizePage() {
 
   const options = useMemo(() => getVisualizeOptions(allDrugs), [allDrugs])
   const drugs = useMemo(() => applyVisualizeFilters(allDrugs, filters), [allDrugs, filters])
+
+  // 그래프 클릭 → 해당 축 필터 토글
+  const toggleFilter = (key, value) => {
+    setFilters((prev) => {
+      const cur = prev[key]
+      const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]
+      return { ...prev, [key]: next }
+    })
+  }
+
+  const activeChips = Object.entries(filters).flatMap(([key, vals]) =>
+    vals.map((v) => ({ key, value: v })),
+  )
+  const hasActive = activeChips.length > 0
 
   const stats = useMemo(() => getSummaryStats(drugs), [drugs])
   const companyData = useMemo(() => aggregateByField(drugs, 'company', topN), [drugs, topN])
@@ -69,10 +96,9 @@ export default function VisualizePage() {
     )
   }
 
-  const summary =
-    filters.companies.length > 0 || filters.cancers.length > 0
-      ? `${[...filters.companies, ...filters.cancers].join(', ')} — ${drugs.length.toLocaleString()} records`
-      : `All trials — ${drugs.length.toLocaleString()} records`
+  const summary = hasActive
+    ? `${drugs.length.toLocaleString()} records match ${activeChips.length} filter${activeChips.length > 1 ? 's' : ''}`
+    : `All trials — ${drugs.length.toLocaleString()} records`
 
   return (
     <div className="flex flex-col h-full">
@@ -93,6 +119,30 @@ export default function VisualizePage() {
           topN={topN}
           onTopNChange={setTopN}
         />
+
+        {/* Active filter chips */}
+        {hasActive && (
+          <div className="flex items-center gap-1.5 flex-wrap mt-2">
+            {activeChips.map(({ key, value }) => (
+              <button
+                key={`${key}:${value}`}
+                onClick={() => toggleFilter(key, value)}
+                className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                title="Remove filter"
+              >
+                <span className="text-blue-400">{CHIP_META[key].label}:</span>
+                {CHIP_META[key].render(value)}
+                <span className="text-blue-400">✕</span>
+              </button>
+            ))}
+            <button
+              onClick={() => setFilters(DEFAULT_FILTERS)}
+              className="text-xs text-slate-400 hover:text-slate-600 ml-1"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Scrollable charts */}
@@ -100,12 +150,36 @@ export default function VisualizePage() {
         <SummaryCards stats={stats} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <CompanyDistributionChart data={companyData} />
-          <PhaseDistributionChart data={phaseData} />
-          <CancerTypeDistributionChart data={cancerData} />
-          <ModalityDistributionChart data={modalityData} />
-          <TargetDistributionChart data={targetData} />
-          <BiomarkerChart data={biomarkerData} />
+          <CompanyDistributionChart
+            data={companyData}
+            selected={filters.companies}
+            onSelect={(v) => toggleFilter('companies', v)}
+          />
+          <PhaseDistributionChart
+            data={phaseData}
+            selected={filters.phases}
+            onSelect={(v) => toggleFilter('phases', v)}
+          />
+          <CancerTypeDistributionChart
+            data={cancerData}
+            selected={filters.cancers}
+            onSelect={(v) => toggleFilter('cancers', v)}
+          />
+          <ModalityDistributionChart
+            data={modalityData}
+            selected={filters.modalities}
+            onSelect={(v) => toggleFilter('modalities', v)}
+          />
+          <TargetDistributionChart
+            data={targetData}
+            selected={filters.targets}
+            onSelect={(v) => toggleFilter('targets', v)}
+          />
+          <BiomarkerChart
+            data={biomarkerData}
+            selected={filters.biomarkers}
+            onSelect={(v) => toggleFilter('biomarkers', v)}
+          />
         </div>
       </div>
     </div>

@@ -1,15 +1,20 @@
 import { useState, useMemo } from 'react'
+import { phaseLabel } from '../../utils/visualizeAggregations'
 
-// 검색형 다중선택 (회사 6,000개 대응)
-function SearchableMultiSelect({ label, options, selected, onChange, width = 'w-56' }) {
+// 다중선택 드롭다운. searchable=true면 검색창(회사 6,000개 대응).
+function MultiSelect({
+  label, options, selected, onChange,
+  searchable = false, renderLabel = (v) => v, width = 'w-56',
+}) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(() => {
+    if (!searchable) return options
     const q = query.trim().toLowerCase()
     const base = q ? options.filter((o) => o.toLowerCase().includes(q)) : options
-    return base.slice(0, 200) // 렌더 상한
-  }, [options, query])
+    return base.slice(0, 200)
+  }, [options, query, searchable])
 
   const toggle = (val) =>
     onChange(selected.includes(val) ? selected.filter((v) => v !== val) : [...selected, val])
@@ -37,16 +42,18 @@ function SearchableMultiSelect({ label, options, selected, onChange, width = 'w-
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className={`absolute top-full left-0 mt-1 z-20 bg-white border border-slate-200 rounded shadow-lg ${width}`}>
-            <div className="p-2 border-b border-slate-100">
-              <input
-                autoFocus
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={`Search ${label.toLowerCase()}…`}
-                className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
-              />
-            </div>
+            {searchable && (
+              <div className="p-2 border-b border-slate-100">
+                <input
+                  autoFocus
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={`Search ${label.toLowerCase()}…`}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                />
+              </div>
+            )}
             {selected.length > 0 && (
               <button
                 onClick={() => onChange([])}
@@ -70,10 +77,10 @@ function SearchableMultiSelect({ label, options, selected, onChange, width = 'w-
                     onChange={() => toggle(opt)}
                     className="accent-blue-500"
                   />
-                  <span className="text-slate-700 truncate">{opt}</span>
+                  <span className="text-slate-700 truncate">{renderLabel(opt)}</span>
                 </label>
               ))}
-              {query.trim() === '' && options.length > 200 && (
+              {searchable && query.trim() === '' && options.length > 200 && (
                 <div className="px-3 py-1.5 text-xs text-slate-400 italic">
                   Showing first 200 — type to search all {options.length.toLocaleString()}
                 </div>
@@ -88,23 +95,45 @@ function SearchableMultiSelect({ label, options, selected, onChange, width = 'w-
 
 export default function VisualizeFilterBar({ options, filters, onChange, topN, onTopNChange }) {
   const set = (key, value) => onChange({ ...filters, [key]: value })
-  const hasFilters = filters.companies.length > 0 || filters.cancers.length > 0
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <SearchableMultiSelect
-        label="Company"
+      <MultiSelect
+        label="Company" searchable width="w-72"
         options={options.companies}
         selected={filters.companies}
         onChange={(v) => set('companies', v)}
-        width="w-72"
       />
-
-      <SearchableMultiSelect
-        label="Cancer"
+      <MultiSelect
+        label="Cancer" searchable
         options={options.cancerCategories}
         selected={filters.cancers}
         onChange={(v) => set('cancers', v)}
+      />
+      <MultiSelect
+        label="Phase"
+        options={options.phases}
+        selected={filters.phases}
+        onChange={(v) => set('phases', v)}
+        renderLabel={phaseLabel}
+      />
+      <MultiSelect
+        label="Modality"
+        options={options.modalities}
+        selected={filters.modalities}
+        onChange={(v) => set('modalities', v)}
+      />
+      <MultiSelect
+        label="Target" searchable
+        options={options.targets}
+        selected={filters.targets}
+        onChange={(v) => set('targets', v)}
+      />
+      <MultiSelect
+        label="Biomarker" searchable
+        options={options.biomarkers}
+        selected={filters.biomarkers}
+        onChange={(v) => set('biomarkers', v)}
       />
 
       <div className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -119,15 +148,6 @@ export default function VisualizeFilterBar({ options, filters, onChange, topN, o
           ))}
         </select>
       </div>
-
-      {hasFilters && (
-        <button
-          onClick={() => onChange({ companies: [], cancers: [] })}
-          className="text-xs text-slate-400 hover:text-slate-600 ml-1"
-        >
-          Clear all
-        </button>
-      )}
     </div>
   )
 }
