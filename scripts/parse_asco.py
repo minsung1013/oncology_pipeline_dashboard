@@ -336,81 +336,79 @@ def clean_company(research_sponsor: str | None) -> str | None:
 
 # ── 초록 블록 파싱 ────────────────────────────────────────────────────────────
 
-def parse_block(
-    abstract_id: str,
-    text_before: str,   # "First Author:" 이전 (~3000자 윈도우)
-    text_after: str,    # "First Author:" 이후 ~ 다음 "First Author:" 이전
-    current_track: str,
-) -> dict:
+
+# ── 컬럼 인식 추출 (2단 레이아웃 정렬) ──────────────────────────────────────────
+from pdfminer.high_level import extract_pages
+from pdfminer.layout import LTTextContainer, LAParams
+
+NUM_LINE_RE = re.compile(r"^(LBA\d+|TPS\d+|\d{3,5})$")
+SESSION_START_RE = re.compile(
+    r"^(Plenary Session|Poster Session|Oral Abstract Session|Rapid Oral Abstract Session"
+    r"|Poster Discussion Session|Clinical Science Symposium)",
+    re.I,
+)
+FA_RE = re.compile(r"First\s+Author:")
+PAGENUM_BOX_RE = re.compile(r"^\d{1,4}s$")
+TRACK_BOX_RE = re.compile(r"^[A-Z][A-Z &/—\-,'()0-9]{8,}$")
+
+
+def column_aware_stream(pdf_path: str) -> list[str]:
+    """2단 레이아웃을 좌→우, 위→아래 순서로 재정렬한 텍스트 박스 스트림."""
+    stream: list[str] = []
+    for page in extract_pages(pdf_path, laparams=LAParams()):
+        mid = page.width / 2
+        boxes = []
+        for el in page:
+            if isinstance(el, LTTextContainer):
+                t = el.get_text().strip()
+                if t:
+                    cx = (el.x0 + el.x1) / 2
+                    boxes.append((cx < mid, -round(el.y0 / 3), el.x0, t))
+        boxes.sort(key=lambda b: (not b[0], b[1], b[2]))
+        stream.extend(b[3] for b in boxes)
+    return stream
+
+
+def _pick_title(block: list[str]) -> str:
+    """블록에서 제목 박스 선택 (푸터·페이지번호·트랙·번호 건너뜀, 세션 접두사 제거), First Author 앞까지."""
+    for b in block:
+        # 세션 라벨이 같은 박스 앞에 붙은 경우 제거 ("Clinical Science Symposium\n<title>")
+        s2 = SESSION_START_RE.sub("", b, count=1).strip()
+        if not s2 or FOOTER_RE.search(s2) or PAGENUM_BOX_RE.match(s2):
+            continue
+        if NUM_LINE_RE.match(s2) or TRACK_BOX_RE.match(s2):
+            continue
+        m = FA_RE.search(s2)
+        title = s2[:m.start()] if m else s2
+        return clean_text(title).rstrip(". ")
+    return ""
+
+
+def build_record(abstract_id: str, session_type: str, track: str, block: list[str]) -> dict:
     is_lba = abstract_id.startswith("LBA")
     uid = f"asco-{YEAR}-{abstract_id.lower()}"
+    title = _pick_title(block)
 
-    # 세션 타입 (lookback 마지막 매칭)
-    session_type = None
-    for m in SESSION_RE.finditer(text_before):
-        session_type = m.group(1)
-
-    # Track 갱신 (lookback에서 마지막 매칭)
-    track = current_track
-    for m in TRACK_RE.finditer(text_before):
-        track = m.group(0).strip()
-
-    # 제목: lookback에서 "이전 초록 끝" 위치를 찾아 그 이후 텍스트를 제목으로 사용
-    # 우선순위: 세션타입 > Research Sponsor > Clinical trial info > Embargo 끝 > 마지막 \n\n
-    title_start = 0
-    for m in SESSION_RE.finditer(text_before):
-        title_start = max(title_start, m.end())
-    for m in re.finditer(r"(?:Research\s+)?Sponsor:[^\n]*\n?", text_before):
-        title_start = max(title_start, m.end())
-    for m in re.finditer(r"Clinical trial information:[^\n]*\n?", text_before):
-        title_start = max(title_start, m.end())
-    for m in EMBARGOED_RE.finditer(text_before):
-        para_end = text_before.find("\n\n", m.end())
-        title_start = max(title_start, para_end + 2 if para_end > 0 else m.end())
-    # 위 마커가 없을 때: 마지막 \n\n 이후가 제목 (이전 초록 저자라인과 구분)
-    if title_start == 0:
-        for m in re.finditer(r"\n\n", text_before):
-            title_start = max(title_start, m.end())
-
-    raw_title = text_before[title_start:]
-    # 잔여 번호·페이지 마커·Track명·세션타입·Sponsor 제거
-    raw_title = re.sub(r"^\s*(LBA)?\d+\s*", "", raw_title)
-    raw_title = re.sub(r"^\s*\d+s\s*", "", raw_title)
-    raw_title = TRACK_RE.sub("", raw_title, count=1).strip()
-    raw_title = SESSION_RE.sub("", raw_title, count=1).strip()
-    raw_title = re.sub(r"^(?:Research\s+)?Sponsor:[^\n]+\n?", "", raw_title).strip()
-    title = clean_text(raw_title)
-
-    # 암종: Pipeline 체계로 재태깅 (title 키워드 + 트랙 보강) — 탭 간 공유용
+    btxt = "\n".join(b for b in block if not FOOTER_RE.search(b))
+    btxt = re.sub(r"-\n\s*", "", btxt)
     cancer_category = retag_cancer(track, title)
 
-    # Embargo 판별
-    is_embargoed = bool(EMBARGOED_RE.search(text_after))
+    fam = FA_RE.search(btxt)
+    after_fa = btxt[fam.end():] if fam else ""
+    is_embargoed = bool(EMBARGOED_RE.search(btxt))
 
     if is_embargoed:
-        em = EMBARGOED_RE.search(text_after)
-        author_raw = text_after[:em.start()].strip()
-        author_raw = clean_text(author_raw)
-        body_text = None
-        status = "embargoed"
-        enrich_status = "embargoed"
+        em = EMBARGOED_RE.search(after_fa)
+        author_raw = clean_text(after_fa[:em.start()]) if em else clean_text(after_fa[:300])
+        body_text, status, enrich = None, "embargoed", "embargoed"
     else:
-        # 저자 라인: "First Author:" ~ 본문 시작 마커 (Background: 등)
-        bm = BODY_START_RE.search(text_after)
+        bm = BODY_START_RE.search(after_fa)
         if bm:
-            author_raw = clean_text(text_after[:bm.start()])
-            body_raw = text_after[bm.start():]
+            author_raw = clean_text(after_fa[:bm.start()])
+            body_raw = after_fa[bm.start():]
         else:
-            nl = text_after.find("\n\n")
-            if nl > 0:
-                author_raw = clean_text(text_after[:nl])
-                body_raw = text_after[nl:]
-            else:
-                author_raw = clean_text(text_after[:300])
-                body_raw = ""
-
-        # 본문 끝 자르기 (Research Sponsor / Clinical trial info)
-        body_raw = re.sub(r"-\n\s*", "", body_raw)
+            author_raw = clean_text(after_fa[:300])
+            body_raw = ""
         cut = len(body_raw)
         sm = SPONSOR_RE.search(body_raw)
         cm = CLINICAL_INFO_RE.search(body_raw)
@@ -419,28 +417,20 @@ def parse_block(
         if cm:
             cut = min(cut, cm.start())
         body_text = re.sub(r"\s+", " ", body_raw[:cut]).strip()
-        # 본문이 너무 짧으면 Embargo 미감지로 판단 (Background: 구조 없는 경우)
         if len(body_text) < 200 and not BODY_START_RE.search(body_text):
-            body_text = None
-            status = "embargoed"
-            enrich_status = "embargoed"
+            body_text, status, enrich = None, "embargoed", "embargoed"
         else:
-            status = "available"
-            enrich_status = "dictionary_v1"
+            status, enrich = "available", "dictionary_v1"
 
     author = parse_author(author_raw) if author_raw else None
-
-    # NCT, Phase, 키워드 매칭 (제목+본문+전체 after 포함)
-    full = f"{title} {body_text or ''} {text_after}"
+    full = f"{title} {body_text or ''} {btxt}"
     nct_ids = extract_nct_ids(full)
     phases = extract_phases(full)
     modality_list = infer_modality_list(full)
     target_list = infer_target_list(full)
     biomarker_list = infer_biomarker_list(full)
-
-    sm2 = SPONSOR_RE.search(text_after)
+    sm2 = SPONSOR_RE.search(btxt)
     research_sponsor = clean_text(sm2.group(1)) if sm2 else None
-
     drugs_mentioned = extract_drugs(f"{title} {body_text or ''}")
     company = clean_company(research_sponsor)
     companies = [company] if company else []
@@ -449,152 +439,93 @@ def parse_block(
     )
 
     return {
-        "uid": uid,
-        "conference": CONFERENCE,
-        "year": YEAR,
-        "abstract_id": abstract_id,
-        "is_lba": is_lba,
-        "status": status,
-        "presentation_type": session_type,
-        "track": track,
-        "cancer_category": cancer_category,
-        "title": title,
-        "authors": [author] if author else [],
-        "author_raw": author_raw,
-        "abstract_text": body_text,
-        "phase": phases[0] if phases else None,
-        "phases": phases,
-        "modality_list": modality_list,
-        "target_list": target_list,
-        "biomarker_mentioned": len(biomarker_list) > 0,
-        "biomarker_list": biomarker_list,
+        "uid": uid, "conference": CONFERENCE, "year": YEAR, "abstract_id": abstract_id,
+        "is_lba": is_lba, "status": status, "presentation_type": session_type, "track": track,
+        "cancer_category": cancer_category, "title": title,
+        "authors": [author] if author else [], "author_raw": author_raw,
+        "abstract_text": body_text, "phase": phases[0] if phases else None, "phases": phases,
+        "modality_list": modality_list, "target_list": target_list,
+        "biomarker_mentioned": len(biomarker_list) > 0, "biomarker_list": biomarker_list,
         "nct_ids": nct_ids,
-        "clinicaltrials_url": (
-            f"https://clinicaltrials.gov/study/{nct_ids[0]}" if nct_ids else None
-        ),
-        "companies": companies,
-        "companies_normalized": companies_normalized,
-        "drugs_mentioned": drugs_mentioned,
-        "research_sponsor": research_sponsor,
+        "clinicaltrials_url": f"https://clinicaltrials.gov/study/{nct_ids[0]}" if nct_ids else None,
+        "companies": companies, "companies_normalized": companies_normalized,
+        "drugs_mentioned": drugs_mentioned, "research_sponsor": research_sponsor,
         "source": {"url": None, "doi": None, "page": None},
-        "keyword_parsed": status == "available",
-        "enrichment_status": enrich_status,
+        "keyword_parsed": status == "available", "enrichment_status": enrich,
     }
 
 
 # ── 메인 ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    print(f"[1/4] PDF 텍스트 추출: {PDF_PATH}")
-    raw = extract_text(PDF_PATH)
-    pages = raw.count("\x0c") + 1
-    print(f"      {len(raw):,} chars / {pages} pages")
+    print(f"[1/4] 컬럼 인식 추출: {PDF_PATH}")
+    stream = column_aware_stream(PDF_PATH)
+    print(f"      {len(stream):,} text boxes")
 
-    print("[2/4] 클리닝 (푸터·페이지번호 제거)")
-    cleaned_pages = []
-    for page in raw.split("\x0c"):
-        page = FOOTER_RE.sub("", page)
-        page = PAGE_NUM_RE.sub("", page)
-        cleaned_pages.append(page)
-    full = "\n\n".join(cleaned_pages)
+    print("[2/4] 세그먼트 (번호→세션 시작점)")
+    starts = [
+        k for k in range(len(stream) - 1)
+        if NUM_LINE_RE.match(stream[k]) and SESSION_START_RE.match(stream[k + 1].strip())
+    ]
+    print(f"      {len(starts)} abstract blocks")
 
     print("[3/4] 파싱")
-
-    # 이벤트 시퀀스 구축: abstract_number와 First Author: 위치
-    num_events: list[tuple[int, str]] = [
-        (m.start(), m.group(1)) for m in ABSTRACT_NUM_RE.finditer(full)
-    ]
-    fa_positions: list[int] = [
-        m.start() for m in re.finditer(r"First Author:", full)
-    ]
-
-    print(f"      Abstract number candidates: {len(num_events)}")
-    print(f"      'First Author:' occurrences: {len(fa_positions)}")
-
-    # FIFO 큐: 번호를 순서대로 소비해 First Author: 에 매핑
-    num_queue: deque[tuple[int, str]] = deque(num_events)
-    fa_assignments: list[tuple[int, str]] = []  # (fa_pos, abstract_id)
-
-    for fa_pos in fa_positions:
-        # 큐 앞에서 fa_pos보다 앞에 있는 번호를 꺼냄
-        while num_queue and num_queue[0][0] > fa_pos:
-            num_queue.popleft()   # fa_pos보다 앞에 없으면 건너뜀
-
-        if num_queue:
-            _, abstract_id = num_queue.popleft()
-        else:
-            abstract_id = f"auto-{len(fa_assignments):04d}"
-
-        fa_assignments.append((fa_pos, abstract_id))
-
-    print(f"      Matched: {len(fa_assignments)}")
-
-    # 초록 파싱
     abstracts: list[dict] = []
-    current_track: str | None = None
-    LOOKBACK = 3000
-
-    for i, (fa_pos, abstract_id) in enumerate(tqdm(fa_assignments, desc="  Parsing")):
-        # lookback 윈도우 (이전 FA 이후 ~ 현재 FA)
-        prev_fa_end = (
-            fa_assignments[i - 1][0] + len("First Author:")
-            if i > 0 else 0
-        )
-        lookback_start = max(prev_fa_end, fa_pos - LOOKBACK)
-        text_before = full[lookback_start:fa_pos]
-
-        # next FA까지가 after 범위
-        next_fa = fa_assignments[i + 1][0] if i + 1 < len(fa_assignments) else len(full)
-        text_after = full[fa_pos + len("First Author:"):next_fa]
-
-        # track 갱신
-        for m in TRACK_RE.finditer(text_before):
-            current_track = m.group(0).strip()
-
+    current_track = None
+    for idx, k in enumerate(starts):
+        end = starts[idx + 1] if idx + 1 < len(starts) else len(stream)
+        abstract_id = stream[k]
+        sm = SESSION_START_RE.match(stream[k + 1].strip())
+        session_type = sm.group(1) if sm else stream[k + 1].strip()[:40]
+        # 트랙: 이 시작점 직전의 전역 마지막 ALL-CAPS 트랙 박스 갱신
+        for j in range(max(0, k - 4), k):
+            s = stream[j].strip()
+            if TRACK_BOX_RE.match(s) and not NUM_LINE_RE.match(s):
+                current_track = s
+        # 세션 박스(k+1)부터 포함 — 세션 라벨과 제목이 한 박스에 있는 경우 대응
+        block = stream[k + 1:end]
         try:
-            rec = parse_block(abstract_id, text_before, text_after, current_track)
-            abstracts.append(rec)
+            abstracts.append(build_record(abstract_id, session_type, current_track, block))
         except Exception as e:
-            print(f"\n  [warn] {abstract_id} @ pos {fa_pos}: {e}")
+            print(f"  [warn] {abstract_id}: {e}")
+
+    # 중복 abstract_id 처리 (드물게 페이지 헤더 반복) — 첫 등장 유지
+    seen = set()
+    deduped = []
+    for a in abstracts:
+        if a["abstract_id"] in seen:
+            continue
+        seen.add(a["abstract_id"])
+        deduped.append(a)
+    abstracts = deduped
 
     available = sum(1 for a in abstracts if a["status"] == "available")
     embargoed = sum(1 for a in abstracts if a["status"] == "embargoed")
-    auto_ids = sum(1 for a in abstracts if str(a["abstract_id"]).startswith("auto-"))
-
-    print(f"\n      Total: {len(abstracts)}")
-    print(f"      Available: {available}  Embargoed: {embargoed}  Auto-ID: {auto_ids}")
+    print(f"\n      Total: {len(abstracts)}  Available: {available}  Embargoed: {embargoed}")
 
     print("[4/4] 저장")
     os.makedirs("data/parsed", exist_ok=True)
-
     output = {
         "metadata": {
             "last_updated": datetime.now(timezone.utc).isoformat(),
-            "conference": CONFERENCE,
-            "year": YEAR,
-            "total_abstracts": len(abstracts),
-            "available": available,
-            "embargoed": embargoed,
+            "conference": CONFERENCE, "year": YEAR,
+            "total_abstracts": len(abstracts), "available": available, "embargoed": embargoed,
             "source_pdf": PDF_PATH,
         },
         "abstracts": abstracts,
     }
-
     with open(OUT_ABSTRACTS, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
     mb = os.path.getsize(OUT_ABSTRACTS) / 1024 / 1024
     print(f"      {OUT_ABSTRACTS}  ({mb:.1f} MB)")
 
-    # NCT → uid 역인덱스
     nct_index: dict[str, list[str]] = {}
     for a in abstracts:
         for nct in a.get("nct_ids", []):
             nct_index.setdefault(nct, []).append(a["uid"])
-
     with open(OUT_NCT_INDEX, "w", encoding="utf-8") as f:
         json.dump(nct_index, f, ensure_ascii=False, indent=2)
     print(f"      {OUT_NCT_INDEX}  ({len(nct_index)} NCT IDs)")
-
     print("\n완료!")
 
 
