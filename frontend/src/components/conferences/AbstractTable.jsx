@@ -158,7 +158,13 @@ const COLUMNS = [
 
   col.accessor('author_raw', {
     header: 'First Author',
-    cell: ({ getValue }) => <AuthorCell raw={getValue()} />,
+    cell: ({ getValue, row, table }) => (
+      <AuthorCell
+        raw={getValue()}
+        name={row.original.authors?.[0]?.name}
+        onClick={table.options.meta?.onAuthorClick}
+      />
+    ),
     size: 180,
   }),
 
@@ -189,19 +195,28 @@ const COLUMNS = [
     size: 110,
   }),
 
-  col.accessor((row) => row.companies?.[0], {
+  col.accessor((row) => row.companies_normalized ?? [], {
     id: 'company',
     header: 'Company',
-    cell: ({ getValue }) => {
-      const v = getValue()
-      if (!v) return <span className="text-slate-300">—</span>
+    enableSorting: false,
+    cell: ({ getValue, row }) => {
+      const list = getValue()
+      const raw = row.original.research_sponsor
+      if (!list.length) return <span className="text-slate-300">—</span>
       return (
-        <span className="text-xs font-medium text-slate-700 line-clamp-2" title={v}>
-          {v}
-        </span>
+        <div className="flex flex-wrap gap-1" title={raw || undefined}>
+          {list.map((c) => (
+            <span
+              key={c}
+              className="text-xs font-medium bg-violet-50 text-violet-700 px-1.5 py-0.5 rounded"
+            >
+              {c}
+            </span>
+          ))}
+        </div>
       )
     },
-    size: 160,
+    size: 180,
   }),
 
   col.accessor('drugs_mentioned', {
@@ -267,7 +282,7 @@ const COLUMNS = [
   }),
 ]
 
-export default function AbstractTable({ abstracts }) {
+export default function AbstractTable({ abstracts, onAuthorClick }) {
   const [sorting, setSorting] = useState([])
   const [columnSizing, setColumnSizing] = useState({})
 
@@ -275,6 +290,7 @@ export default function AbstractTable({ abstracts }) {
     data: abstracts,
     columns: COLUMNS,
     state: { sorting, columnSizing },
+    meta: { onAuthorClick },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
     columnResizeMode: 'onChange',

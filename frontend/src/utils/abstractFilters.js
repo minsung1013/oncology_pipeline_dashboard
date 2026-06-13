@@ -1,10 +1,9 @@
 export function applyAbstractFilters(abstracts, filters) {
   const {
-    conferences, years, phases, modalities, cancers, countries, company, affiliation,
-    keyword, nctId, showEmbargoed,
+    conferences, years, phases, modalities, cancers, countries, companies, affiliation,
+    authorName, keyword, nctId, showEmbargoed,
   } = filters
 
-  const companyQ = company?.trim().toLowerCase()
   const affilQ = affiliation?.trim().toLowerCase()
 
   return abstracts.filter((a) => {
@@ -15,8 +14,9 @@ export function applyAbstractFilters(abstracts, filters) {
     if (modalities.length > 0 && !modalities.some((m) => (a.modality_list ?? []).includes(m))) return false
     if (cancers.length > 0 && !(a.cancer_category ?? []).some((c) => cancers.includes(c))) return false
     if (countries?.length > 0 && !countries.includes(a.authors?.[0]?.country)) return false
-    if (companyQ && !(a.companies ?? []).join(' ').toLowerCase().includes(companyQ)) return false
+    if (companies?.length > 0 && !(a.companies_normalized ?? []).some((c) => companies.includes(c))) return false
     if (affilQ && !(a.authors?.[0]?.affiliation ?? '').toLowerCase().includes(affilQ)) return false
+    if (authorName && a.authors?.[0]?.name !== authorName) return false
     if (nctId && !(a.nct_ids ?? []).includes(nctId)) return false
 
     if (keyword) {
@@ -30,6 +30,7 @@ export function applyAbstractFilters(abstracts, filters) {
         ...(a.nct_ids ?? []),
         ...(a.drugs_mentioned ?? []),
         ...(a.companies ?? []),
+        ...(a.companies_normalized ?? []),
         ...(a.cancer_category ?? []),
         a.authors?.[0]?.country,
         a.authors?.[0]?.affiliation,
@@ -71,5 +72,9 @@ export function getAbstractFilterOptions(abstracts) {
     ...new Set(abstracts.map((a) => a.authors?.[0]?.country).filter(Boolean)),
   ].sort()
 
-  return { conferences, years, phases, modalities, cancers, countries }
+  const companies = [
+    ...new Set(abstracts.flatMap((a) => a.companies_normalized ?? []).filter(Boolean)),
+  ].sort()
+
+  return { conferences, years, phases, modalities, cancers, countries, companies }
 }

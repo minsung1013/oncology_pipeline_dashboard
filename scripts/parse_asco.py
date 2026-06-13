@@ -28,6 +28,7 @@ from parse_fields import (
     BIOMARKER_EXACT_KEYWORDS,
     _word_boundary_match,
 )
+from normalize_entities import normalize_companies
 
 # ── 경로 ──────────────────────────────────────────────────────────────────────
 PDF_PATH = "data/source/asco_2026/ASCO26-Abstracts-Full-Proceedings.pdf"
@@ -410,6 +411,9 @@ def parse_block(
     drugs_mentioned = extract_drugs(f"{title} {body_text or ''}")
     company = clean_company(research_sponsor)
     companies = [company] if company else []
+    companies_normalized = normalize_companies(
+        research_sponsor or "", author.get("affiliation", "") if author else ""
+    )
 
     return {
         "uid": uid,
@@ -436,6 +440,7 @@ def parse_block(
             f"https://clinicaltrials.gov/study/{nct_ids[0]}" if nct_ids else None
         ),
         "companies": companies,
+        "companies_normalized": companies_normalized,
         "drugs_mentioned": drugs_mentioned,
         "research_sponsor": research_sponsor,
         "source": {"url": None, "doi": None, "page": None},

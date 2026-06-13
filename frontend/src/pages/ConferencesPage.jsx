@@ -14,8 +14,9 @@ const DEFAULT_FILTERS = {
   modalities: [],
   cancers: [],
   countries: [],
-  company: '',
+  companies: [],
   affiliation: '',
+  authorName: '',
   keyword: '',
   showEmbargoed: false,
 }
@@ -162,6 +163,18 @@ export default function ConferencesPage() {
             </div>
           )}
 
+          {filters.authorName && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border border-violet-300 bg-violet-50 text-violet-800 font-medium">
+              Author: {filters.authorName}
+              <button
+                onClick={() => setFilter('authorName', '')}
+                className="ml-1 text-violet-500 hover:text-violet-700"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <MultiSelect
             label="Source"
             options={filterOptions.conferences}
@@ -204,12 +217,11 @@ export default function ConferencesPage() {
             onChange={(v) => setFilter('countries', v)}
           />
 
-          <input
-            type="text"
-            placeholder="Company…"
-            value={filters.company}
-            onChange={(e) => setFilter('company', e.target.value)}
-            className="border border-slate-200 rounded px-3 py-1.5 text-xs w-36 focus:outline-none focus:border-blue-400"
+          <MultiSelect
+            label="Company"
+            options={filterOptions.companies}
+            selected={filters.companies}
+            onChange={(v) => setFilter('companies', v)}
           />
 
           <input
@@ -244,8 +256,9 @@ export default function ConferencesPage() {
             filters.phases.length > 0 ||
             filters.modalities.length > 0 ||
             filters.countries.length > 0 ||
-            filters.company ||
+            filters.companies.length > 0 ||
             filters.affiliation ||
+            filters.authorName ||
             filters.keyword ||
             nctParam) && (
             <button
@@ -262,7 +275,10 @@ export default function ConferencesPage() {
       </div>
 
       {/* Table */}
-      <AbstractTable abstracts={filtered} />
+      <AbstractTable
+        abstracts={filtered}
+        onAuthorClick={(name) => setFilter('authorName', name)}
+      />
     </div>
   )
 }
