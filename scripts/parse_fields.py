@@ -8,6 +8,8 @@ import re
 import uuid
 from datetime import datetime, timezone
 
+from normalize_entities import normalize_companies
+
 # ---------------------------------------------------------------------------
 # 키워드 사전
 # ---------------------------------------------------------------------------
@@ -412,6 +414,7 @@ def extract_study_fields(study: dict) -> dict | None:
         "all_drugs": all_drugs,
         "is_combination": is_combination,
         "company": lead_sponsor,
+        "company_normalized": (normalize_companies(lead_sponsor) or [None])[0],
         "collaborators": collaborators,
         "partnership_status": partnership_status,
         "condition": condition,

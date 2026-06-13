@@ -18,7 +18,7 @@ export function applyFilters(drugs, filters) {
   return drugs.filter((drug) => {
     if (cancerCategories.length > 0 && !cancerCategories.includes(drug.cancer_category)) return false
     if (modalities.length > 0 && !modalities.includes(drug.modality)) return false
-    if (companies?.length > 0 && !companies.includes(drug.company)) return false
+    if (companies?.length > 0 && !companies.includes(drug.company_normalized)) return false
     if (targets?.length > 0 && !targets.includes(drug.target)) return false
     if (biomarkers?.length > 0 && !(drug.biomarker_list ?? []).some((b) => biomarkers.includes(b))) return false
     if (phases.length > 0) {
@@ -92,7 +92,7 @@ export function getFilterOptions(drugs) {
   if (hasUnphased) rawPhases.add('NA')
   const phases = [...rawPhases].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b))
   const overallStatuses = [...new Set(drugs.map((d) => d.overall_status).filter(Boolean))].sort()
-  const companies = [...new Set(drugs.map((d) => d.company).filter(Boolean))].sort()
+  const companies = [...new Set(drugs.map((d) => d.company_normalized).filter(Boolean))].sort()
   const targets = [...new Set(drugs.map((d) => d.target).filter(Boolean))].sort()
   const biomarkers = [...new Set(drugs.flatMap((d) => d.biomarker_list ?? []).filter(Boolean))].sort()
 

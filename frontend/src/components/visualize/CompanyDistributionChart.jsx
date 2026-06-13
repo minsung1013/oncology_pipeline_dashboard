@@ -6,7 +6,7 @@ export default function CompanyDistributionChart({ data, onSelect, selected = []
     if (entry && !entry.isOther && onSelect) onSelect(entry.name)
   }
   return (
-    <ChartCard title="① Company Distribution" subtitle="Trials per lead sponsor — click a bar to filter" height={320}>
+    <ChartCard title="① Company Distribution" subtitle="Trials per pharma (normalized) — click a bar to filter" height={320}>
       {data.length === 0 ? (
         <EmptyHint message="No data." />
       ) : (

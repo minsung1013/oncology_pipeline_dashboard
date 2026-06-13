@@ -8,14 +8,13 @@ const ABSTRACTS_URL =
   import.meta.env.VITE_ABSTRACTS_URL ??
   'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/abstracts_asco2026.json'
 
-// cancer/phase/modality는 공유 축, 나머지는 Conferences 고유
-const SHARED_KEYS = new Set(['cancers', 'phases', 'modalities'])
+// cancer/phase/modality/company는 공유 축 (company는 정규 제약사명으로 통일), 나머지는 Conferences 고유
+const SHARED_KEYS = new Set(['cancers', 'phases', 'modalities', 'companies'])
 
 const LOCAL_DEFAULT = {
   conferences: [],
   years: [],
   countries: [],
-  companies: [],
   affiliation: '',
   authorName: '',
   keyword: '',
@@ -29,10 +28,10 @@ function buildFilters() {
     cancers: s.cancers,
     phases: s.phases,
     modalities: s.modalities,
+    companies: s.companies,
     conferences: l.conferences ?? [],
     years: l.years ?? [],
     countries: l.countries ?? [],
-    companies: l.companies ?? [],
     affiliation: l.affiliation ?? '',
     authorName: l.authorName ?? '',
     keyword: l.keyword ?? '',
@@ -124,7 +123,7 @@ export default function ConferencesPage() {
   function persistLocal(next) {
     setTabState('conferences', {
       conferences: next.conferences, years: next.years, countries: next.countries,
-      companies: next.companies, affiliation: next.affiliation, authorName: next.authorName,
+      affiliation: next.affiliation, authorName: next.authorName,
       keyword: next.keyword, showEmbargoed: next.showEmbargoed,
     })
   }
@@ -133,7 +132,11 @@ export default function ConferencesPage() {
     setFiltersState((prev) => {
       const next = { ...prev, [key]: value }
       if (SHARED_KEYS.has(key)) {
-        setShared({ ...getShared(), cancers: next.cancers, phases: next.phases, modalities: next.modalities })
+        setShared({
+          ...getShared(),
+          cancers: next.cancers, phases: next.phases,
+          modalities: next.modalities, companies: next.companies,
+        })
       } else {
         persistLocal(next)
       }
@@ -142,9 +145,9 @@ export default function ConferencesPage() {
   }
 
   function clearAll() {
-    const next = { cancers: [], phases: [], modalities: [], ...LOCAL_DEFAULT }
+    const next = { cancers: [], phases: [], modalities: [], companies: [], ...LOCAL_DEFAULT }
     setFiltersState(next)
-    setShared({ ...getShared(), cancers: [], phases: [], modalities: [] })
+    setShared({ ...getShared(), cancers: [], phases: [], modalities: [], companies: [] })
     setTabState('conferences', LOCAL_DEFAULT)
     clearNct()
   }

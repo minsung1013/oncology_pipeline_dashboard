@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import VisualizeFilterBar from '../components/visualize/VisualizeFilterBar'
 import SummaryCards from '../components/visualize/SummaryCards'
 import CompanyDistributionChart from '../components/visualize/CompanyDistributionChart'
@@ -44,7 +43,6 @@ const CHIP_META = {
 }
 
 export default function VisualizePage() {
-  const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(getShared)
@@ -96,7 +94,11 @@ export default function VisualizePage() {
   const hasActive = activeCount > 0
 
   const stats = useMemo(() => getSummaryStats(drugs), [drugs])
-  const companyData = useMemo(() => aggregateByField(drugs, 'company', topN), [drugs, topN])
+  // 정규 제약사명 기준 (미인식 회사는 제외 — 빅파마 활동 뷰)
+  const companyData = useMemo(
+    () => aggregateByField(drugs.filter((d) => d.company_normalized), 'company_normalized', topN),
+    [drugs, topN],
+  )
   const cancerData = useMemo(() => aggregateByField(drugs, 'cancer_category', topN), [drugs, topN])
   const targetData = useMemo(() => aggregateByField(drugs, 'target', topN), [drugs, topN])
   const phaseData = useMemo(() => aggregateByPhaseStatus(drugs), [drugs])
@@ -126,11 +128,6 @@ export default function VisualizePage() {
 
   const yearChipLabel = `${filters.startYear.from === 'all' ? '…' : filters.startYear.from}–${filters.startYear.to === 'all' ? '…' : filters.startYear.to}`
 
-  // 공유 스토어가 이미 동기화돼 있으므로 Pipeline 탭으로 이동하면 동일 필터가 적용됨
-  function applyToPipeline() {
-    navigate('/')
-  }
-
   return (
     <div className="flex flex-col h-full">
       {/* Header + filter bar */}
@@ -142,18 +139,6 @@ export default function VisualizePage() {
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">{summary}</p>
           </div>
-          <button
-            onClick={applyToPipeline}
-            disabled={!hasActive}
-            title={hasActive ? 'Open the Pipeline table with these filters applied' : 'Select at least one filter first'}
-            className={`text-xs font-semibold px-3 py-1.5 rounded border transition-colors ${
-              hasActive
-                ? 'border-blue-500 bg-blue-600 text-white hover:bg-blue-700'
-                : 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
-            }`}
-          >
-            Apply to Pipeline →
-          </button>
         </div>
         <VisualizeFilterBar
           options={options}

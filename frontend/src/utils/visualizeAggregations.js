@@ -144,7 +144,7 @@ export function getSummaryStats(drugs) {
 
 // 필터 옵션: 각 축의 고유값
 export function getVisualizeOptions(drugs) {
-  const companies = [...new Set(drugs.map((d) => d.company).filter(Boolean))].sort()
+  const companies = [...new Set(drugs.map((d) => d.company_normalized).filter(Boolean))].sort()
   const cancerCategories = [...new Set(drugs.map((d) => d.cancer_category).filter(Boolean))].sort()
   const phaseSet = new Set(drugs.flatMap((d) => d.phases ?? []).filter((p) => p && p !== 'UNKNOWN'))
   if (drugs.some((d) => { const p = d.phases ?? []; return p.length === 0 || p.every((v) => v === 'UNKNOWN') })) {
@@ -176,7 +176,7 @@ export function applyVisualizeFilters(drugs, filters) {
   const to = startYear && startYear.to !== 'all' ? parseInt(startYear.to) : null
 
   return drugs.filter((d) => {
-    if (compSet.size > 0 && !compSet.has(d.company)) return false
+    if (compSet.size > 0 && !compSet.has(d.company_normalized)) return false
     if (cancerSet.size > 0 && !cancerSet.has(d.cancer_category)) return false
     if (phaseSet.size > 0) {
       const dp = d.phases ?? []
