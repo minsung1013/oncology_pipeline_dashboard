@@ -10,7 +10,11 @@ export function applyAbstractFilters(abstracts, filters) {
     if (!showEmbargoed && a.status === 'embargoed') return false
     if (conferences?.length > 0 && !conferences.includes(a.conference)) return false
     if (years?.length > 0 && !years.includes(String(a.year))) return false
-    if (phases.length > 0 && !phases.some((p) => (a.phases ?? []).includes(p))) return false
+    if (phases.length > 0) {
+      const ap = a.phases ?? []
+      const isUn = ap.length === 0
+      if (!phases.some((p) => (p === 'NA' ? isUn : ap.includes(p)))) return false
+    }
     if (modalities.length > 0 && !modalities.some((m) => (a.modality_list ?? []).includes(m))) return false
     if (cancers.length > 0 && !(a.cancer_category ?? []).some((c) => cancers.includes(c))) return false
     if (countries?.length > 0 && !countries.includes(a.authors?.[0]?.country)) return false
@@ -56,9 +60,9 @@ export function getAbstractFilterOptions(abstracts) {
     ...new Set(abstracts.map((a) => a.year).filter(Boolean)),
   ].sort((a, b) => b - a).map(String)
 
-  const phases = [
-    ...new Set(abstracts.flatMap((a) => a.phases ?? []).filter(Boolean)),
-  ].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b))
+  const phaseSet = new Set(abstracts.flatMap((a) => a.phases ?? []).filter(Boolean))
+  if (abstracts.some((a) => (a.phases ?? []).length === 0)) phaseSet.add('NA')
+  const phases = [...phaseSet].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b))
 
   const modalities = [
     ...new Set(abstracts.flatMap((a) => a.modality_list ?? []).filter(Boolean)),

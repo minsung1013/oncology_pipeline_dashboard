@@ -26,6 +26,7 @@ from parse_fields import (
     TARGET_EXACT_KEYWORDS,
     BIOMARKER_KEYWORDS,
     BIOMARKER_EXACT_KEYWORDS,
+    CANCER_CATEGORY_MAP,
     _word_boundary_match,
 )
 from normalize_entities import normalize_companies
@@ -119,15 +120,46 @@ TRACK_TO_CANCER: dict[str, list[str]] = {
 }
 
 
+# ASCO 트랙 문자열 → Pipeline 암종 (title 키워드가 없을 때 보강용, 구체적 순서로)
+TRACK_SUBSTR_TO_PIPELINE: list[tuple[str, str]] = [
+    ("PROSTATE", "Prostate"),
+    ("KIDNEY", "Renal"),
+    ("UROTHELIAL", "Bladder"),
+    ("BLADDER", "Bladder"),
+    ("GASTROESOPHAGEAL", "Gastric"),
+    ("PANCREATIC", "Pancreatic"),
+    ("HEPATOBILIARY", "Liver"),
+    ("COLORECTAL", "Colorectal"),
+    ("LUNG", "Lung"),
+    ("BREAST", "Breast"),
+    ("MELANOMA", "Melanoma"),
+    ("SKIN", "Skin"),
+    ("SARCOMA", "Sarcoma"),
+    ("CENTRAL NERVOUS", "Glioma"),
+    ("HEAD AND NECK", "Head & Neck"),
+    ("HEMATOLOGIC", "Hematologic"),
+]
+
+
 # ── 헬퍼 함수 ─────────────────────────────────────────────────────────────────
 
-def get_cancer_category(track: str) -> list[str]:
-    if not track:
-        return []
-    t = track.upper()
-    for key, cats in sorted(TRACK_TO_CANCER.items(), key=lambda x: -len(x[0])):
-        if t.startswith(key):
-            return cats
+def retag_cancer(track: str, title: str) -> list[str]:
+    """Pipeline 암종 체계로 재태깅 (탭 간 공유용).
+    1) title을 CANCER_CATEGORY_MAP 키워드로 스캔 (정확)
+    2) 없으면 ASCO 트랙 문자열로 보강
+    cross-cutting 트랙(Developmental Therapeutics 등)은 빈 리스트.
+    """
+    tl = (title or "").lower()
+    cats: list[str] = []
+    for cat, kws in CANCER_CATEGORY_MAP.items():
+        if any(kw.lower() in tl for kw in kws):
+            cats.append(cat)
+    if cats:
+        return cats
+    tu = (track or "").upper()
+    for sub, cat in TRACK_SUBSTR_TO_PIPELINE:
+        if sub in tu:
+            return [cat]
     return []
 
 
@@ -323,8 +355,6 @@ def parse_block(
     for m in TRACK_RE.finditer(text_before):
         track = m.group(0).strip()
 
-    cancer_category = get_cancer_category(track)
-
     # 제목: lookback에서 "이전 초록 끝" 위치를 찾아 그 이후 텍스트를 제목으로 사용
     # 우선순위: 세션타입 > Research Sponsor > Clinical trial info > Embargo 끝 > 마지막 \n\n
     title_start = 0
@@ -350,6 +380,9 @@ def parse_block(
     raw_title = SESSION_RE.sub("", raw_title, count=1).strip()
     raw_title = re.sub(r"^(?:Research\s+)?Sponsor:[^\n]+\n?", "", raw_title).strip()
     title = clean_text(raw_title)
+
+    # 암종: Pipeline 체계로 재태깅 (title 키워드 + 트랙 보강) — 탭 간 공유용
+    cancer_category = retag_cancer(track, title)
 
     # Embargo 판별
     is_embargoed = bool(EMBARGOED_RE.search(text_after))

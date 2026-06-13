@@ -21,16 +21,16 @@ import {
   getSummaryStats,
   phaseLabel,
 } from '../utils/visualizeAggregations'
+import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
+
+const EMPTY_FILTERS = {
+  cancers: [], phases: [], modalities: [], companies: [], targets: [], biomarkers: [],
+  statuses: [], startYear: { from: 'all', to: 'all' },
+}
 
 const PIPELINE_URL =
   import.meta.env.VITE_PIPELINE_URL ??
   'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/pipeline.json'
-
-const DEFAULT_FILTERS = {
-  companies: [], cancers: [], phases: [], modalities: [], targets: [], biomarkers: [],
-  statuses: [],
-  startYear: { from: 'all', to: 'all' },
-}
 
 // 필터칩 표시용 (key → 라벨, 값 렌더러)
 const CHIP_META = {
@@ -43,21 +43,25 @@ const CHIP_META = {
   statuses: { label: 'Status', render: statusLabel },
 }
 
-// Visualize의 단일 phase 필드(콤보 'PHASE1/PHASE2') → Pipeline의 개별 phase 배열
-function expandPhases(phases) {
-  const out = new Set()
-  for (const p of phases) {
-    for (const seg of p.split('/')) out.add(seg === 'UNKNOWN' ? 'NA' : seg)
-  }
-  return [...out]
-}
-
 export default function VisualizePage() {
   const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
-  const [topN, setTopN] = useState(10)
+  const [filters, setFiltersState] = useState(getShared)
+  const [topN, setTopNState] = useState(() => getTabState('visualize')?.topN ?? 10)
+
+  // Visualize의 모든 축은 공유 축 → 변경 시 store.shared 에 동기화
+  function setFilters(updater) {
+    setFiltersState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      setShared(next)
+      return next
+    })
+  }
+  function setTopN(v) {
+    setTopNState(v)
+    setTabState('visualize', { topN: v })
+  }
 
   useEffect(() => {
     // browser HTTP 캐시 허용 (Pipeline 탭과 동일 파일 — 중복 fetch 비용 완화)
@@ -122,18 +126,9 @@ export default function VisualizePage() {
 
   const yearChipLabel = `${filters.startYear.from === 'all' ? '…' : filters.startYear.from}–${filters.startYear.to === 'all' ? '…' : filters.startYear.to}`
 
+  // 공유 스토어가 이미 동기화돼 있으므로 Pipeline 탭으로 이동하면 동일 필터가 적용됨
   function applyToPipeline() {
-    const pipelineFilters = {
-      cancerCategories: filters.cancers,
-      modalities: filters.modalities,
-      phases: expandPhases(filters.phases),
-      companies: filters.companies,
-      targets: filters.targets,
-      biomarkers: filters.biomarkers,
-      overallStatuses: filters.statuses,
-      startYear: filters.startYear,
-    }
-    navigate('/', { state: { pipelineFilters } })
+    navigate('/')
   }
 
   return (
@@ -195,7 +190,7 @@ export default function VisualizePage() {
               </button>
             )}
             <button
-              onClick={() => setFilters(DEFAULT_FILTERS)}
+              onClick={() => setFilters(EMPTY_FILTERS)}
               className="text-xs text-slate-400 hover:text-slate-600 ml-1"
             >
               Clear all

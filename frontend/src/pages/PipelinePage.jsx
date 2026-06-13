@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useLocation } from 'react-router-dom'
 import FilterBar from '../components/pipeline/FilterBar'
 import CompanyList from '../components/pipeline/CompanyList'
 import PipelineTable from '../components/pipeline/PipelineTable'
 import { applyFilters, getFilterOptions, groupByCompany } from '../utils/filters'
+import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 
 const PIPELINE_URL =
   import.meta.env.VITE_PIPELINE_URL ??
@@ -13,33 +13,68 @@ const NCT_INDEX_URL =
   import.meta.env.VITE_NCT_INDEX_URL ??
   'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/nct_index.json'
 
-const DEFAULT_FILTERS = {
-  cancerCategories: [],
-  modalities: [],
-  phases: [],
-  overallStatuses: [],
-  companies: [],
-  targets: [],
-  biomarkers: [],
+// Pipeline 고유(비공유) 필터 기본값
+const LOCAL_DEFAULT = {
   partnershipStatus: 'all',
   regimen: 'all',
   needsReview: false,
-  startYear: { from: 'all', to: 'all' },
   completionYear: { from: 'all', to: 'all' },
   keyword: '',
 }
 
+// 공유 스토어 + 로컬 슬라이스 → FilterBar용 단일 filters 객체
+function buildFilters() {
+  const s = getShared()
+  const l = getTabState('pipeline') ?? LOCAL_DEFAULT
+  return {
+    cancerCategories: s.cancers,
+    modalities: s.modalities,
+    phases: s.phases,
+    overallStatuses: s.statuses,
+    companies: s.companies,
+    targets: s.targets,
+    biomarkers: s.biomarkers,
+    startYear: s.startYear,
+    partnershipStatus: l.partnershipStatus ?? 'all',
+    regimen: l.regimen ?? 'all',
+    needsReview: l.needsReview ?? false,
+    completionYear: l.completionYear ?? { from: 'all', to: 'all' },
+    keyword: l.keyword ?? '',
+  }
+}
+
 export default function PipelinePage() {
-  const location = useLocation()
-  // Visualize 탭에서 "Apply to Pipeline"로 넘어온 필터를 초기값에 병합
-  const incoming = location.state?.pipelineFilters
   const [data, setData] = useState(null)
   const [nctIndex, setNctIndex] = useState({})
   const [error, setError] = useState(null)
-  const [filters, setFilters] = useState(
-    incoming ? { ...DEFAULT_FILTERS, ...incoming } : DEFAULT_FILTERS,
-  )
-  const [selectedCompany, setSelectedCompany] = useState(null)
+  const [filters, setFiltersState] = useState(buildFilters)
+  const [selectedCompany, setSelectedCompany] = useState(() => getTabState('pipeline')?.selectedCompany ?? null)
+
+  function persistLocal(patch) {
+    setTabState('pipeline', { ...(getTabState('pipeline') ?? LOCAL_DEFAULT), ...patch })
+  }
+
+  // FilterBar 변경 → 공유 축은 store.shared, 고유 축은 store.pipeline 에 분리 저장
+  function setFilters(next) {
+    setFiltersState(next)
+    setShared({
+      cancers: next.cancerCategories,
+      modalities: next.modalities,
+      phases: next.phases,
+      statuses: next.overallStatuses,
+      companies: next.companies,
+      targets: next.targets,
+      biomarkers: next.biomarkers,
+      startYear: next.startYear,
+    })
+    persistLocal({
+      partnershipStatus: next.partnershipStatus,
+      regimen: next.regimen,
+      needsReview: next.needsReview,
+      completionYear: next.completionYear,
+      keyword: next.keyword,
+    })
+  }
 
   useEffect(() => {
     fetch(PIPELINE_URL, { cache: 'no-store' })
@@ -74,7 +109,11 @@ export default function PipelinePage() {
   }, [filteredDrugs, selectedCompany])
 
   function handleSelectCompany(company) {
-    setSelectedCompany((prev) => (prev === company ? null : company))
+    setSelectedCompany((prev) => {
+      const next = prev === company ? null : company
+      persistLocal({ selectedCompany: next })
+      return next
+    })
   }
 
   if (error) {

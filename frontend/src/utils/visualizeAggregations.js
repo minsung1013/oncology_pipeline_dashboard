@@ -55,22 +55,29 @@ export function aggregateByPhase(drugs) {
     })
 }
 
-// Phase × Status: 누적 막대용 — phase별로 status 카운트를 한 행에 펼침
+const PHASE_ENUM_ORDER = ['EARLY_PHASE1', 'PHASE1', 'PHASE2', 'PHASE3', 'PHASE4', 'NA']
+
+// 약물의 phase enum 집합 (콤보는 분해, 미상은 NA) — Pipeline/Conferences와 동일 체계
+function drugPhaseEnums(d) {
+  const enums = (d.phases ?? []).filter((p) => p && p !== 'UNKNOWN')
+  return enums.length ? enums : ['NA']
+}
+
+// Phase × Status: 누적 막대용 — 개별 phase enum별로 status 카운트 (콤보 분해)
 export function aggregateByPhaseStatus(drugs) {
   const byPhase = new Map()
   for (const d of drugs) {
-    const raw = d.phase || 'UNKNOWN'
-    if (!byPhase.has(raw)) byPhase.set(raw, { raw, name: phaseLabel(raw), total: 0 })
-    const row = byPhase.get(raw)
     const st = d.overall_status || 'UNKNOWN'
-    row[st] = (row[st] ?? 0) + 1
-    row.total += 1
+    for (const e of drugPhaseEnums(d)) {
+      if (!byPhase.has(e)) byPhase.set(e, { raw: e, name: phaseLabel(e), total: 0 })
+      const row = byPhase.get(e)
+      row[st] = (row[st] ?? 0) + 1
+      row.total += 1
+    }
   }
-  return [...byPhase.values()].sort((a, b) => {
-    const ai = PHASE_ORDER.indexOf(a.raw)
-    const bi = PHASE_ORDER.indexOf(b.raw)
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
-  })
+  return [...byPhase.values()].sort(
+    (a, b) => (PHASE_ENUM_ORDER.indexOf(a.raw) + 1 || 99) - (PHASE_ENUM_ORDER.indexOf(b.raw) + 1 || 99),
+  )
 }
 
 // Status: overall_status group-by count (라벨/색은 차트에서 STATUS_META로 매핑)
@@ -139,8 +146,13 @@ export function getSummaryStats(drugs) {
 export function getVisualizeOptions(drugs) {
   const companies = [...new Set(drugs.map((d) => d.company).filter(Boolean))].sort()
   const cancerCategories = [...new Set(drugs.map((d) => d.cancer_category).filter(Boolean))].sort()
-  const phases = [...new Set(drugs.map((d) => d.phase).filter(Boolean))]
-    .sort((a, b) => (PHASE_ORDER.indexOf(a) + 1 || 99) - (PHASE_ORDER.indexOf(b) + 1 || 99))
+  const phaseSet = new Set(drugs.flatMap((d) => d.phases ?? []).filter((p) => p && p !== 'UNKNOWN'))
+  if (drugs.some((d) => { const p = d.phases ?? []; return p.length === 0 || p.every((v) => v === 'UNKNOWN') })) {
+    phaseSet.add('NA')
+  }
+  const phases = [...phaseSet].sort(
+    (a, b) => (PHASE_ENUM_ORDER.indexOf(a) + 1 || 99) - (PHASE_ENUM_ORDER.indexOf(b) + 1 || 99),
+  )
   const modalities = [...new Set(drugs.map((d) => d.modality).filter(Boolean))].sort()
   const targets = [...new Set(drugs.map((d) => d.target).filter(Boolean))].sort()
   const biomarkers = [...new Set(drugs.flatMap((d) => d.biomarker_list ?? []).filter(Boolean))].sort()
@@ -166,7 +178,12 @@ export function applyVisualizeFilters(drugs, filters) {
   return drugs.filter((d) => {
     if (compSet.size > 0 && !compSet.has(d.company)) return false
     if (cancerSet.size > 0 && !cancerSet.has(d.cancer_category)) return false
-    if (phaseSet.size > 0 && !phaseSet.has(d.phase)) return false
+    if (phaseSet.size > 0) {
+      const dp = d.phases ?? []
+      const isUn = dp.length === 0 || dp.every((p) => p === 'UNKNOWN')
+      const ok = [...phaseSet].some((p) => (p === 'NA' ? isUn || dp.includes('NA') : dp.includes(p)))
+      if (!ok) return false
+    }
     if (modSet.size > 0 && !modSet.has(d.modality)) return false
     if (targetSet.size > 0 && !targetSet.has(d.target)) return false
     if (bioSet.size > 0 && !(d.biomarker_list ?? []).some((b) => bioSet.has(b))) return false

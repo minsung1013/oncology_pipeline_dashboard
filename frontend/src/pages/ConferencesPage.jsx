@@ -2,23 +2,42 @@ import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import AbstractTable from '../components/conferences/AbstractTable'
 import { applyAbstractFilters, getAbstractFilterOptions } from '../utils/abstractFilters'
+import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 
 const ABSTRACTS_URL =
   import.meta.env.VITE_ABSTRACTS_URL ??
   'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/abstracts_asco2026.json'
 
-const DEFAULT_FILTERS = {
+// cancer/phase/modality는 공유 축, 나머지는 Conferences 고유
+const SHARED_KEYS = new Set(['cancers', 'phases', 'modalities'])
+
+const LOCAL_DEFAULT = {
   conferences: [],
   years: [],
-  phases: [],
-  modalities: [],
-  cancers: [],
   countries: [],
   companies: [],
   affiliation: '',
   authorName: '',
   keyword: '',
   showEmbargoed: false,
+}
+
+function buildFilters() {
+  const s = getShared()
+  const l = getTabState('conferences') ?? LOCAL_DEFAULT
+  return {
+    cancers: s.cancers,
+    phases: s.phases,
+    modalities: s.modalities,
+    conferences: l.conferences ?? [],
+    years: l.years ?? [],
+    countries: l.countries ?? [],
+    companies: l.companies ?? [],
+    affiliation: l.affiliation ?? '',
+    authorName: l.authorName ?? '',
+    keyword: l.keyword ?? '',
+    showEmbargoed: l.showEmbargoed ?? false,
+  }
 }
 
 function MultiSelect({ label, options, selected, onChange }) {
@@ -72,7 +91,7 @@ function MultiSelect({ label, options, selected, onChange }) {
 export default function ConferencesPage() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  const [filters, setFiltersState] = useState(buildFilters)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const nctParam = searchParams.get('nct')
@@ -102,8 +121,32 @@ export default function ConferencesPage() {
     [abstracts, activeFilters],
   )
 
+  function persistLocal(next) {
+    setTabState('conferences', {
+      conferences: next.conferences, years: next.years, countries: next.countries,
+      companies: next.companies, affiliation: next.affiliation, authorName: next.authorName,
+      keyword: next.keyword, showEmbargoed: next.showEmbargoed,
+    })
+  }
+
   function setFilter(key, value) {
-    setFilters((prev) => ({ ...prev, [key]: value }))
+    setFiltersState((prev) => {
+      const next = { ...prev, [key]: value }
+      if (SHARED_KEYS.has(key)) {
+        setShared({ ...getShared(), cancers: next.cancers, phases: next.phases, modalities: next.modalities })
+      } else {
+        persistLocal(next)
+      }
+      return next
+    })
+  }
+
+  function clearAll() {
+    const next = { cancers: [], phases: [], modalities: [], ...LOCAL_DEFAULT }
+    setFiltersState(next)
+    setShared({ ...getShared(), cancers: [], phases: [], modalities: [] })
+    setTabState('conferences', LOCAL_DEFAULT)
+    clearNct()
   }
 
   function clearNct() {
@@ -262,10 +305,7 @@ export default function ConferencesPage() {
             filters.keyword ||
             nctParam) && (
             <button
-              onClick={() => {
-                setFilters(DEFAULT_FILTERS)
-                clearNct()
-              }}
+              onClick={clearAll}
               className="text-xs text-slate-400 hover:text-slate-600 ml-1"
             >
               Clear all
