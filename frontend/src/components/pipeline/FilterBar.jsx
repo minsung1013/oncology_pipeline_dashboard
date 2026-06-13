@@ -302,7 +302,7 @@ function MultiSelect({ label, options, selected, onToggle, onClear, renderOption
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-20 min-w-52 max-h-72 overflow-y-auto">
+          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-20 w-64 max-w-64 max-h-72 overflow-y-auto">
             {searchable && (
               <div className="p-2 border-b border-slate-100 sticky top-0 bg-white">
                 <input
@@ -329,15 +329,16 @@ function MultiSelect({ label, options, selected, onToggle, onClear, renderOption
             {shown.map((opt) => (
               <label
                 key={opt}
+                title={String(render(opt))}
                 className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer"
               >
                 <input
                   type="checkbox"
                   checked={selected.includes(opt)}
                   onChange={() => onToggle(opt)}
-                  className="w-3.5 h-3.5 accent-blue-500"
+                  className="w-3.5 h-3.5 accent-blue-500 shrink-0"
                 />
-                <span className="text-sm text-slate-700 truncate">{render(opt)}</span>
+                <span className="text-sm text-slate-700 truncate min-w-0">{render(opt)}</span>
               </label>
             ))}
             {searchable && query.trim() === '' && options.length > 200 && (

@@ -10,6 +10,7 @@ const SHARED_DEFAULT = {
   phases: [],
   modalities: [],
   companies: [],
+  drugs: [],
   targets: [],
   biomarkers: [],
   statuses: [],

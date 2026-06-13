@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import VisualizeFilterBar from '../components/visualize/VisualizeFilterBar'
 import SummaryCards from '../components/visualize/SummaryCards'
 import CompanyDistributionChart from '../components/visualize/CompanyDistributionChart'
+import DrugDistributionChart from '../components/visualize/DrugDistributionChart'
 import PhaseDistributionChart from '../components/visualize/PhaseDistributionChart'
 import CancerTypeDistributionChart from '../components/visualize/CancerTypeDistributionChart'
 import ModalityDistributionChart from '../components/visualize/ModalityDistributionChart'
@@ -26,7 +27,7 @@ import { applyAbstractFilters } from '../utils/abstractFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 
 const EMPTY_FILTERS = {
-  cancers: [], phases: [], modalities: [], companies: [], targets: [], biomarkers: [],
+  cancers: [], phases: [], modalities: [], companies: [], drugs: [], targets: [], biomarkers: [],
   statuses: [], startYear: { from: 'all', to: 'all' },
 }
 
@@ -41,6 +42,7 @@ const ABSTRACTS_URL =
 // 필터칩 표시용 (key → 라벨, 값 렌더러)
 const CHIP_META = {
   companies: { label: 'Company', render: (v) => v },
+  drugs: { label: 'Drug', render: (v) => v },
   cancers: { label: 'Cancer', render: (v) => v },
   phases: { label: 'Phase', render: phaseLabel },
   modalities: { label: 'Modality', render: (v) => v },
@@ -130,6 +132,7 @@ export default function VisualizePage() {
     () => aggregateByField(drugs.filter((d) => d.company_normalized), 'company_normalized', topN),
     [drugs, topN],
   )
+  const drugData = useMemo(() => aggregateByField(drugs, 'drug_name', topN), [drugs, topN])
   const cancerData = useMemo(() => aggregateByField(drugs, 'cancer_category', topN), [drugs, topN])
   const targetData = useMemo(() => aggregateByField(drugs, 'target', topN), [drugs, topN])
   const phaseData = useMemo(() => aggregateByPhaseStatus(drugs), [drugs])
@@ -224,6 +227,11 @@ export default function VisualizePage() {
             data={companyData}
             selected={filters.companies}
             onSelect={(v) => toggleFilter('companies', v)}
+          />
+          <DrugDistributionChart
+            data={drugData}
+            selected={filters.drugs}
+            onSelect={(v) => toggleFilter('drugs', v)}
           />
           <PhaseDistributionChart
             data={phaseData}

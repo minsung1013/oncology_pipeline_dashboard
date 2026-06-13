@@ -164,6 +164,7 @@ export function getSummaryStats(drugs) {
 // 필터 옵션: 각 축의 고유값
 export function getVisualizeOptions(drugs) {
   const companies = [...new Set(drugs.map((d) => d.company_normalized).filter(Boolean))].sort()
+  const drugNames = [...new Set(drugs.map((d) => d.drug_name).filter(Boolean))].sort()
   const cancerCategories = [...new Set(drugs.map((d) => d.cancer_category).filter(Boolean))].sort()
   const phaseSet = new Set(drugs.flatMap((d) => d.phases ?? []).filter((p) => p && p !== 'UNKNOWN'))
   if (drugs.some((d) => { const p = d.phases ?? []; return p.length === 0 || p.every((v) => v === 'UNKNOWN') })) {
@@ -179,12 +180,13 @@ export function getVisualizeOptions(drugs) {
   const startYears = [...new Set(
     drugs.map((d) => parseInt(d.start_date?.slice(0, 4))).filter((y) => y > 2000 && y < 2040),
   )].sort((a, b) => a - b)
-  return { companies, cancerCategories, phases, modalities, targets, biomarkers, statuses, startYears }
+  return { companies, drugNames, cancerCategories, phases, modalities, targets, biomarkers, statuses, startYears }
 }
 
 export function applyVisualizeFilters(drugs, filters) {
-  const { companies, cancers, phases, modalities, targets, biomarkers, statuses, startYear } = filters
+  const { companies, drugs: drugFilter, cancers, phases, modalities, targets, biomarkers, statuses, startYear } = filters
   const compSet = new Set(companies)
+  const drugSet = new Set(drugFilter)
   const cancerSet = new Set(cancers)
   const phaseSet = new Set(phases)
   const modSet = new Set(modalities)
@@ -196,6 +198,7 @@ export function applyVisualizeFilters(drugs, filters) {
 
   return drugs.filter((d) => {
     if (compSet.size > 0 && !compSet.has(d.company_normalized)) return false
+    if (drugSet.size > 0 && !drugSet.has(d.drug_name)) return false
     if (cancerSet.size > 0 && !cancerSet.has(d.cancer_category)) return false
     if (phaseSet.size > 0) {
       const dp = d.phases ?? []

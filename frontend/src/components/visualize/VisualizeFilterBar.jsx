@@ -108,6 +108,12 @@ export default function VisualizeFilterBar({ options, filters, onChange, topN, o
         onChange={(v) => set('companies', v)}
       />
       <MultiSelect
+        label="Drug" searchable width="w-72"
+        options={options.drugNames}
+        selected={filters.drugs}
+        onChange={(v) => set('drugs', v)}
+      />
+      <MultiSelect
         label="Cancer" searchable
         options={options.cancerCategories}
         selected={filters.cancers}

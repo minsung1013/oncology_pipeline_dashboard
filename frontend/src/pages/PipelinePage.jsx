@@ -58,6 +58,7 @@ export default function PipelinePage() {
   function setFilters(next) {
     setFiltersState(next)
     setShared({
+      ...getShared(),
       cancers: next.cancerCategories,
       modalities: next.modalities,
       phases: next.phases,
