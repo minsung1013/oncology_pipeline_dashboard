@@ -22,7 +22,10 @@ const STATUS_LABELS = {
 }
 
 export default function FilterBar({ options, filters, onChange }) {
-  const { cancerCategories, modalities, phases, overallStatuses, startYears, completionYears } = options
+  const {
+    cancerCategories, modalities, phases, overallStatuses,
+    companies = [], targets = [], biomarkers = [], startYears, completionYears,
+  } = options
 
   function toggle(key, value) {
     const current = filters[key]
@@ -41,6 +44,9 @@ export default function FilterBar({ options, filters, onChange }) {
     filters.modalities.length,
     filters.phases.length,
     filters.overallStatuses.length,
+    (filters.companies?.length ?? 0),
+    (filters.targets?.length ?? 0),
+    (filters.biomarkers?.length ?? 0),
     filters.partnershipStatus !== 'all' ? 1 : 0,
     filters.regimen !== 'all' ? 1 : 0,
     filters.needsReview ? 1 : 0,
@@ -102,6 +108,36 @@ export default function FilterBar({ options, filters, onChange }) {
         onToggle={(v) => toggle('overallStatuses', v)}
         onClear={() => set('overallStatuses', [])}
         renderOption={(opt) => STATUS_LABELS[opt] ?? opt}
+      />
+
+      {/* Company (searchable — 6,000+) */}
+      <MultiSelect
+        label="Company"
+        options={companies}
+        selected={filters.companies ?? []}
+        onToggle={(v) => toggle('companies', v)}
+        onClear={() => set('companies', [])}
+        searchable
+      />
+
+      {/* Target */}
+      <MultiSelect
+        label="Target"
+        options={targets}
+        selected={filters.targets ?? []}
+        onToggle={(v) => toggle('targets', v)}
+        onClear={() => set('targets', [])}
+        searchable
+      />
+
+      {/* Biomarker */}
+      <MultiSelect
+        label="Biomarker"
+        options={biomarkers}
+        selected={filters.biomarkers ?? []}
+        onToggle={(v) => toggle('biomarkers', v)}
+        onClear={() => set('biomarkers', [])}
+        searchable
       />
 
       {/* Partnership */}
@@ -176,6 +212,9 @@ export default function FilterBar({ options, filters, onChange }) {
               modalities: [],
               phases: [],
               overallStatuses: [],
+              companies: [],
+              targets: [],
+              biomarkers: [],
               partnershipStatus: 'all',
               regimen: 'all',
               needsReview: false,
@@ -227,9 +266,17 @@ function Divider() {
   return <span className="text-slate-200 text-lg select-none">|</span>
 }
 
-function MultiSelect({ label, options, selected, onToggle, onClear, renderOption }) {
+function MultiSelect({ label, options, selected, onToggle, onClear, renderOption, searchable }) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const render = renderOption ?? ((v) => v)
+
+  const shown = searchable
+    ? (query.trim()
+        ? options.filter((o) => String(o).toLowerCase().includes(query.trim().toLowerCase()))
+        : options
+      ).slice(0, 200)
+    : options
 
   return (
     <div className="relative">
@@ -256,6 +303,18 @@ function MultiSelect({ label, options, selected, onToggle, onClear, renderOption
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-20 min-w-52 max-h-72 overflow-y-auto">
+            {searchable && (
+              <div className="p-2 border-b border-slate-100 sticky top-0 bg-white">
+                <input
+                  autoFocus
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={`Search ${label.toLowerCase()}…`}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                />
+              </div>
+            )}
             {selected.length > 0 && (
               <button
                 onClick={() => { onClear(); }}
@@ -264,7 +323,10 @@ function MultiSelect({ label, options, selected, onToggle, onClear, renderOption
                 Clear all
               </button>
             )}
-            {options.map((opt) => (
+            {shown.length === 0 && (
+              <div className="px-3 py-2 text-xs text-slate-400">No matches</div>
+            )}
+            {shown.map((opt) => (
               <label
                 key={opt}
                 className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer"
@@ -275,9 +337,14 @@ function MultiSelect({ label, options, selected, onToggle, onClear, renderOption
                   onChange={() => onToggle(opt)}
                   className="w-3.5 h-3.5 accent-blue-500"
                 />
-                <span className="text-sm text-slate-700">{render(opt)}</span>
+                <span className="text-sm text-slate-700 truncate">{render(opt)}</span>
               </label>
             ))}
+            {searchable && query.trim() === '' && options.length > 200 && (
+              <div className="px-3 py-1.5 text-xs text-slate-400 italic">
+                Showing first 200 — type to search all {options.length.toLocaleString()}
+              </div>
+            )}
           </div>
         </>
       )}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import FilterBar from '../components/pipeline/FilterBar'
 import CompanyList from '../components/pipeline/CompanyList'
 import PipelineTable from '../components/pipeline/PipelineTable'
@@ -17,6 +18,9 @@ const DEFAULT_FILTERS = {
   modalities: [],
   phases: [],
   overallStatuses: [],
+  companies: [],
+  targets: [],
+  biomarkers: [],
   partnershipStatus: 'all',
   regimen: 'all',
   needsReview: false,
@@ -26,10 +30,15 @@ const DEFAULT_FILTERS = {
 }
 
 export default function PipelinePage() {
+  const location = useLocation()
+  // Visualize 탭에서 "Apply to Pipeline"로 넘어온 필터를 초기값에 병합
+  const incoming = location.state?.pipelineFilters
   const [data, setData] = useState(null)
   const [nctIndex, setNctIndex] = useState({})
   const [error, setError] = useState(null)
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  const [filters, setFilters] = useState(
+    incoming ? { ...DEFAULT_FILTERS, ...incoming } : DEFAULT_FILTERS,
+  )
   const [selectedCompany, setSelectedCompany] = useState(null)
 
   useEffect(() => {

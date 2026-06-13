@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import VisualizeFilterBar from '../components/visualize/VisualizeFilterBar'
 import SummaryCards from '../components/visualize/SummaryCards'
 import CompanyDistributionChart from '../components/visualize/CompanyDistributionChart'
@@ -11,7 +12,7 @@ import {
   getVisualizeOptions,
   applyVisualizeFilters,
   aggregateByField,
-  aggregateByPhase,
+  aggregateByPhaseStatus,
   aggregateByModality,
   aggregateBiomarker,
   getSummaryStats,
@@ -36,7 +37,17 @@ const CHIP_META = {
   biomarkers: { label: 'Biomarker', render: (v) => v },
 }
 
+// Visualize의 단일 phase 필드(콤보 'PHASE1/PHASE2') → Pipeline의 개별 phase 배열
+function expandPhases(phases) {
+  const out = new Set()
+  for (const p of phases) {
+    for (const seg of p.split('/')) out.add(seg === 'UNKNOWN' ? 'NA' : seg)
+  }
+  return [...out]
+}
+
 export default function VisualizePage() {
+  const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
@@ -76,7 +87,7 @@ export default function VisualizePage() {
   const companyData = useMemo(() => aggregateByField(drugs, 'company', topN), [drugs, topN])
   const cancerData = useMemo(() => aggregateByField(drugs, 'cancer_category', topN), [drugs, topN])
   const targetData = useMemo(() => aggregateByField(drugs, 'target', topN), [drugs, topN])
-  const phaseData = useMemo(() => aggregateByPhase(drugs), [drugs])
+  const phaseData = useMemo(() => aggregateByPhaseStatus(drugs), [drugs])
   const modalityData = useMemo(() => aggregateByModality(drugs), [drugs])
   const biomarkerData = useMemo(() => aggregateBiomarker(drugs), [drugs])
 
@@ -100,6 +111,18 @@ export default function VisualizePage() {
     ? `${drugs.length.toLocaleString()} records match ${activeChips.length} filter${activeChips.length > 1 ? 's' : ''}`
     : `All trials — ${drugs.length.toLocaleString()} records`
 
+  function applyToPipeline() {
+    const pipelineFilters = {
+      cancerCategories: filters.cancers,
+      modalities: filters.modalities,
+      phases: expandPhases(filters.phases),
+      companies: filters.companies,
+      targets: filters.targets,
+      biomarkers: filters.biomarkers,
+    }
+    navigate('/', { state: { pipelineFilters } })
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Header + filter bar */}
@@ -111,6 +134,18 @@ export default function VisualizePage() {
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">{summary}</p>
           </div>
+          <button
+            onClick={applyToPipeline}
+            disabled={!hasActive}
+            title={hasActive ? 'Open the Pipeline table with these filters applied' : 'Select at least one filter first'}
+            className={`text-xs font-semibold px-3 py-1.5 rounded border transition-colors ${
+              hasActive
+                ? 'border-blue-500 bg-blue-600 text-white hover:bg-blue-700'
+                : 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
+            }`}
+          >
+            Apply to Pipeline →
+          </button>
         </div>
         <VisualizeFilterBar
           options={options}

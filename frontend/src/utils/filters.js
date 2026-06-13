@@ -4,6 +4,9 @@ export function applyFilters(drugs, filters) {
     modalities,
     phases,
     overallStatuses,
+    companies,
+    targets,
+    biomarkers,
     partnershipStatus,
     regimen,
     needsReview,
@@ -15,6 +18,9 @@ export function applyFilters(drugs, filters) {
   return drugs.filter((drug) => {
     if (cancerCategories.length > 0 && !cancerCategories.includes(drug.cancer_category)) return false
     if (modalities.length > 0 && !modalities.includes(drug.modality)) return false
+    if (companies?.length > 0 && !companies.includes(drug.company)) return false
+    if (targets?.length > 0 && !targets.includes(drug.target)) return false
+    if (biomarkers?.length > 0 && !(drug.biomarker_list ?? []).some((b) => biomarkers.includes(b))) return false
     if (phases.length > 0) {
       const drugPhases = drug.phases ?? []
       const isUnphased = drugPhases.length === 0 || drugPhases.every((p) => p === 'UNKNOWN')
@@ -86,6 +92,9 @@ export function getFilterOptions(drugs) {
   if (hasUnphased) rawPhases.add('NA')
   const phases = [...rawPhases].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b))
   const overallStatuses = [...new Set(drugs.map((d) => d.overall_status).filter(Boolean))].sort()
+  const companies = [...new Set(drugs.map((d) => d.company).filter(Boolean))].sort()
+  const targets = [...new Set(drugs.map((d) => d.target).filter(Boolean))].sort()
+  const biomarkers = [...new Set(drugs.flatMap((d) => d.biomarker_list ?? []).filter(Boolean))].sort()
 
   const startYears = [...new Set(
     drugs.map((d) => parseInt(d.start_date?.slice(0, 4))).filter((y) => y > 2000 && y < 2040)
@@ -95,7 +104,10 @@ export function getFilterOptions(drugs) {
     drugs.map((d) => parseInt(d.primary_completion_date?.slice(0, 4))).filter((y) => y > 2000 && y < 2040)
   )].sort((a, b) => a - b)
 
-  return { cancerCategories, modalities, phases, overallStatuses, startYears, completionYears }
+  return {
+    cancerCategories, modalities, phases, overallStatuses,
+    companies, targets, biomarkers, startYears, completionYears,
+  }
 }
 
 export function groupByCompany(drugs) {

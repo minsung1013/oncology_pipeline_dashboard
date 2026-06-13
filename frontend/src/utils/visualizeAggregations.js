@@ -55,6 +55,24 @@ export function aggregateByPhase(drugs) {
     })
 }
 
+// Phase × Status: 누적 막대용 — phase별로 status 카운트를 한 행에 펼침
+export function aggregateByPhaseStatus(drugs) {
+  const byPhase = new Map()
+  for (const d of drugs) {
+    const raw = d.phase || 'UNKNOWN'
+    if (!byPhase.has(raw)) byPhase.set(raw, { raw, name: phaseLabel(raw), total: 0 })
+    const row = byPhase.get(raw)
+    const st = d.overall_status || 'UNKNOWN'
+    row[st] = (row[st] ?? 0) + 1
+    row.total += 1
+  }
+  return [...byPhase.values()].sort((a, b) => {
+    const ai = PHASE_ORDER.indexOf(a.raw)
+    const bi = PHASE_ORDER.indexOf(b.raw)
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+  })
+}
+
 // Modality: group-by count (Unknown 포함 — 스펙 §5④)
 export function aggregateByModality(drugs) {
   const counts = new Map()
