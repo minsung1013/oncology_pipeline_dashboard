@@ -142,9 +142,14 @@ const COLUMNS = [
 
   col.accessor('cancer_category', {
     header: 'Cancer',
-    cell: ({ getValue }) => (
-      <span className="text-xs text-slate-600">{getValue() || '—'}</span>
-    ),
+    enableSorting: false,
+    cell: ({ getValue }) => {
+      const cats = getValue() ?? []
+      if (cats.length === 0) return <span className="text-slate-300">—</span>
+      return (
+        <span className="text-xs text-slate-600">{cats.join(', ')}</span>
+      )
+    },
     size: 120,
   }),
 

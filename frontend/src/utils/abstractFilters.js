@@ -5,7 +5,7 @@ export function applyAbstractFilters(abstracts, filters) {
     if (!showEmbargoed && a.status === 'embargoed') return false
     if (phases.length > 0 && !phases.some((p) => (a.phases ?? []).includes(p))) return false
     if (modalities.length > 0 && !modalities.some((m) => (a.modality_list ?? []).includes(m))) return false
-    if (cancers.length > 0 && !cancers.includes(a.cancer_category)) return false
+    if (cancers.length > 0 && !(a.cancer_category ?? []).some((c) => cancers.includes(c))) return false
     if (nctId && !(a.nct_ids ?? []).includes(nctId)) return false
 
     if (keyword) {
@@ -19,7 +19,7 @@ export function applyAbstractFilters(abstracts, filters) {
         ...(a.nct_ids ?? []),
         ...(a.drugs_mentioned ?? []),
         ...(a.companies ?? []),
-        a.cancer_category,
+        ...(a.cancer_category ?? []),
       ]
         .filter(Boolean)
         .join(' ')
@@ -43,7 +43,7 @@ export function getAbstractFilterOptions(abstracts) {
   ].sort()
 
   const cancers = [
-    ...new Set(abstracts.map((a) => a.cancer_category).filter(Boolean)),
+    ...new Set(abstracts.flatMap((a) => a.cancer_category ?? []).filter(Boolean)),
   ].sort()
 
   return { phases, modalities, cancers }
