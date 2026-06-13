@@ -1,5 +1,8 @@
 import { useState, useMemo } from 'react'
 import { phaseLabel } from '../../utils/visualizeAggregations'
+import { statusLabel, STATUS_META } from './statusMeta'
+
+const STATUS_ORDER = STATUS_META.map((s) => s.key)
 
 // 다중선택 드롭다운. searchable=true면 검색창(회사 6,000개 대응).
 function MultiSelect({
@@ -122,6 +125,13 @@ export default function VisualizeFilterBar({ options, filters, onChange, topN, o
         options={options.modalities}
         selected={filters.modalities}
         onChange={(v) => set('modalities', v)}
+      />
+      <MultiSelect
+        label="Status"
+        options={[...options.statuses].sort((a, b) => STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b))}
+        selected={filters.statuses}
+        onChange={(v) => set('statuses', v)}
+        renderLabel={statusLabel}
       />
       <MultiSelect
         label="Target" searchable

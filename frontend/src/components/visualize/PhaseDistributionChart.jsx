@@ -1,20 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import ChartCard, { EmptyHint } from './ChartCard'
+import { STATUS_META as STATUSES } from './statusMeta'
 
-// 상태 표시 순서(진행→종료) + 라벨 + 색
-const STATUSES = [
-  { key: 'NOT_YET_RECRUITING', label: 'Not yet recruiting', color: '#60a5fa' },
-  { key: 'RECRUITING', label: 'Recruiting', color: '#22c55e' },
-  { key: 'ENROLLING_BY_INVITATION', label: 'By invitation', color: '#06b6d4' },
-  { key: 'ACTIVE_NOT_RECRUITING', label: 'Active', color: '#eab308' },
-  { key: 'COMPLETED', label: 'Completed', color: '#6366f1' },
-  { key: 'TERMINATED', label: 'Terminated', color: '#ef4444' },
-  { key: 'SUSPENDED', label: 'Suspended', color: '#f97316' },
-  { key: 'WITHDRAWN', label: 'Withdrawn', color: '#ec4899' },
-  { key: 'UNKNOWN', label: 'Unknown', color: '#cbd5e1' },
-]
-
-export default function PhaseDistributionChart({ data, onSelect, selected = [] }) {
+export default function PhaseDistributionChart({ data, onSelect }) {
   const handleClick = (entry) => {
     // 누적 막대의 어느 세그먼트를 눌러도 payload에 phase row(raw)가 담김
     const raw = entry?.raw ?? entry?.payload?.raw

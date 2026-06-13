@@ -8,11 +8,14 @@ import CancerTypeDistributionChart from '../components/visualize/CancerTypeDistr
 import ModalityDistributionChart from '../components/visualize/ModalityDistributionChart'
 import TargetDistributionChart from '../components/visualize/TargetDistributionChart'
 import BiomarkerChart from '../components/visualize/BiomarkerChart'
+import StatusDistributionChart from '../components/visualize/StatusDistributionChart'
+import { statusLabel } from '../components/visualize/statusMeta'
 import {
   getVisualizeOptions,
   applyVisualizeFilters,
   aggregateByField,
   aggregateByPhaseStatus,
+  aggregateByStatus,
   aggregateByModality,
   aggregateBiomarker,
   getSummaryStats,
@@ -25,6 +28,7 @@ const PIPELINE_URL =
 
 const DEFAULT_FILTERS = {
   companies: [], cancers: [], phases: [], modalities: [], targets: [], biomarkers: [],
+  statuses: [],
   startYear: { from: 'all', to: 'all' },
 }
 
@@ -36,6 +40,7 @@ const CHIP_META = {
   modalities: { label: 'Modality', render: (v) => v },
   targets: { label: 'Target', render: (v) => v },
   biomarkers: { label: 'Biomarker', render: (v) => v },
+  statuses: { label: 'Status', render: statusLabel },
 }
 
 // Visualize의 단일 phase 필드(콤보 'PHASE1/PHASE2') → Pipeline의 개별 phase 배열
@@ -91,6 +96,7 @@ export default function VisualizePage() {
   const cancerData = useMemo(() => aggregateByField(drugs, 'cancer_category', topN), [drugs, topN])
   const targetData = useMemo(() => aggregateByField(drugs, 'target', topN), [drugs, topN])
   const phaseData = useMemo(() => aggregateByPhaseStatus(drugs), [drugs])
+  const statusData = useMemo(() => aggregateByStatus(drugs), [drugs])
   const modalityData = useMemo(() => aggregateByModality(drugs), [drugs])
   const biomarkerData = useMemo(() => aggregateBiomarker(drugs), [drugs])
 
@@ -124,6 +130,7 @@ export default function VisualizePage() {
       companies: filters.companies,
       targets: filters.targets,
       biomarkers: filters.biomarkers,
+      overallStatuses: filters.statuses,
       startYear: filters.startYear,
     }
     navigate('/', { state: { pipelineFilters } })
@@ -209,8 +216,12 @@ export default function VisualizePage() {
           />
           <PhaseDistributionChart
             data={phaseData}
-            selected={filters.phases}
             onSelect={(v) => toggleFilter('phases', v)}
+          />
+          <StatusDistributionChart
+            counts={statusData}
+            selected={filters.statuses}
+            onSelect={(v) => toggleFilter('statuses', v)}
           />
           <CancerTypeDistributionChart
             data={cancerData}

@@ -73,6 +73,16 @@ export function aggregateByPhaseStatus(drugs) {
   })
 }
 
+// Status: overall_status group-by count (라벨/색은 차트에서 STATUS_META로 매핑)
+export function aggregateByStatus(drugs) {
+  const counts = new Map()
+  for (const d of drugs) {
+    const key = d.overall_status || 'UNKNOWN'
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return counts // Map<statusKey, count>
+}
+
 // Modality: group-by count (Unknown 포함 — 스펙 §5④)
 export function aggregateByModality(drugs) {
   const counts = new Map()
@@ -134,20 +144,22 @@ export function getVisualizeOptions(drugs) {
   const modalities = [...new Set(drugs.map((d) => d.modality).filter(Boolean))].sort()
   const targets = [...new Set(drugs.map((d) => d.target).filter(Boolean))].sort()
   const biomarkers = [...new Set(drugs.flatMap((d) => d.biomarker_list ?? []).filter(Boolean))].sort()
+  const statuses = [...new Set(drugs.map((d) => d.overall_status).filter(Boolean))]
   const startYears = [...new Set(
     drugs.map((d) => parseInt(d.start_date?.slice(0, 4))).filter((y) => y > 2000 && y < 2040),
   )].sort((a, b) => a - b)
-  return { companies, cancerCategories, phases, modalities, targets, biomarkers, startYears }
+  return { companies, cancerCategories, phases, modalities, targets, biomarkers, statuses, startYears }
 }
 
 export function applyVisualizeFilters(drugs, filters) {
-  const { companies, cancers, phases, modalities, targets, biomarkers, startYear } = filters
+  const { companies, cancers, phases, modalities, targets, biomarkers, statuses, startYear } = filters
   const compSet = new Set(companies)
   const cancerSet = new Set(cancers)
   const phaseSet = new Set(phases)
   const modSet = new Set(modalities)
   const targetSet = new Set(targets)
   const bioSet = new Set(biomarkers)
+  const statusSet = new Set(statuses)
   const from = startYear && startYear.from !== 'all' ? parseInt(startYear.from) : null
   const to = startYear && startYear.to !== 'all' ? parseInt(startYear.to) : null
 
@@ -158,6 +170,7 @@ export function applyVisualizeFilters(drugs, filters) {
     if (modSet.size > 0 && !modSet.has(d.modality)) return false
     if (targetSet.size > 0 && !targetSet.has(d.target)) return false
     if (bioSet.size > 0 && !(d.biomarker_list ?? []).some((b) => bioSet.has(b))) return false
+    if (statusSet.size > 0 && !statusSet.has(d.overall_status)) return false
     if (from !== null || to !== null) {
       const y = parseInt(d.start_date?.slice(0, 4))
       if (!y) return false
