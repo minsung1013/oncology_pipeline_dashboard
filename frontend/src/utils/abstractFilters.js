@@ -1,0 +1,50 @@
+export function applyAbstractFilters(abstracts, filters) {
+  const { phases, modalities, cancers, keyword, nctId, showEmbargoed } = filters
+
+  return abstracts.filter((a) => {
+    if (!showEmbargoed && a.status === 'embargoed') return false
+    if (phases.length > 0 && !phases.some((p) => (a.phases ?? []).includes(p))) return false
+    if (modalities.length > 0 && !modalities.some((m) => (a.modality_list ?? []).includes(m))) return false
+    if (cancers.length > 0 && !cancers.includes(a.cancer_category)) return false
+    if (nctId && !(a.nct_ids ?? []).includes(nctId)) return false
+
+    if (keyword) {
+      const q = keyword.toLowerCase()
+      const searchable = [
+        a.title,
+        a.author_raw,
+        a.abstract_id,
+        ...(a.target_list ?? []),
+        ...(a.biomarker_list ?? []),
+        ...(a.nct_ids ?? []),
+        ...(a.drugs_mentioned ?? []),
+        ...(a.companies ?? []),
+        a.cancer_category,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      if (!searchable.includes(q)) return false
+    }
+
+    return true
+  })
+}
+
+const PHASE_ORDER = ['EARLY_PHASE1', 'PHASE1', 'PHASE2', 'PHASE3', 'PHASE4', 'NA']
+
+export function getAbstractFilterOptions(abstracts) {
+  const phases = [
+    ...new Set(abstracts.flatMap((a) => a.phases ?? []).filter(Boolean)),
+  ].sort((a, b) => PHASE_ORDER.indexOf(a) - PHASE_ORDER.indexOf(b))
+
+  const modalities = [
+    ...new Set(abstracts.flatMap((a) => a.modality_list ?? []).filter(Boolean)),
+  ].sort()
+
+  const cancers = [
+    ...new Set(abstracts.map((a) => a.cancer_category).filter(Boolean)),
+  ].sort()
+
+  return { phases, modalities, cancers }
+}
