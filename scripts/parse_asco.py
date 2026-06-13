@@ -248,26 +248,34 @@ DRUG_SUFFIX_RE = re.compile(
 )
 # 하이픈 코드명: ABBV-706, BGB-43395, DS-8201 등 (하이픈 필수 — 오탐 최소화)
 DRUG_CODE_RE = re.compile(r"\b([A-Z]{2,5}-\d{2,6}[A-Z]{0,2}\d{0,2})\b")
-# 약물이 아닌 접두사: 종양마커·사이토카인·바이러스·임상시험그룹·그랜트 코드
+# 약물이 아닌 접두사: 종양마커·사이토카인·바이러스·질병코드·임상시험그룹/시험명·설문지
 NON_DRUG_PREFIX = {
-    "CA", "CD", "IL", "HPV", "COVID", "SARS", "HR", "CI", "OS", "PFS",
-    "IGG", "IGM", "GDF", "TBCRC", "OPBC", "TTCC", "BCRF", "OPERA", "TRUCE",
-    "CLL", "AML", "TGF", "EGF", "FGF", "VEGF",
+    # 종양마커·사이토카인·바이러스
+    "CA", "CD", "IL", "HPV", "COVID", "SARS", "GDF", "TGF", "EGF", "FGF", "VEGF",
+    "IGG", "IGM", "IP",
+    # 통계·결과 지표
+    "HR", "CI", "OS", "PFS",
+    # 질병·코딩·설문지·그랜트
+    "CLL", "AML", "CRC", "GI", "DIPG", "ICD", "SF", "SOC", "NSF",
+    # 임상시험그룹·협력그룹·시험명 약어
+    "TBCRC", "OPBC", "TTCC", "BCRF", "OPERA", "TRUCE", "GOG", "SOLTI", "CGGA",
+    "IFCT", "FIGHT", "HIPEC", "IIT", "II", "EF", "SURE", "OMAHA", "CLIO", "EV",
+    "EPC", "AA", "KN",
 }
 
 
-def extract_drugs_from_title(title: str) -> list[str]:
-    """제목에서 약물명 후보 추출 (INN 접미사 + 하이픈 코드명)."""
-    if not title:
+def extract_drugs(text: str) -> list[str]:
+    """텍스트(제목+본문)에서 약물명 후보 추출 (INN 접미사 + 하이픈 코드명)."""
+    if not text:
         return []
     found: list[str] = []
     low: set[str] = set()
-    for m in DRUG_SUFFIX_RE.finditer(title):
+    for m in DRUG_SUFFIX_RE.finditer(text):
         w = m.group(1)
         if w.lower() not in low:
             found.append(w)
             low.add(w.lower())
-    for m in DRUG_CODE_RE.finditer(title):
+    for m in DRUG_CODE_RE.finditer(text):
         w = m.group(1)
         prefix = re.match(r"^[A-Z]+", w).group(0)
         if prefix in NON_DRUG_PREFIX:
@@ -275,7 +283,12 @@ def extract_drugs_from_title(title: str) -> list[str]:
         if w.lower() not in low:
             found.append(w)
             low.add(w.lower())
-    return found[:6]
+    return found[:10]
+
+
+# 하위호환 별칭 (제목만)
+def extract_drugs_from_title(title: str) -> list[str]:
+    return extract_drugs(title)
 
 
 def clean_company(research_sponsor: str | None) -> str | None:
@@ -394,7 +407,7 @@ def parse_block(
     sm2 = SPONSOR_RE.search(text_after)
     research_sponsor = clean_text(sm2.group(1)) if sm2 else None
 
-    drugs_mentioned = extract_drugs_from_title(title)
+    drugs_mentioned = extract_drugs(f"{title} {body_text or ''}")
     company = clean_company(research_sponsor)
     companies = [company] if company else []
 
