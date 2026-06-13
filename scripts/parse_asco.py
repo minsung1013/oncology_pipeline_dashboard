@@ -234,6 +234,60 @@ def infer_biomarker_list(text: str) -> list[str]:
     return found
 
 
+# ── 약물명 추출 (제목 기반) ───────────────────────────────────────────────────
+# INN 접미사 (일반명): pembrolizumab, osimertinib, palbociclib 등
+DRUG_SUFFIXES = (
+    "mab", "nib", "tinib", "ciclib", "parib", "rasib", "lisib", "degib", "zomib",
+    "metinib", "tecan", "platin", "rubicin", "taxel", "citabine", "ciloleucel",
+    "leucel", "brutinib", "asib", "fenib", "limus", "sidenib",
+)
+DRUG_SUFFIX_RE = re.compile(
+    r"\b([A-Za-z]{5,}(?:"
+    + "|".join(sorted(set(DRUG_SUFFIXES), key=len, reverse=True))
+    + r"))\b"
+)
+# 하이픈 코드명: ABBV-706, BGB-43395, DS-8201 등 (하이픈 필수 — 오탐 최소화)
+DRUG_CODE_RE = re.compile(r"\b([A-Z]{2,5}-\d{2,6}[A-Z]{0,2}\d{0,2})\b")
+# 약물이 아닌 접두사: 종양마커·사이토카인·바이러스·임상시험그룹·그랜트 코드
+NON_DRUG_PREFIX = {
+    "CA", "CD", "IL", "HPV", "COVID", "SARS", "HR", "CI", "OS", "PFS",
+    "IGG", "IGM", "GDF", "TBCRC", "OPBC", "TTCC", "BCRF", "OPERA", "TRUCE",
+    "CLL", "AML", "TGF", "EGF", "FGF", "VEGF",
+}
+
+
+def extract_drugs_from_title(title: str) -> list[str]:
+    """제목에서 약물명 후보 추출 (INN 접미사 + 하이픈 코드명)."""
+    if not title:
+        return []
+    found: list[str] = []
+    low: set[str] = set()
+    for m in DRUG_SUFFIX_RE.finditer(title):
+        w = m.group(1)
+        if w.lower() not in low:
+            found.append(w)
+            low.add(w.lower())
+    for m in DRUG_CODE_RE.finditer(title):
+        w = m.group(1)
+        prefix = re.match(r"^[A-Z]+", w).group(0)
+        if prefix in NON_DRUG_PREFIX:
+            continue
+        if w.lower() not in low:
+            found.append(w)
+            low.add(w.lower())
+    return found[:6]
+
+
+def clean_company(research_sponsor: str | None) -> str | None:
+    """research_sponsor → 회사명 정규화 ('None.'·빈값 제거, 후행 마침표 제거)."""
+    if not research_sponsor:
+        return None
+    s = research_sponsor.strip().rstrip(".").strip()
+    if s.lower() in ("none", ""):
+        return None
+    return s
+
+
 # ── 초록 블록 파싱 ────────────────────────────────────────────────────────────
 
 def parse_block(
@@ -340,6 +394,10 @@ def parse_block(
     sm2 = SPONSOR_RE.search(text_after)
     research_sponsor = clean_text(sm2.group(1)) if sm2 else None
 
+    drugs_mentioned = extract_drugs_from_title(title)
+    company = clean_company(research_sponsor)
+    companies = [company] if company else []
+
     return {
         "uid": uid,
         "conference": CONFERENCE,
@@ -364,8 +422,8 @@ def parse_block(
         "clinicaltrials_url": (
             f"https://clinicaltrials.gov/study/{nct_ids[0]}" if nct_ids else None
         ),
-        "companies": [],
-        "drugs_mentioned": [],
+        "companies": companies,
+        "drugs_mentioned": drugs_mentioned,
         "research_sponsor": research_sponsor,
         "source": {"url": None, "doi": None, "page": None},
         "keyword_parsed": status == "available",

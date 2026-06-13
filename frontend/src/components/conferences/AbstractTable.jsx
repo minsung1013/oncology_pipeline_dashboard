@@ -140,6 +140,57 @@ const COLUMNS = [
     size: 180,
   }),
 
+  col.accessor((row) => row.authors?.[0]?.affiliation, {
+    id: 'affiliation',
+    header: 'Affiliation',
+    enableSorting: false,
+    cell: ({ getValue }) => {
+      const v = getValue()
+      if (!v) return <span className="text-slate-300">—</span>
+      return (
+        <span className="text-xs text-slate-600 line-clamp-2" title={v}>
+          {v}
+        </span>
+      )
+    },
+    size: 200,
+  }),
+
+  col.accessor((row) => row.authors?.[0]?.country, {
+    id: 'country',
+    header: 'Country',
+    cell: ({ getValue }) => {
+      const v = getValue()
+      if (!v) return <span className="text-slate-300">—</span>
+      return <span className="text-xs text-slate-600">{v}</span>
+    },
+    size: 110,
+  }),
+
+  col.accessor((row) => row.companies?.[0], {
+    id: 'company',
+    header: 'Company',
+    cell: ({ getValue }) => {
+      const v = getValue()
+      if (!v) return <span className="text-slate-300">—</span>
+      return (
+        <span className="text-xs font-medium text-slate-700 line-clamp-2" title={v}>
+          {v}
+        </span>
+      )
+    },
+    size: 160,
+  }),
+
+  col.accessor('drugs_mentioned', {
+    header: 'Drugs',
+    enableSorting: false,
+    cell: ({ getValue }) => (
+      <TagList items={getValue()} colorCls="bg-emerald-50 text-emerald-700" max={3} />
+    ),
+    size: 170,
+  }),
+
   col.accessor('cancer_category', {
     header: 'Cancer',
     enableSorting: false,

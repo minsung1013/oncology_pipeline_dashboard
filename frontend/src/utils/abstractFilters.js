@@ -20,6 +20,8 @@ export function applyAbstractFilters(abstracts, filters) {
         ...(a.drugs_mentioned ?? []),
         ...(a.companies ?? []),
         ...(a.cancer_category ?? []),
+        a.authors?.[0]?.country,
+        a.authors?.[0]?.affiliation,
       ]
         .filter(Boolean)
         .join(' ')
