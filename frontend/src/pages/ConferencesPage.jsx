@@ -107,7 +107,7 @@ export default function ConferencesPage() {
   function focusInPipeline(nct) {
     const cur = getTabState('pipeline') ?? {}
     setTabState('pipeline', { ...cur, keyword: nct })
-    navigate('/')
+    navigate('/pipeline')
   }
 
   const nctParam = searchParams.get('nct')
