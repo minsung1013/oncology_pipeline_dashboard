@@ -3,10 +3,17 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import AbstractTable from '../components/conferences/AbstractTable'
 import { applyAbstractFilters, getAbstractFilterOptions } from '../utils/abstractFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
+import { getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
-const ABSTRACTS_URL =
-  import.meta.env.VITE_ABSTRACTS_URL ??
-  'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/abstracts_asco2026.json'
+// 현재 필터(학회·연도)로 로드할 manifest 파일 결정. 미선택 시 최신연도×전체학회.
+function neededItems(index, filters) {
+  if (!index?.length) return []
+  const allYears = [...new Set(index.map((m) => m.year))]
+  const allConfs = [...new Set(index.map((m) => m.conference))]
+  const years = filters.years.length ? filters.years.map(Number) : [Math.max(...allYears)]
+  const confs = filters.conferences.length ? filters.conferences : allConfs
+  return index.filter((m) => years.includes(m.year) && confs.includes(m.conference))
+}
 
 // cancer/phase/modality/company는 공유 축 (company는 정규 제약사명으로 통일), 나머지는 Conferences 고유
 const SHARED_KEYS = new Set(['cancers', 'phases', 'modalities', 'companies'])
@@ -88,7 +95,9 @@ function MultiSelect({ label, options, selected, onChange }) {
 }
 
 export default function ConferencesPage() {
-  const [data, setData] = useState(null)
+  const [index, setIndex] = useState(null)
+  const [abstracts, setAbstracts] = useState([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(buildFilters)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -103,20 +112,30 @@ export default function ConferencesPage() {
 
   const nctParam = searchParams.get('nct')
 
+  // manifest 로드
   useEffect(() => {
-    fetch(ABSTRACTS_URL, { cache: 'no-store' })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then(setData)
-      .catch((e) => setError(e.message))
+    getAbstractIndex().then(setIndex).catch((e) => setError(e.message))
   }, [])
 
-  const abstracts = data?.abstracts ?? []
-  const metadata = data?.metadata
+  // 선택된 학회·연도에 맞는 파일을 lazy 로드 (캐시됨)
+  useEffect(() => {
+    if (!index) return
+    const items = neededItems(index, filters)
+    setLoading(true)
+    loadAbstractFiles(items)
+      .then((list) => { setAbstracts(list); setLoading(false) })
+      .catch((e) => { setError(e.message); setLoading(false) })
+  }, [index, filters.conferences, filters.years])
 
-  const filterOptions = useMemo(() => getAbstractFilterOptions(abstracts), [abstracts])
+  // 학회·연도 옵션은 manifest에서(아직 로드 안 한 것도 선택 가능), 나머지는 로드된 데이터에서
+  const filterOptions = useMemo(() => {
+    const base = getAbstractFilterOptions(abstracts)
+    if (index) {
+      base.conferences = [...new Set(index.map((m) => m.conference))].sort()
+      base.years = [...new Set(index.map((m) => m.year))].sort((a, b) => b - a).map(String)
+    }
+    return base
+  }, [abstracts, index])
 
   const activeFilters = useMemo(
     () => ({ ...filters, nctId: nctParam || null }),
@@ -172,13 +191,16 @@ export default function ConferencesPage() {
     )
   }
 
-  if (!data) {
+  if (!index) {
     return (
       <div className="flex items-center justify-center h-full text-slate-400 text-sm">
-        Loading ASCO 2026 abstracts…
+        Loading conference abstracts…
       </div>
     )
   }
+
+  const totalAvailable = index.reduce((s, m) => s + m.count, 0)
+  const loadedYears = [...new Set(abstracts.map((a) => `${a.conference} ${a.year}`))].sort().join(', ')
 
   return (
     <div className="flex flex-col h-full">
@@ -187,19 +209,18 @@ export default function ConferencesPage() {
         <div className="flex items-center justify-between mb-2">
           <div>
             <h2 className="text-base font-bold text-slate-800 leading-none">
-              ASCO 2026 Abstracts
+              Conference Abstracts
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              {metadata?.available?.toLocaleString()} available ·{' '}
-              {metadata?.embargoed?.toLocaleString()} embargoed · Updated{' '}
-              {metadata?.last_updated?.slice(0, 10)}
+              {index.length} datasets · {totalAvailable.toLocaleString()} abstracts total ·
+              {' '}loaded: {loadedYears || '—'}{loading && ' · loading…'}
             </p>
           </div>
           <div className="text-right text-xs text-slate-500">
             <span className="font-semibold text-slate-700">{filtered.length.toLocaleString()}</span>
             {' '}of{' '}
             <span className="font-semibold text-slate-700">{abstracts.length.toLocaleString()}</span>
-            {' '}abstracts
+            {' '}loaded
           </div>
         </div>
 

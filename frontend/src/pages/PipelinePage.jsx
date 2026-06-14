@@ -5,13 +5,9 @@ import PipelineTable from '../components/pipeline/PipelineTable'
 import { applyFilters, getFilterOptions, groupByCompany } from '../utils/filters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 
-const PIPELINE_URL =
-  import.meta.env.VITE_PIPELINE_URL ??
-  'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/pipeline.json'
+import { PIPELINE_URL, DATA_BASE } from '../utils/dataSource'
 
-const NCT_INDEX_URL =
-  import.meta.env.VITE_NCT_INDEX_URL ??
-  'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/nct_index.json'
+const NCT_INDEX_URL = `${DATA_BASE}/nct_index.json`  // 있으면 ASCO 배지, 없으면 무시
 
 // Pipeline 고유(비공유) 필터 기본값
 const LOCAL_DEFAULT = {

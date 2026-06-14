@@ -25,19 +25,12 @@ import {
 } from '../utils/visualizeAggregations'
 import { applyAbstractFilters } from '../utils/abstractFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
+import { PIPELINE_URL, getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
 const EMPTY_FILTERS = {
   cancers: [], phases: [], modalities: [], companies: [], drugs: [], targets: [], biomarkers: [],
   statuses: [], startYear: { from: 'all', to: 'all' },
 }
-
-const PIPELINE_URL =
-  import.meta.env.VITE_PIPELINE_URL ??
-  'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/pipeline.json'
-
-const ABSTRACTS_URL =
-  import.meta.env.VITE_ABSTRACTS_URL ??
-  'https://raw.githubusercontent.com/minsung1013/oncology_pipeline_dashboard/main/data/parsed/abstracts_asco2026.json'
 
 // 필터칩 표시용 (key → 라벨, 값 렌더러)
 const CHIP_META = {
@@ -72,7 +65,6 @@ export default function VisualizePage() {
   }
 
   useEffect(() => {
-    // browser HTTP 캐시 허용 (Pipeline 탭과 동일 파일 — 중복 fetch 비용 완화)
     fetch(PIPELINE_URL)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -81,10 +73,13 @@ export default function VisualizePage() {
       .then(setData)
       .catch((e) => setError(e.message))
 
-    // ASCO 초록 (회사별 발표 차트용) — 페이지 차단 없이 별도 로드
-    fetch(ABSTRACTS_URL)
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setAbstractsData)
+    // 초록(회사별 발표 차트용): manifest의 최신연도×전체학회만 lazy 로드
+    getAbstractIndex()
+      .then((idx) => {
+        const latest = Math.max(...idx.map((m) => m.year))
+        return loadAbstractFiles(idx.filter((m) => m.year === latest))
+      })
+      .then((list) => setAbstractsData({ abstracts: list }))
       .catch(() => {})
   }, [])
 
