@@ -30,3 +30,9 @@ frontend/public/pipeline.json
 data/frontend/
 data/parsed/
 .env.r2
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
