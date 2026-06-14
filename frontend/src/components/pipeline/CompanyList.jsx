@@ -1,4 +1,4 @@
-export default function CompanyList({ companies, selectedCompany, onSelect }) {
+export default function CompanyList({ companies, selectedCompany, onSelect, onClose }) {
   if (companies.length === 0) {
     return (
       <div className="w-56 shrink-0 text-sm text-slate-400 px-4 py-6">
@@ -9,10 +9,15 @@ export default function CompanyList({ companies, selectedCompany, onSelect }) {
 
   return (
     <div className="w-56 shrink-0 border-r border-slate-200 overflow-y-auto">
-      <div className="sticky top-0 bg-slate-50 border-b border-slate-200 px-3 py-2">
+      <div className="sticky top-0 bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
           Companies ({companies.length})
         </span>
+        {onClose && (
+          <button onClick={onClose} title="Collapse" className="text-slate-400 hover:text-slate-600 text-sm leading-none">
+            ◀
+          </button>
+        )}
       </div>
       <ul>
         {companies.map(({ company, count }) => (

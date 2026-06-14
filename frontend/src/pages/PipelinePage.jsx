@@ -45,6 +45,10 @@ export default function PipelinePage() {
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(buildFilters)
   const [selectedCompany, setSelectedCompany] = useState(() => getTabState('pipeline')?.selectedCompany ?? null)
+  // 회사 목록 사이드바: 데스크톱 기본 펼침, 모바일 기본 접힘
+  const [showCompanies, setShowCompanies] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= 768,
+  )
 
   function persistLocal(patch) {
     setTabState('pipeline', { ...(getTabState('pipeline') ?? LOCAL_DEFAULT), ...patch })
@@ -155,26 +159,39 @@ export default function PipelinePage() {
 
       {/* 메인 */}
       <div className="flex flex-1 overflow-hidden">
-        {/* 회사 목록 */}
-        <CompanyList
-          companies={companies}
-          selectedCompany={selectedCompany}
-          onSelect={handleSelectCompany}
-        />
+        {/* 회사 목록 (접기 가능) */}
+        {showCompanies && (
+          <CompanyList
+            companies={companies}
+            selectedCompany={selectedCompany}
+            onSelect={handleSelectCompany}
+            onClose={() => setShowCompanies(false)}
+          />
+        )}
 
         {/* 파이프라인 테이블 */}
         <div className="flex flex-col flex-1 overflow-hidden">
-          {selectedCompany && (
-            <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center justify-between text-sm">
-              <span className="font-semibold text-blue-800">{selectedCompany}</span>
-              <button
-                onClick={() => setSelectedCompany(null)}
-                className="text-blue-500 hover:text-blue-700 text-xs"
-              >
-                ✕ Show all
-              </button>
-            </div>
-          )}
+          {/* 토글 + 선택 회사 바 */}
+          <div className="bg-slate-50 border-b border-slate-200 px-3 py-1.5 flex items-center gap-2 text-sm shrink-0">
+            <button
+              onClick={() => setShowCompanies((v) => !v)}
+              className="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded px-2 py-0.5 bg-white"
+              title={showCompanies ? 'Hide company list' : 'Show company list'}
+            >
+              {showCompanies ? '◀ Companies' : '▶ Companies'}
+            </button>
+            {selectedCompany && (
+              <span className="flex items-center gap-2 text-blue-800">
+                <span className="font-semibold">{selectedCompany}</span>
+                <button
+                  onClick={() => setSelectedCompany(null)}
+                  className="text-blue-500 hover:text-blue-700 text-xs"
+                >
+                  ✕ Show all
+                </button>
+              </span>
+            )}
+          </div>
           <PipelineTable drugs={tableDrugs} nctIndex={nctIndex} />
         </div>
       </div>
