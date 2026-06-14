@@ -3,16 +3,18 @@ name: Update Oncology Pipeline Data
 on:
   schedule:
     - cron: '0 0 * * 1'   # 매주 월요일 00:00 UTC (09:00 KST)
-  workflow_dispatch:        # 수동 실행 가능
+  workflow_dispatch:
+
+# 필요 시크릿 (Settings > Secrets and variables > Actions):
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_BASE_URL
+# 데이터는 git에 커밋하지 않고 Cloudflare R2로 업로드 (frontend가 R2에서 fetch).
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 120    # 안전장치 (증분 매칭이면 보통 20~30분)
-
+    timeout-minutes: 120
     permissions:
-      contents: write       # data/ 커밋 & 푸시 권한
-
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,16 +28,38 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # 증분 매칭: 기존 data/parsed/pipeline.json(커밋됨)의 논문 데이터를
-      # 보존하고, 새로 등록된 trial만 Europe PMC로 검색.
-      - name: Run pipeline (full fetch + incremental paper matching)
-        run: python scripts/run_pipeline.py --mode full
-        working-directory: ${{ github.workspace }}
+      # 증분 논문매칭 베이스: 직전 pipeline.json을 R2에서 받아옴 (git 커밋분 아님)
+      - name: Pull previous pipeline.json from R2
+        run: |
+          mkdir -p data/parsed
+          curl -fsSL "${{ secrets.R2_BASE_URL }}/pipeline.json" -o data/parsed/pipeline.json || \
+            echo "(no previous pipeline.json — full build)"
 
-      - name: Commit and push data
+      - name: Refresh pipeline (ClinicalTrials.gov)
+        run: python scripts/run_pipeline.py --mode full
+
+      # 커밋된 LLM 캐시 재적용(Ollama 없이 modality/target 보강 유지) + 값 정규화
+      - name: Re-apply LLM enrichment + normalize
+        run: |
+          python scripts/llm_merge.py --write || true
+          python scripts/normalize_fields.py --write || true
+
+      - name: Build lite frontend payload (pipeline)
+        run: python scripts/make_frontend_data.py --only pipeline
+
+      - name: Upload to R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: python scripts/upload_r2.py
+
+      # 갱신된 LLM 캐시(신규 약물 분류)만 git에 커밋 (소형)
+      - name: Commit LLM cache
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/parsed/pipeline.json
-          git diff --staged --quiet || git commit -m "chore: update pipeline data $(date +'%Y-%m-%d')"
-          git push
+          git add data/cache/llm_drug_cache.json 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "chore: refresh data $(date +'%Y-%m-%d')"
+          git push || true

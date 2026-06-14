@@ -72,6 +72,21 @@ def build_abstracts():
           f"{sum(x['count'] for x in manifest)} abstracts total)")
 
 
+def build_nct_index():
+    """NCT → [{uid, conference, year}] (Pipeline→Conferences 크로스링크용)."""
+    idx = {}
+    for fp in sorted(glob.glob("data/parsed/abstracts_*.json")):
+        d = json.load(open(fp, encoding="utf-8"))
+        for a in d["abstracts"]:
+            for nct in a.get("nct_ids", []):
+                idx.setdefault(nct, []).append(
+                    {"uid": a["uid"], "conference": a["conference"], "year": a["year"]})
+    os.makedirs(OUT, exist_ok=True)
+    path = f"{OUT}/nct_index.json"
+    json.dump(idx, open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    print(f"nct_index: {len(idx)} NCT IDs -> {path} ({os.path.getsize(path)/1024/1024:.1f} MB)")
+
+
 def build_pipeline():
     src = "data/parsed/pipeline.json"
     if not os.path.exists(src):
@@ -88,5 +103,13 @@ def build_pipeline():
 
 
 if __name__ == "__main__":
-    build_abstracts()
-    build_pipeline()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--only", choices=["abstracts", "pipeline"], default=None,
+                    help="일부만 빌드 (CI에서 pipeline만 갱신 등)")
+    only = ap.parse_args().only
+    if only != "pipeline":
+        build_abstracts()
+        build_nct_index()
+    if only != "abstracts":
+        build_pipeline()

@@ -25,11 +25,8 @@ frontend/public/pipeline.json
 # Claude Code internal
 .claude/
 
-# Frontend lite payload + multi-conference abstract data → hosted on Cloudflare R2 (not git)
+# Generated data → hosted on Cloudflare R2 (frontend fetches from R2, not git).
+# LLM 캐시(data/cache/)는 CI 재적용용으로 git 유지.
 data/frontend/
-data/parsed/abstracts_aacr*.json
-data/parsed/abstracts_asco2022.json
-data/parsed/abstracts_asco2023.json
-data/parsed/abstracts_asco2024.json
-data/parsed/abstracts_asco2025.json
+data/parsed/
 .env.r2

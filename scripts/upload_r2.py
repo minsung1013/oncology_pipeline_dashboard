@@ -90,7 +90,8 @@ def put_object(env, key, body: bytes, content_type="application/json"):
 
 def main():
     env = load_env()
-    files = ["data/frontend/index.json", "data/frontend/pipeline.json"]
+    files = ["data/frontend/index.json", "data/frontend/nct_index.json", "data/frontend/pipeline.json"]
+    files = [f for f in files if os.path.exists(f)]
     files += sorted(glob.glob("data/frontend/abstracts/*.json"))
     print(f"[R2] {env['R2_BUCKET']} 에 {len(files)}개 업로드")
     for fp in files:
