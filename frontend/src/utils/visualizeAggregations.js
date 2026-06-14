@@ -80,6 +80,41 @@ export function aggregateByPhaseStatus(drugs) {
   )
 }
 
+// 초록에 공유 필터(암종·단계·모달리티·회사·타겟·바이오마커) 적용 (리스트 필드는 교집합)
+export function filterAbstractsForVisualize(abstracts, f) {
+  const has = (sel) => sel && sel.length > 0
+  return abstracts.filter((a) => {
+    if (has(f.cancers) && !(a.cancer_category ?? []).some((c) => f.cancers.includes(c))) return false
+    if (has(f.phases) && !(a.phases ?? []).some((p) => f.phases.includes(p))) return false
+    if (has(f.modalities) && !(a.modality_list ?? []).some((m) => f.modalities.includes(m))) return false
+    if (has(f.companies) && !(a.companies_normalized ?? []).some((c) => f.companies.includes(c))) return false
+    if (has(f.targets) && !(a.target_list ?? []).some((t) => f.targets.includes(t))) return false
+    if (has(f.biomarkers) && !(a.biomarker_list ?? []).some((b) => f.biomarkers.includes(b))) return false
+    return true
+  })
+}
+
+// 초록 → 연도×학회 카운트 [{year, ASCO, AACR}]
+export function aggregateAbstractsByYear(abstracts) {
+  const byYear = new Map()
+  for (const a of abstracts) {
+    if (!byYear.has(a.year)) byYear.set(a.year, { year: a.year })
+    const row = byYear.get(a.year)
+    row[a.conference] = (row[a.conference] ?? 0) + 1
+  }
+  return [...byYear.values()].sort((x, y) => x.year - y.year)
+}
+
+// manifest([{conference, year, count}]) → 동일 형태 (필터 미적용 시 총계)
+export function manifestByYear(manifest) {
+  const byYear = new Map()
+  for (const m of manifest) {
+    if (!byYear.has(m.year)) byYear.set(m.year, { year: m.year })
+    byYear.get(m.year)[m.conference] = m.count
+  }
+  return [...byYear.values()].sort((x, y) => x.year - y.year)
+}
+
 // 초록(ASCO) 회사별 발표 수 — companies_normalized 리스트 평탄화 + Top N
 export function aggregateAbstractsByCompany(abstracts, topN) {
   const counts = new Map()

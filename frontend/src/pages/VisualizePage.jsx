@@ -19,11 +19,14 @@ import {
   aggregateByStatus,
   aggregateByModality,
   aggregateBiomarker,
+  filterAbstractsForVisualize,
+  aggregateAbstractsByYear,
+  manifestByYear,
   getSummaryStats,
   phaseLabel,
 } from '../utils/visualizeAggregations'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
-import { PIPELINE_URL, getAbstractIndex } from '../utils/dataSource'
+import { PIPELINE_URL, getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
 const EMPTY_FILTERS = {
   cancers: [], phases: [], modalities: [], companies: [], drugs: [], targets: [], biomarkers: [],
@@ -45,6 +48,7 @@ const CHIP_META = {
 export default function VisualizePage() {
   const [data, setData] = useState(null)
   const [abstractManifest, setAbstractManifest] = useState(null)
+  const [allAbstracts, setAllAbstracts] = useState(null)
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(getShared)
   const [topN, setTopNState] = useState(() => getTabState('visualize')?.topN ?? 10)
@@ -76,6 +80,28 @@ export default function VisualizePage() {
   }, [])
 
   const allDrugs = data?.drugs ?? []
+
+  // 초록 관련 공유 필터가 활성화되면 전체 초록을 1회 로드(캐시) → 필터 반응형 차트
+  const abstractFilterActive =
+    filters.cancers.length || filters.phases.length || filters.modalities.length ||
+    filters.companies.length || filters.targets.length || filters.biomarkers.length
+  useEffect(() => {
+    if (abstractFilterActive && !allAbstracts && abstractManifest) {
+      loadAbstractFiles(abstractManifest).then(setAllAbstracts).catch(() => {})
+    }
+  }, [abstractFilterActive, allAbstracts, abstractManifest])
+
+  const confList = useMemo(
+    () => (abstractManifest ? [...new Set(abstractManifest.map((m) => m.conference))].sort() : []),
+    [abstractManifest],
+  )
+  const abstractYearData = useMemo(() => {
+    if (abstractFilterActive) {
+      if (!allAbstracts) return null  // loading
+      return aggregateAbstractsByYear(filterAbstractsForVisualize(allAbstracts, filters))
+    }
+    return abstractManifest ? manifestByYear(abstractManifest) : null
+  }, [abstractFilterActive, allAbstracts, abstractManifest, filters])
 
   const options = useMemo(() => getVisualizeOptions(allDrugs), [allDrugs])
   const drugs = useMemo(() => applyVisualizeFilters(allDrugs, filters), [allDrugs, filters])
@@ -232,7 +258,12 @@ export default function VisualizePage() {
             selected={filters.biomarkers}
             onSelect={(v) => toggleFilter('biomarkers', v)}
           />
-          <AbstractsByYearChart manifest={abstractManifest} />
+          <AbstractsByYearChart
+            data={abstractYearData}
+            confs={confList}
+            filtered={!!abstractFilterActive}
+            loading={!!abstractFilterActive && !allAbstracts}
+          />
         </div>
       </div>
     </div>

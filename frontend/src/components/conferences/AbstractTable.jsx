@@ -118,8 +118,14 @@ const COLUMNS = [
     cell: ({ getValue }) => {
       const v = getValue()
       if (!v) return <span className="text-slate-300">—</span>
+      // 학회별 색 (Visualize 연도 차트와 동일 팔레트)
+      const cls = v === 'ASCO'
+        ? 'bg-blue-100 text-blue-700'
+        : v === 'AACR'
+          ? 'bg-purple-100 text-purple-700'
+          : 'bg-slate-100 text-slate-600'
       return (
-        <span className="inline-block text-xs font-semibold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+        <span className={`inline-block text-xs font-semibold px-1.5 py-0.5 rounded ${cls}`}>
           {v}
         </span>
       )
