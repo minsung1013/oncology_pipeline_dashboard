@@ -323,6 +323,38 @@ export default function ConferencesPage() {
             </button>
           )}
         </div>
+
+        {/* Active filter chips (선택 항목 표시 + 개별 제거) */}
+        {(() => {
+          const META = {
+            conferences: 'Source', years: 'Year', cancers: 'Cancer',
+            phases: 'Phase', modalities: 'Modality', countries: 'Country', companies: 'Company',
+          }
+          const chips = Object.entries(META).flatMap(([key, label]) =>
+            (filters[key] || []).map((value) => ({ key, label, value })),
+          )
+          if (filters.affiliation) chips.push({ key: 'affiliation', label: 'Affiliation', value: filters.affiliation, text: true })
+          if (filters.keyword) chips.push({ key: 'keyword', label: 'Search', value: filters.keyword, text: true })
+          if (chips.length === 0) return null
+          return (
+            <div className="flex items-center gap-1.5 flex-wrap mt-2">
+              {chips.map(({ key, label, value, text }) => (
+                <button
+                  key={`${key}:${value}`}
+                  onClick={() =>
+                    setFilter(key, text ? '' : (filters[key] || []).filter((v) => v !== value))
+                  }
+                  className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  title="Remove filter"
+                >
+                  <span className="text-blue-400">{label}:</span>
+                  {value}
+                  <span className="text-blue-400">✕</span>
+                </button>
+              ))}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Table */}
