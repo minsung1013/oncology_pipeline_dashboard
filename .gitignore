@@ -32,3 +32,4 @@ data/parsed/abstracts_asco2022.json
 data/parsed/abstracts_asco2023.json
 data/parsed/abstracts_asco2024.json
 data/parsed/abstracts_asco2025.json
+.env.r2
