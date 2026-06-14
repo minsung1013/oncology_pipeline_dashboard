@@ -9,7 +9,7 @@ import ModalityDistributionChart from '../components/visualize/ModalityDistribut
 import TargetDistributionChart from '../components/visualize/TargetDistributionChart'
 import BiomarkerChart from '../components/visualize/BiomarkerChart'
 import StatusDistributionChart from '../components/visualize/StatusDistributionChart'
-import AbstractCompanyChart from '../components/visualize/AbstractCompanyChart'
+import AbstractsByYearChart from '../components/visualize/AbstractsByYearChart'
 import { statusLabel } from '../components/visualize/statusMeta'
 import {
   getVisualizeOptions,
@@ -19,13 +19,11 @@ import {
   aggregateByStatus,
   aggregateByModality,
   aggregateBiomarker,
-  aggregateAbstractsByCompany,
   getSummaryStats,
   phaseLabel,
 } from '../utils/visualizeAggregations'
-import { applyAbstractFilters } from '../utils/abstractFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
-import { PIPELINE_URL, getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
+import { PIPELINE_URL, getAbstractIndex } from '../utils/dataSource'
 
 const EMPTY_FILTERS = {
   cancers: [], phases: [], modalities: [], companies: [], drugs: [], targets: [], biomarkers: [],
@@ -46,7 +44,7 @@ const CHIP_META = {
 
 export default function VisualizePage() {
   const [data, setData] = useState(null)
-  const [abstractsData, setAbstractsData] = useState(null)
+  const [abstractManifest, setAbstractManifest] = useState(null)
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(getShared)
   const [topN, setTopNState] = useState(() => getTabState('visualize')?.topN ?? 10)
@@ -73,37 +71,14 @@ export default function VisualizePage() {
       .then(setData)
       .catch((e) => setError(e.message))
 
-    // 초록(회사별 발표 차트용): manifest의 최신연도×전체학회만 lazy 로드
-    getAbstractIndex()
-      .then((idx) => {
-        const latest = Math.max(...idx.map((m) => m.year))
-        return loadAbstractFiles(idx.filter((m) => m.year === latest))
-      })
-      .then((list) => setAbstractsData({ abstracts: list }))
-      .catch(() => {})
+    // 통합 "연도별 초록 수" 차트: manifest만 사용 (초록 전체 로드 불필요)
+    getAbstractIndex().then(setAbstractManifest).catch(() => {})
   }, [])
 
   const allDrugs = data?.drugs ?? []
 
   const options = useMemo(() => getVisualizeOptions(allDrugs), [allDrugs])
   const drugs = useMemo(() => applyVisualizeFilters(allDrugs, filters), [allDrugs, filters])
-
-  // 초록에 공유 필터(암종·단계·모달리티·회사) 적용 → 회사별 발표 수
-  const filteredAbstracts = useMemo(() => {
-    const list = abstractsData?.abstracts
-    if (!list) return null
-    return applyAbstractFilters(list, {
-      conferences: [], years: [], countries: [], affiliation: '', authorName: '',
-      keyword: '', nctId: null, showEmbargoed: false,
-      cancers: filters.cancers, phases: filters.phases,
-      modalities: filters.modalities, companies: filters.companies,
-    })
-  }, [abstractsData, filters])
-
-  const abstractCompanyData = useMemo(
-    () => (filteredAbstracts ? aggregateAbstractsByCompany(filteredAbstracts, topN) : []),
-    [filteredAbstracts, topN],
-  )
 
   // 그래프 클릭 → 해당 축 필터 토글
   const toggleFilter = (key, value) => {
@@ -257,13 +232,7 @@ export default function VisualizePage() {
             selected={filters.biomarkers}
             onSelect={(v) => toggleFilter('biomarkers', v)}
           />
-          <AbstractCompanyChart
-            data={abstractCompanyData}
-            total={filteredAbstracts?.length}
-            loading={filteredAbstracts === null}
-            selected={filters.companies}
-            onSelect={(v) => toggleFilter('companies', v)}
-          />
+          <AbstractsByYearChart manifest={abstractManifest} />
         </div>
       </div>
     </div>
