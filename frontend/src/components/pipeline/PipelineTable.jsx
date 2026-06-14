@@ -29,7 +29,11 @@ function DrugCell({ d, nctIndex }) {
   const ncts = d.nct_ids ?? []
   const combo = d.combo_drugs ?? []
   const primaryUrl = d.clinicaltrials_url || (ncts[0] ? `https://clinicaltrials.gov/study/${ncts[0]}` : null)
-  const ascoNct = ncts.find((nct) => nctIndex?.[nct])
+  const abstrNct = ncts.find((nct) => nctIndex?.[nct]?.length)
+  // nct_index: NCT → [{uid, conference, year}]. 매칭 학회들을 배지 라벨로.
+  const abstrConfs = abstrNct
+    ? [...new Set((nctIndex[abstrNct] || []).map((e) => e.conference))].join('/')
+    : null
 
   return (
     <div>
@@ -43,13 +47,13 @@ function DrugCell({ d, nctIndex }) {
         ) : (
           <span className="font-medium">{d.drug_name}</span>
         )}
-        {ascoNct && (
+        {abstrNct && (
           <Link
-            to={`/conferences?nct=${ascoNct}`}
+            to={`/conferences?nct=${abstrNct}`}
             className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold hover:bg-amber-200 transition-colors"
-            title={`ASCO 2026 abstract · ${ascoNct}`}
+            title={`Conference abstract (${abstrConfs}) · ${abstrNct}`}
           >
-            ASCO
+            {abstrConfs || 'Abstr'}
           </Link>
         )}
         {ncts.length > 1 && (
