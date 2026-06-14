@@ -24,3 +24,11 @@ frontend/public/pipeline.json
 
 # Claude Code internal
 .claude/
+
+# Frontend lite payload + multi-conference abstract data → hosted on Cloudflare R2 (not git)
+data/frontend/
+data/parsed/abstracts_aacr*.json
+data/parsed/abstracts_asco2022.json
+data/parsed/abstracts_asco2023.json
+data/parsed/abstracts_asco2024.json
+data/parsed/abstracts_asco2025.json

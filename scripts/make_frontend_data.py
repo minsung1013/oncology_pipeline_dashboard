@@ -1,0 +1,92 @@
+"""
+프론트엔드용 lite 페이로드 생성 (옵션 D).
+
+- 전 학회/연도 초록을 병합하고 **본문(abstract_text) 제거** → data/frontend/abstracts.json
+  (본문은 용량의 ~80%. 테이블·필터·검색엔 불필요. 전문은 source.doi 링크/R2 전체파일로.)
+- pipeline.json에서 프론트가 안 쓰는 장문 필드 제거 → data/frontend/pipeline.json
+
+전체(본문 포함) 파일은 R2에 업로드, lite 파일은 프론트가 fetch.
+
+용법: python scripts/make_frontend_data.py
+"""
+
+import glob
+import json
+import os
+
+OUT = "data/frontend"
+
+# 초록 lite에 보존할 필드 (본문 제외)
+ABS_KEEP = [
+    "uid", "conference", "year", "abstract_id", "is_lba", "status", "presentation_type",
+    "cancer_category", "title", "authors", "author_raw", "phase", "phases",
+    "modality_list", "target_list", "biomarker_list", "biomarker_mentioned",
+    "nct_ids", "companies_normalized", "drugs_mentioned", "source",
+]
+# 저자는 첫 저자의 표시용 필드만
+AUTHOR_KEEP = ["name", "affiliation", "country"]
+
+# pipeline lite 보존 필드 (프론트 테이블·필터·검색·배지에서 실제 사용)
+DRUG_KEEP = [
+    "drug_name", "combo_drugs", "company", "company_normalized", "collaborators",
+    "partnership_status", "condition", "cancer_category", "phase", "phases",
+    "overall_status", "primary_completion_date", "start_date",
+    "modality", "modality_src", "modality_rule", "target", "target_src", "target_rule",
+    "moa", "biomarker_mentioned", "biomarker_list", "nct_ids", "clinicaltrials_url",
+    "official_title", "brief_title", "primary_outcomes", "pubmed_links",
+    "is_combination", "data_flags",
+]
+
+
+def _lite_record(a):
+    rec = {k: a.get(k) for k in ABS_KEEP if k in a}
+    if rec.get("authors"):
+        rec["authors"] = [{k: au.get(k) for k in AUTHOR_KEEP} for au in rec["authors"][:1]]
+    # source는 doi만 (url 제거 — 용량)
+    if rec.get("source"):
+        rec["source"] = {"doi": rec["source"].get("doi")}
+    rec["has_body"] = bool(a.get("abstract_text"))
+    return rec
+
+
+def build_abstracts():
+    """연도·학회별 lite 파일 + manifest(index) 생성 → 프론트가 선택적 lazy 로드."""
+    os.makedirs(f"{OUT}/abstracts", exist_ok=True)
+    files = sorted(glob.glob("data/parsed/abstracts_*.json"))
+    manifest = []
+    for fp in files:
+        d = json.load(open(fp, encoding="utf-8"))
+        m = d["metadata"]
+        recs = [_lite_record(a) for a in d["abstracts"]]
+        key = f"{m['conference'].lower()}{m['year']}"
+        path = f"{OUT}/abstracts/{key}.json"
+        json.dump({"metadata": m, "abstracts": recs}, open(path, "w", encoding="utf-8"),
+                  ensure_ascii=False, separators=(",", ":"))
+        mb = os.path.getsize(path) / 1024 / 1024
+        manifest.append({"conference": m["conference"], "year": m["year"],
+                         "count": len(recs), "file": f"abstracts/{key}.json", "mb": round(mb, 1)})
+        print(f"  {key}: {len(recs)} -> {path} ({mb:.1f} MB)")
+    json.dump({"abstracts": manifest}, open(f"{OUT}/index.json", "w", encoding="utf-8"),
+              ensure_ascii=False, indent=2)
+    print(f"manifest -> {OUT}/index.json ({len(manifest)} files, "
+          f"{sum(x['count'] for x in manifest)} abstracts total)")
+
+
+def build_pipeline():
+    src = "data/parsed/pipeline.json"
+    if not os.path.exists(src):
+        print("pipeline.json 없음 — 스킵")
+        return
+    d = json.load(open(src, encoding="utf-8"))
+    drugs = [{k: x.get(k) for k in DRUG_KEEP if k in x} for x in d["drugs"]]
+    out = {"metadata": d.get("metadata", {}), "drugs": drugs}
+    os.makedirs(OUT, exist_ok=True)
+    path = f"{OUT}/pipeline.json"
+    json.dump(out, open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    print(f"pipeline lite: {len(drugs)} -> {path} "
+          f"({os.path.getsize(src)/1024/1024:.0f}MB -> {os.path.getsize(path)/1024/1024:.0f}MB)")
+
+
+if __name__ == "__main__":
+    build_abstracts()
+    build_pipeline()

@@ -149,11 +149,20 @@ def retag_cancer(track: str, title: str) -> list[str]:
     2) 없으면 ASCO 트랙 문자열로 보강
     cross-cutting 트랙(Developmental Therapeutics 등)은 빈 리스트.
     """
-    tl = (title or "").lower()
+    text = title or ""
+    tl = text.lower()
     cats: list[str] = []
     for cat, kws in CANCER_CATEGORY_MAP.items():
-        if any(kw.lower() in tl for kw in kws):
-            cats.append(cat)
+        for kw in kws:
+            if kw.isupper():
+                # 대문자 약어(ALL, AML, CLL, RCC, GBM...)는 대소문자 구분 + 단어경계
+                # ("ALL" 백혈병 ≠ 영어단어 "all"; "spatially"의 substring 오탐 방지)
+                if re.search(r"(?<![A-Za-z])" + re.escape(kw) + r"(?![A-Za-z])", text):
+                    cats.append(cat)
+                    break
+            elif kw.lower() in tl:
+                cats.append(cat)
+                break
     if cats:
         return cats
     tu = (track or "").upper()
