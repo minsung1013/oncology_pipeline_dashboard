@@ -106,10 +106,16 @@ function makeColumns(nctIndex) {
     cell: ({ row }) => {
       const d = row.original
       return (
-        <div>
-          <span className="font-medium text-slate-700">{d.company || '—'}</span>
+        <div className="min-w-0">
+          {/* 긴 원본 회사명은 1줄 truncate + 정규명/전체명 툴팁 */}
+          <div
+            className="font-medium text-slate-700 truncate"
+            title={d.company_normalized ? `${d.company_normalized} · ${d.company}` : d.company || ''}
+          >
+            {d.company || '—'}
+          </div>
           {d.collaborators?.length > 0 && (
-            <div className="text-xs text-slate-400 truncate max-w-40" title={d.collaborators.join(', ')}>
+            <div className="text-xs text-slate-400 truncate" title={d.collaborators.join(', ')}>
               + {d.collaborators.join(', ')}
             </div>
           )}
