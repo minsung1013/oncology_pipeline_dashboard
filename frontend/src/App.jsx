@@ -18,7 +18,7 @@ export default function App() {
         {/* Global top bar */}
         <nav className="bg-white border-b border-slate-200 px-4 py-2 flex items-center gap-1 shrink-0">
           <span className="text-sm font-bold text-slate-700 mr-4">
-            Oncology Pipeline Intelligence
+            <span className="text-blue-600">Onco</span>lyzer
           </span>
           <NavLink to="/" end className={navClass}>
             Pipeline
