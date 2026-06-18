@@ -34,9 +34,9 @@ const FEATURES = [
     desc: 'Five years of ASCO and AACR abstracts with author/affiliation, normalized pharma sponsors, drugs, targets and biomarkers — cross-linked to the matching trial by NCT.',
   },
   {
-    to: '/visualize', tag: 'Visualize', color: 'teal',
+    to: '/conference-visualize', tag: 'Visualize', color: 'teal',
     title: 'Cross-Filter Analytics',
-    desc: 'Interactive distributions — company, drug, cancer, phase × status, modality, target, biomarker, and abstracts by year. Click any bar to drill down across the whole dashboard.',
+    desc: 'Per-domain interactive distributions — separate Conference and Pipeline views covering modality, target, biomarker, cancer, company, phase and more. Click any bar to drill down across the dashboard.',
   },
 ]
 

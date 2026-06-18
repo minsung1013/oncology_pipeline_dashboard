@@ -22,6 +22,7 @@ const store = {
   pipeline: null,
   visualize: null,
   conferences: null,
+  'conference-visualize': null,
 }
 
 export function getShared() {

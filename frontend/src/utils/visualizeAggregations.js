@@ -134,6 +134,81 @@ export function aggregateAbstractsByCompany(abstracts, topN) {
   return top
 }
 
+// ── Conference 시각화용 초록 집계 ─────────────────────────────────────────────
+// 초록 리스트 필드(modality_list / target_list / biomarker_list / cancer_category /
+// companies_normalized)를 평탄화해 빈도 카운트 → Top N + Other
+export function aggregateAbstractListField(abstracts, field, topN, { excludeUnknown = false } = {}) {
+  const counts = new Map()
+  for (const a of abstracts) {
+    for (const v of a[field] ?? []) {
+      if (!v || (excludeUnknown && v === 'Unknown')) continue
+      counts.set(v, (counts.get(v) ?? 0) + 1)
+    }
+  }
+  const sorted = [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+  if (!topN || sorted.length <= topN) return sorted
+  const top = sorted.slice(0, topN)
+  const rest = sorted.slice(topN)
+  const otherCount = rest.reduce((s, r) => s + r.count, 0)
+  if (otherCount > 0) top.push({ name: `Other (${rest.length})`, count: otherCount, isOther: true })
+  return top
+}
+
+// 초록 제1저자 국가 분포 → Top N + Other
+export function aggregateAbstractsByCountry(abstracts, topN) {
+  const counts = new Map()
+  for (const a of abstracts) {
+    const c = a.authors?.[0]?.country
+    if (c) counts.set(c, (counts.get(c) ?? 0) + 1)
+  }
+  const sorted = [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+  if (!topN || sorted.length <= topN) return sorted
+  const top = sorted.slice(0, topN)
+  const rest = sorted.slice(topN)
+  const otherCount = rest.reduce((s, r) => s + r.count, 0)
+  if (otherCount > 0) top.push({ name: `Other (${rest.length})`, count: otherCount, isOther: true })
+  return top
+}
+
+// 초록 phase 분포 — phases 리스트를 개별 enum으로 분해(빈 건 NA), Pipeline과 동일 순서
+export function aggregateAbstractsByPhase(abstracts) {
+  const counts = new Map()
+  for (const a of abstracts) {
+    const enums = (a.phases ?? []).filter((p) => p && p !== 'UNKNOWN')
+    for (const e of (enums.length ? enums : ['NA'])) {
+      counts.set(e, (counts.get(e) ?? 0) + 1)
+    }
+  }
+  return [...counts.entries()]
+    .map(([raw, count]) => ({ name: phaseLabel(raw), raw, count }))
+    .sort((a, b) => (PHASE_ENUM_ORDER.indexOf(a.raw) + 1 || 99) - (PHASE_ENUM_ORDER.indexOf(b.raw) + 1 || 99))
+}
+
+// Conference 요약 카드 통계
+export function getAbstractSummaryStats(abstracts) {
+  const companies = new Set()
+  const cancers = new Set()
+  const confYears = new Set()
+  let withTherapeutic = 0
+  for (const a of abstracts) {
+    for (const c of a.companies_normalized ?? []) companies.add(c)
+    for (const c of a.cancer_category ?? []) cancers.add(c)
+    if (a.conference && a.year) confYears.add(`${a.conference} ${a.year}`)
+    if ((a.modality_list ?? []).length) withTherapeutic += 1
+  }
+  return {
+    total: abstracts.length,
+    uniqueCompanies: companies.size,
+    uniqueCancerTypes: cancers.size,
+    datasets: confYears.size,
+    therapeuticPct: abstracts.length ? Math.round((withTherapeutic / abstracts.length) * 100) : 0,
+  }
+}
+
 // Status: overall_status group-by count (라벨/색은 차트에서 STATUS_META로 매핑)
 export function aggregateByStatus(drugs) {
   const counts = new Map()
