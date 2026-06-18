@@ -27,6 +27,7 @@ const CHIP_META = {
   biomarkers: 'Biomarker',
   cancers: 'Cancer',
   companies: 'Company',
+  institutions: 'Institution',
   phases: 'Phase',
 }
 
@@ -170,7 +171,7 @@ export default function ConferenceVisualizePage() {
             ))}
             <button
               onClick={() => setFilters((prev) => ({
-                ...prev, modalities: [], targets: [], biomarkers: [], cancers: [], companies: [], phases: [],
+                ...prev, modalities: [], targets: [], biomarkers: [], cancers: [], companies: [], institutions: [], phases: [],
               }))}
               className="text-xs text-slate-400 hover:text-slate-600 ml-1"
             >
@@ -234,10 +235,13 @@ export default function ConferenceVisualizePage() {
           />
           <DistributionBarChart
             title="Top Institutions"
-            subtitle="First-author affiliation, normalized to university / company level"
+            subtitle="First-author affiliation, normalized to university / company level — click a bar to filter"
             data={institutionData}
+            selected={filters.institutions ?? []}
             baseColor="#6366f1"
+            selectedColor="#4338ca"
             yWidth={150}
+            onSelect={(v) => toggleFilter('institutions', v)}
           />
           <DistributionBarChart
             title="Phase Distribution"

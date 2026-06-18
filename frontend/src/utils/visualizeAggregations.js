@@ -91,6 +91,7 @@ export function filterAbstractsForVisualize(abstracts, f) {
     if (has(f.companies) && !(a.companies_normalized ?? []).some((c) => f.companies.includes(c))) return false
     if (has(f.targets) && !(a.target_list ?? []).some((t) => f.targets.includes(t))) return false
     if (has(f.biomarkers) && !(a.biomarker_list ?? []).some((b) => f.biomarkers.includes(b))) return false
+    if (has(f.institutions) && !f.institutions.includes(normalizeAffiliation(a.authors?.[0]?.affiliation))) return false
     return true
   })
 }

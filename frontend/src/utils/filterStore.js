@@ -13,6 +13,7 @@ const SHARED_DEFAULT = {
   drugs: [],
   targets: [],
   biomarkers: [],
+  institutions: [],
   statuses: [],
   startYear: { from: 'all', to: 'all' },
 }
