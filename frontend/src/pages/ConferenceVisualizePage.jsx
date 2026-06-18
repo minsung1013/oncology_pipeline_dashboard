@@ -7,6 +7,7 @@ import {
   aggregateAbstractsByYear,
   aggregateAbstractListField,
   aggregateAbstractsByCompany,
+  aggregateAbstractsByInstitution,
   aggregateAbstractsByCountry,
   aggregateAbstractsByPhase,
   getAbstractSummaryStats,
@@ -101,6 +102,7 @@ export default function ConferenceVisualizePage() {
   const biomarkerData = useMemo(() => aggregateAbstractListField(filtered, 'biomarker_list', topN), [filtered, topN])
   const cancerData = useMemo(() => aggregateAbstractListField(filtered, 'cancer_category', topN), [filtered, topN])
   const companyData = useMemo(() => aggregateAbstractsByCompany(filtered, topN), [filtered, topN])
+  const institutionData = useMemo(() => aggregateAbstractsByInstitution(filtered, topN), [filtered, topN])
   const phaseData = useMemo(() => aggregateAbstractsByPhase(filtered), [filtered])
   const countryData = useMemo(() => aggregateAbstractsByCountry(filtered, topN), [filtered, topN])
 
@@ -229,6 +231,13 @@ export default function ConferenceVisualizePage() {
             selected={filters.companies ?? []}
             yWidth={120}
             onSelect={(v) => toggleFilter('companies', v)}
+          />
+          <DistributionBarChart
+            title="Top Institutions"
+            subtitle="First-author affiliation, normalized to university / company level"
+            data={institutionData}
+            baseColor="#6366f1"
+            yWidth={150}
           />
           <DistributionBarChart
             title="Phase Distribution"

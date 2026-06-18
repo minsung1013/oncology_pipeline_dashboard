@@ -1,3 +1,5 @@
+import { normalizeAffiliation } from '../../utils/dataClean'
+
 export default function AuthorCell({ raw, name: parsedName, onClick }) {
   if (!raw && !parsedName) return <span className="text-slate-300">—</span>
 
@@ -22,7 +24,7 @@ export default function AuthorCell({ raw, name: parsedName, onClick }) {
       )}
       {affil && (
         <div className="text-xs text-slate-400 truncate max-w-44 leading-tight" title={affil}>
-          {affil}
+          {normalizeAffiliation(affil)}
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 // Pipeline 시각화용 집계 함수 모음.
 // 입력: filteredDrugs (pipeline.json drugs 일부), 출력: recharts용 [{name, count}] 등.
-import { normalizeCountry } from './dataClean'
+import { normalizeCountry, normalizeAffiliation } from './dataClean'
 
 const PHASE_ORDER = ['EARLY_PHASE1', 'PHASE1', 'PHASE1/PHASE2', 'PHASE2', 'PHASE2/PHASE3', 'PHASE3', 'PHASE4', 'NA', 'UNKNOWN']
 
@@ -163,6 +163,24 @@ export function aggregateAbstractsByCountry(abstracts, topN) {
   for (const a of abstracts) {
     const c = normalizeCountry(a.authors?.[0]?.country)
     if (c) counts.set(c, (counts.get(c) ?? 0) + 1)
+  }
+  const sorted = [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+  if (!topN || sorted.length <= topN) return sorted
+  const top = sorted.slice(0, topN)
+  const rest = sorted.slice(topN)
+  const otherCount = rest.reduce((s, r) => s + r.count, 0)
+  if (otherCount > 0) top.push({ name: `Other (${rest.length})`, count: otherCount, isOther: true })
+  return top
+}
+
+// 초록 제1저자 소속 기관(대학/회사) 분포 → Top N + Other
+export function aggregateAbstractsByInstitution(abstracts, topN) {
+  const counts = new Map()
+  for (const a of abstracts) {
+    const inst = normalizeAffiliation(a.authors?.[0]?.affiliation)
+    if (inst) counts.set(inst, (counts.get(inst) ?? 0) + 1)
   }
   const sorted = [...counts.entries()]
     .map(([name, count]) => ({ name, count }))

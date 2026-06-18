@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table'
 import { useState } from 'react'
 import AuthorCell from './AuthorCell'
-import { normalizeCountry } from '../../utils/dataClean'
+import { normalizeCountry, normalizeAffiliation } from '../../utils/dataClean'
 
 const col = createColumnHelper()
 
@@ -185,15 +185,16 @@ const COLUMNS = [
     size: 180,
   }),
 
-  col.accessor((row) => row.authors?.[0]?.affiliation, {
+  col.accessor((row) => normalizeAffiliation(row.authors?.[0]?.affiliation), {
     id: 'affiliation',
     header: 'Affiliation',
     sortUndefined: 'last',
-    cell: ({ getValue }) => {
+    cell: ({ getValue, row }) => {
       const v = getValue()
       if (!v) return <span className="text-slate-300">—</span>
+      // 표시는 기관 단위, 원문 전체는 hover 툴팁으로
       return (
-        <span className="text-xs text-slate-600 line-clamp-2" title={v}>
+        <span className="text-xs text-slate-600 line-clamp-2" title={row.original.authors?.[0]?.affiliation}>
           {v}
         </span>
       )

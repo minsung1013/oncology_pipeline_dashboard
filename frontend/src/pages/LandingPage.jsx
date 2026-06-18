@@ -31,19 +31,19 @@ const FEATURES = [
   {
     to: '/conferences', tag: 'Conferences', color: 'purple',
     title: 'ASCO & AACR Abstracts',
-    desc: 'Five years of ASCO and AACR abstracts with author/affiliation, normalized pharma sponsors, drugs, targets and biomarkers — cross-linked to the matching trial by NCT.',
+    desc: 'Five years of ASCO and AACR abstracts — authors with institutions and countries normalized to a clean level, plus pharma sponsors, drugs, targets and biomarkers, cross-linked to the matching trial by NCT.',
   },
   {
     to: '/conference-visualize', tag: 'Visualize', color: 'teal',
     title: 'Cross-Filter Analytics',
-    desc: 'Per-domain interactive distributions — separate Conference and Pipeline views covering modality, target, biomarker, cancer, company, phase and more. Click any bar to drill down across the dashboard.',
+    desc: 'Per-domain interactive dashboards — separate Conference and Pipeline views covering modality, target, biomarker, cancer, company, institution, country and phase. Click any bar to drill down across the dashboard.',
   },
 ]
 
 const SOURCES = [
   { name: 'ClinicalTrials.gov', desc: 'Trial records via the official API v2 (industry-sponsored cancer studies).' },
   { name: 'Crossref', desc: 'ASCO (J Clin Oncol) & AACR (Cancer Research) abstract metadata + full text.' },
-  { name: 'Enrichment', desc: 'Rule-based dictionaries + a local LLM (Qwen3) for modality / target / biomarker.' },
+  { name: 'Enrichment', desc: 'Rule-based dictionaries + a local LLM (Qwen3) for modality / target / biomarker, plus field normalization (institutions, countries, companies).' },
 ]
 
 const TAG_CLS = {
