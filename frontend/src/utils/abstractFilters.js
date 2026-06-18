@@ -1,3 +1,5 @@
+import { normalizeCountry } from './dataClean'
+
 export function applyAbstractFilters(abstracts, filters) {
   const {
     conferences, years, phases, modalities, cancers, countries, companies, affiliation,
@@ -17,7 +19,7 @@ export function applyAbstractFilters(abstracts, filters) {
     }
     if (modalities.length > 0 && !modalities.some((m) => (a.modality_list ?? []).includes(m))) return false
     if (cancers.length > 0 && !(a.cancer_category ?? []).some((c) => cancers.includes(c))) return false
-    if (countries?.length > 0 && !countries.includes(a.authors?.[0]?.country)) return false
+    if (countries?.length > 0 && !countries.includes(normalizeCountry(a.authors?.[0]?.country))) return false
     if (companies?.length > 0 && !(a.companies_normalized ?? []).some((c) => companies.includes(c))) return false
     if (affilQ && !(a.authors?.[0]?.affiliation ?? '').toLowerCase().includes(affilQ)) return false
     if (authorName && a.authors?.[0]?.name !== authorName) return false
@@ -73,7 +75,7 @@ export function getAbstractFilterOptions(abstracts) {
   ].sort()
 
   const countries = [
-    ...new Set(abstracts.map((a) => a.authors?.[0]?.country).filter(Boolean)),
+    ...new Set(abstracts.map((a) => normalizeCountry(a.authors?.[0]?.country)).filter(Boolean)),
   ].sort()
 
   const companies = [

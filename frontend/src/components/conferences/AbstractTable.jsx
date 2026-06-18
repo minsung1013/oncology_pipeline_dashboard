@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-table'
 import { useState } from 'react'
 import AuthorCell from './AuthorCell'
+import { normalizeCountry } from '../../utils/dataClean'
 
 const col = createColumnHelper()
 
@@ -200,7 +201,7 @@ const COLUMNS = [
     size: 200,
   }),
 
-  col.accessor((row) => row.authors?.[0]?.country, {
+  col.accessor((row) => normalizeCountry(row.authors?.[0]?.country), {
     id: 'country',
     header: 'Country',
     cell: ({ getValue }) => {

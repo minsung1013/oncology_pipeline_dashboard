@@ -1,5 +1,6 @@
 // Pipeline 시각화용 집계 함수 모음.
 // 입력: filteredDrugs (pipeline.json drugs 일부), 출력: recharts용 [{name, count}] 등.
+import { normalizeCountry } from './dataClean'
 
 const PHASE_ORDER = ['EARLY_PHASE1', 'PHASE1', 'PHASE1/PHASE2', 'PHASE2', 'PHASE2/PHASE3', 'PHASE3', 'PHASE4', 'NA', 'UNKNOWN']
 
@@ -160,7 +161,7 @@ export function aggregateAbstractListField(abstracts, field, topN, { excludeUnkn
 export function aggregateAbstractsByCountry(abstracts, topN) {
   const counts = new Map()
   for (const a of abstracts) {
-    const c = a.authors?.[0]?.country
+    const c = normalizeCountry(a.authors?.[0]?.country)
     if (c) counts.set(c, (counts.get(c) ?? 0) + 1)
   }
   const sorted = [...counts.entries()]
