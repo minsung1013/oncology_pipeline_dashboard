@@ -125,39 +125,49 @@ def merge(write: bool) -> None:
 
 
 def merge_abstracts(write: bool) -> None:
-    data = json.load(open(ABSTRACTS, encoding="utf-8"))
-    abstracts = data["abstracts"]
+    import glob
+    files = sorted(glob.glob("data/parsed/abstracts_*.json"))
     cache = json.load(open(ABSTRACT_CACHE, encoding="utf-8"))
-    stats = {"total": len(abstracts), "have_llm": 0, "applied": 0}
+    total_stats = {"total": 0, "have_llm": 0, "applied": 0, "summary_ko": 0}
 
-    for a in abstracts:
-        # 원본 규칙 리스트 보존
-        a.setdefault("modality_list_rule", a.get("modality_list", []))
-        a.setdefault("target_list_rule", a.get("target_list", []))
-        a.setdefault("biomarker_list_rule", a.get("biomarker_list", []))
-        llm = cache.get(a["uid"])
-        src = "rule"
-        if llm and llm.get("confidence", 0) >= ABS_CONF:
-            stats["have_llm"] += 1
-            a["modality_list"] = llm.get("modality_list") or ["Unknown"]
-            a["target_list"] = llm.get("target_list") or ["Unknown"]
-            a["biomarker_list"] = llm.get("biomarkers") or []
-            a["biomarker_mentioned"] = len(a["biomarker_list"]) > 0
-            src = "llm"
-            stats["applied"] += 1
-        a["enrich_src"] = src
-        a["llm_confidence"] = llm.get("confidence") if llm else None
+    for fp in files:
+        data = json.load(open(fp, encoding="utf-8"))
+        abstracts = data["abstracts"]
+        stats = {"total": len(abstracts), "have_llm": 0, "applied": 0}
 
-    print("=== 초록 병합 통계 ===")
-    for k, v in stats.items():
+        for a in abstracts:
+            a.setdefault("modality_list_rule", a.get("modality_list", []))
+            a.setdefault("target_list_rule", a.get("target_list", []))
+            a.setdefault("biomarker_list_rule", a.get("biomarker_list", []))
+            llm = cache.get(a["uid"])
+            src = "rule"
+            if llm and llm.get("confidence", 0) >= ABS_CONF:
+                stats["have_llm"] += 1
+                a["modality_list"] = llm.get("modality_list") or ["Unknown"]
+                a["target_list"] = llm.get("target_list") or ["Unknown"]
+                a["biomarker_list"] = llm.get("biomarkers") or []
+                a["biomarker_mentioned"] = len(a["biomarker_list"]) > 0
+                src = "llm"
+                stats["applied"] += 1
+            if llm and llm.get("summary_ko"):
+                a["summary_ko"] = llm["summary_ko"]
+                total_stats["summary_ko"] += 1
+            a["enrich_src"] = src
+            a["llm_confidence"] = llm.get("confidence") if llm else None
+
+        for k in stats:
+            total_stats[k] = total_stats.get(k, 0) + stats[k]
+
+        if write:
+            with open(fp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            bm = sum(1 for a in abstracts if a.get("biomarker_mentioned"))
+            print(f"  저장 -> {fp}  ({len(abstracts)}건, biomarker {bm}, summary_ko {stats['applied']})")
+
+    print("=== 초록 병합 통계 (전체) ===")
+    for k, v in total_stats.items():
         print(f"  {k}: {v}")
-    bm = sum(1 for a in abstracts if a.get("biomarker_mentioned"))
-    print(f"  biomarker_mentioned: {bm}/{len(abstracts)}")
-    if write:
-        with open(ABSTRACTS, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        print(f"\n저장 완료 -> {ABSTRACTS}")
-    else:
+    if not write:
         print("\n(미리보기 — 저장하려면 --write)")
 
 

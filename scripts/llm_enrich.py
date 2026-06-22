@@ -16,11 +16,28 @@ import argparse
 import json
 import os
 import re
+import socket
 import time
+import urllib.error
 import urllib.request
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "qwen3:30b-a3b-q4_K_M"
+# 기본은 qwen3.5:27b(dense). 26GB 통합메모리 맥에서 전체 GPU 오프로드로 OOM 없이 돌고
+# 한글 요약 품질이 좋아 채택. 다른 모델로 시험/교체할 땐 LLM_MODEL 환경변수로 덮어쓴다
+# (예: LLM_MODEL=qwen3.5:9b → ~2배 빠르지만 한자 혼입·오역 일부).
+# 같은 캐시를 공유하므로 모델을 바꾸면 신규 항목만 새 모델로 채워진다.
+MODEL = os.environ.get("LLM_MODEL", "qwen3.5:27b")
+# 출력 토큰 상한. 정상 응답은 ~300토큰이면 충분하지만, 유전자/단백질을 잔뜩 나열하는
+# 초록에서 모델이 biomarker 목록을 무한 생성(runaway)해 180s 타임아웃을 내는 사고가 있었다.
+# 상한을 두면 정상 호출은 영향 없고 폭주만 잘려서 진행이 멈추지 않는다.
+NUM_PREDICT = 768
+
+# GPU 오프로드 레이어 수. 24GB 통합메모리 맥에서 30B 모델(~18GB)을 전 레이어 GPU에 올리면
+# GPU 워킹셋이 꽉 차 연산용 command buffer 할당이 실패한다
+# (Metal: kIOGPUCommandBufferCallbackErrorOutOfMemory → 이후 모든 요청 Compute error).
+# 일부 레이어를 CPU로 내려 GPU에 연산 여유를 남긴다. 메모리가 넉넉한 환경(집)에서는
+# LLM_NUM_GPU=999(전체 오프로드)로 덮어쓰면 더 빠르다.
+NUM_GPU = int(os.environ.get("LLM_NUM_GPU", "32"))
 
 PIPELINE = "data/parsed/pipeline.json"
 DRUG_CACHE = "data/cache/llm_drug_cache.json"
@@ -48,6 +65,10 @@ SYSTEM = (
 )
 
 
+_CONN_BACKOFF_MAX = 30.0   # 연결 재시도 최대 대기(초)
+_TIMEOUT_RETRIES = 3       # 응답 타임아웃 시 재시도 횟수
+
+
 def ollama(prompt: str, timeout: int = 120) -> str:
     body = json.dumps({
         "model": MODEL,
@@ -56,11 +77,33 @@ def ollama(prompt: str, timeout: int = 120) -> str:
         "think": False,
         "format": "json",
         "keep_alive": "15m",
-        "options": {"temperature": 0, "num_ctx": 2048},
+        "options": {"temperature": 0, "num_ctx": 2048, "num_predict": NUM_PREDICT, "num_gpu": NUM_GPU},
     }).encode()
-    req = urllib.request.Request(OLLAMA_URL, data=body, headers={"Content-Type": "application/json"})
-    resp = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
-    return resp.get("response", "")
+    backoff = 2.0
+    timeouts_left = _TIMEOUT_RETRIES
+    while True:
+        req = urllib.request.Request(OLLAMA_URL, data=body, headers={"Content-Type": "application/json"})
+        try:
+            resp = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+            return resp.get("response", "")
+        except urllib.error.HTTPError:
+            # 서버가 응답은 했으나 HTTP 에러(잘못된 요청 등) -> 재시도 무의미, 호출부에서 skip
+            raise
+        except (urllib.error.URLError, ConnectionError, socket.timeout, TimeoutError) as e:
+            reason = getattr(e, "reason", e)
+            is_timeout = isinstance(e, (socket.timeout, TimeoutError)) or isinstance(reason, (socket.timeout, TimeoutError))
+            if is_timeout:
+                # 응답 타임아웃: 모델이 느리거나 멈춤 -> 제한 재시도 후 포기(skip)
+                timeouts_left -= 1
+                if timeouts_left < 0:
+                    raise
+                print(f"  [retry] 응답 타임아웃, 재시도 ({_TIMEOUT_RETRIES - timeouts_left}/{_TIMEOUT_RETRIES})", flush=True)
+                time.sleep(2)
+                continue
+            # 연결 거부/서버 다운/슬립: Ollama가 돌아올 때까지 무한 대기 후 재시도
+            print(f"  [wait] Ollama 연결 실패 ({reason}); {backoff:.0f}s 후 재시도...", flush=True)
+            time.sleep(backoff)
+            backoff = min(backoff * 2, _CONN_BACKOFF_MAX)
 
 
 def normalize_modality(m: str) -> str:
@@ -89,26 +132,93 @@ def classify_drug(drug_name: str, combo: list, condition: str, title: str) -> di
 
 
 SYSTEM_ABS = (
-    "You are an oncology conference abstract classifier. From the abstract text, extract STRICT JSON:\n"
-    '{"modality_list": <list from: ADC, Bispecific Antibody, CAR-T, Monoclonal Antibody, Small Molecule, '
-    "mRNA, Peptide, Cell Therapy, Oncolytic Virus, Radiopharmaceutical (only those actually studied; [] if none)>, "
-    '"target_list": <list of molecular target gene/protein symbols studied (e.g. ["HER2","EGFR"]) or []>, '
-    '"biomarkers": <list of patient-selection / stratification biomarkers (e.g. ["PD-L1","MSI-H","ctDNA"]) or []>, '
+    "You are an oncology conference abstract classifier. Your job is to identify THERAPEUTIC AGENTS "
+    "(drugs/treatments that are developed, tested, or administered) and what they target.\n"
+    "Output STRICT JSON only:\n"
+    '{"modality_list": <modalities of therapeutic agents ACTUALLY STUDIED as treatments, chosen ONLY from: '
+    "ADC, Bispecific Antibody, CAR-T, Monoclonal Antibody, Small Molecule, mRNA, Peptide, Cell Therapy, "
+    "Oncolytic Virus, Radiopharmaceutical; [] if no specific therapeutic agent is studied>, "
+    '"target_list": <gene/protein symbols that a STUDIED therapeutic agent acts ON (its drug target), '
+    'e.g. ["HER2","EGFR"]; [] if none>, '
+    '"biomarkers": <genes/markers used for patient selection, stratification, monitoring, or prognosis, '
+    'e.g. ["PD-L1","MSI-H","ctDNA"]; [] if none>, '
+    '"summary_ko": <2 sentences in Korean conveying the study subject/core, the problem it addresses, '
+    "the approach, and the key result. Keep gene/protein/drug names and standard medical abbreviations in "
+    "their original English form (e.g. TRAIL, HER2, EGFR, durvalumab, ctDNA) — NEVER transliterate them "
+    "phonetically into Korean. Translate general medical terms accurately "
+    "(e.g. neoadjuvant=수술 전 보조요법, cutaneous=피부, soft tissue sarcoma=연조직 육종). "
+    "Be specific and factual, no filler>, "
     '"confidence": <0.0-1.0>}\n'
-    "Extract only what the abstract actually investigates. Do not invent."
+    "CRITICAL RULES:\n"
+    "1. modality_list and target_list describe a THERAPEUTIC AGENT only. If the abstract is basic biology, "
+    "a signaling/mechanism study, genomic/molecular profiling, epidemiology, a detection/diagnostic or "
+    "computational method, or a prognostic/biomarker-discovery study with NO drug given as treatment "
+    "-> modality_list=[] and target_list=[].\n"
+    "1b. An antibody/peptide/molecule developed ONLY for detection, imaging, diagnosis, or as a research "
+    "reagent (not administered to treat) is NOT a therapeutic -> modality_list=[] and target_list=[].\n"
+    "2. A gene/protein belongs in target_list ONLY if a studied drug acts on it. Genes studied as biology, "
+    "signaling pathways, prognostic/monitoring markers, or detection targets are NOT drug targets "
+    "-> put selection/stratification markers in biomarkers, otherwise omit them.\n"
+    "3. Do not infer standard-of-care drugs the abstract does not actually study. Extract only what is "
+    "explicitly investigated.\n"
+    "4. Never list a modality unless you are specifically confident it is studied; never list most/all modalities.\n"
+    "Do not invent."
 )
+
+
+# num_predict 상한에 걸려 JSON이 중간에 잘리면(주로 biomarker 목록 폭주) 닫히지 않은
+# 문자열/배열/객체를 보정해 부분 결과라도 건진다. (data, truncated) 반환.
+def _loads_lenient(raw: str):
+    raw = (raw or "").strip()
+    try:
+        return json.loads(raw), False
+    except json.JSONDecodeError:
+        pass
+    stack, in_str, esc = [], False, False
+    for ch in raw:
+        if esc:
+            esc = False
+        elif in_str:
+            if ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch in "[{":
+            stack.append("]" if ch == "[" else "}")
+        elif ch in "]}" and stack:
+            stack.pop()
+    s = raw + ('"' if in_str else "")  # 열린 문자열 닫기
+    s = s.rstrip()
+    if s.endswith(":"):                # key 뒤 값이 잘림 → null
+        s += "null"
+    s = s.rstrip().rstrip(",")         # 미완성 요소 앞 콤마 제거
+    s += "".join(reversed(stack))      # 열린 배열/객체를 역순으로 닫기
+    try:
+        return json.loads(s), True
+    except json.JSONDecodeError:
+        return None, True
+
+
+# 폭주 시 모델이 가짜 유전자명을 수십~수백 개 지어낸다. 잘린 응답에서는 목록을 절단한다.
+_RUNAWAY_CAP = 20
 
 
 def classify_abstract(title: str, body: str) -> dict:
     txt = f"Title: {title or 'n/a'}\nAbstract: {(body or '')[:3000]}"
     raw = ollama(f"{SYSTEM_ABS}\n\n{txt}\n\nJSON:", timeout=180)
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        return {"_error": "parse"}
+    data, truncated = _loads_lenient(raw)
+    if data is None:
+        # 복구 불가한 응답(드묾)도 빈 결과로 캐시한다. 그래야 진행이 막히지 않고
+        # 매 실행마다 같은 초록을 재시도하지 않는다. (네트워크 오류는 ollama()가 raise
+        # → run 루프의 try/except가 _error로 잡아 캐시 없이 재시도하므로 여기선 콘텐츠 문제만.)
+        return {"modality_list": [], "target_list": [], "biomarkers": [],
+                "summary_ko": "", "confidence": 0.0, "_unparsed": True}
 
     def _clean_list(v):
-        return [str(x).strip() for x in v if str(x).strip()] if isinstance(v, list) else []
+        lst = [str(x).strip() for x in v if str(x).strip()] if isinstance(v, list) else []
+        return lst[:_RUNAWAY_CAP] if truncated else lst
 
     mods = [normalize_modality(m) for m in _clean_list(data.get("modality_list"))]
     mods = [m for m in mods if m != "Unknown"]
@@ -116,6 +226,7 @@ def classify_abstract(title: str, body: str) -> dict:
         "modality_list": list(dict.fromkeys(mods)),
         "target_list": list(dict.fromkeys(_clean_list(data.get("target_list")))),
         "biomarkers": list(dict.fromkeys(_clean_list(data.get("biomarkers")))),
+        "summary_ko": (data.get("summary_ko") or "").strip() if isinstance(data.get("summary_ko"), str) else "",
         "confidence": float(data.get("confidence", 0.0)) if isinstance(data.get("confidence", 0.0), (int, float)) else 0.0,
     }
 
@@ -184,16 +295,31 @@ def run_drugs(only_unknown: bool, limit: int | None) -> None:
     print(f"완료. 캐시 총 {len(cache)}개 -> {DRUG_CACHE}")
 
 
+def _save_abstract_cache(cache: dict) -> None:
+    tmp = ABSTRACT_CACHE + ".tmp"
+    os.makedirs(os.path.dirname(ABSTRACT_CACHE), exist_ok=True)
+    json.dump(cache, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp, ABSTRACT_CACHE)  # 원자적 교체 → 중단돼도 캐시 손상 없음
+
+
 def run_abstracts(limit: int | None) -> None:
-    abstracts = json.load(open(ABSTRACTS, encoding="utf-8"))["abstracts"]
+    """전 학회·연도 초록(data/parsed/abstracts_*.json)을 uid 캐시 기반으로 보강.
+    중단(Ctrl-C/종료/슬립) 후 재실행하면 캐시된 uid는 건너뛰고 이어서 진행."""
+    import glob
+    files = sorted(glob.glob("data/parsed/abstracts_*.json"))
     cache = {}
     if os.path.exists(ABSTRACT_CACHE):
         cache = json.load(open(ABSTRACT_CACHE, encoding="utf-8"))
 
-    todo = [a for a in abstracts if a["uid"] not in cache and (a.get("title") or a.get("abstract_text"))]
+    # 전 파일에서 미캐시 초록 수집 (uid는 학회·연도 포함이라 전역 유일)
+    todo = []
+    for fp in files:
+        for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
+            if a["uid"] not in cache and (a.get("title") or a.get("abstract_text")):
+                todo.append(a)
     if limit:
         todo = todo[:limit]
-    print(f"초록 {len(abstracts)}개 중 이번 실행 {len(todo)}개 (캐시됨 {len(cache)})")
+    print(f"파일 {len(files)}개 · 미처리 {len(todo)}개 (캐시됨 {len(cache)}) — 재실행하면 이어서 진행")
 
     t0 = time.time()
     for i, a in enumerate(todo, 1):
@@ -206,13 +332,13 @@ def run_abstracts(limit: int | None) -> None:
             continue
         cache[a["uid"]] = res
         if i % 10 == 0 or i == len(todo):
-            tmp = ABSTRACT_CACHE + ".tmp"
-            os.makedirs(os.path.dirname(ABSTRACT_CACHE), exist_ok=True)
-            json.dump(cache, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-            os.replace(tmp, ABSTRACT_CACHE)
+            _save_abstract_cache(cache)
             rate = i / (time.time() - t0)
             eta = (len(todo) - i) / rate if rate else 0
-            print(f"  {i}/{len(todo)}  {rate:.2f}/s  ETA {eta/60:.1f}min | {a['abstract_id']} -> {res['modality_list']}/{res['biomarkers']}")
+            print(f"  {i}/{len(todo)}  {rate:.2f}/s  ETA {eta/3600:.1f}h | {a['uid']}", flush=True)
+            print(f"      mod={res['modality_list']} tgt={res['target_list']} bio={res['biomarkers']}", flush=True)
+            print(f"      요약: {res.get('summary_ko', '')}", flush=True)
+    _save_abstract_cache(cache)
     print(f"완료. 캐시 총 {len(cache)} -> {ABSTRACT_CACHE}")
 
 

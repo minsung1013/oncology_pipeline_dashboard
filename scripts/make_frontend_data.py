@@ -22,6 +22,7 @@ ABS_KEEP = [
     "cancer_category", "title", "authors", "author_raw", "phase", "phases",
     "modality_list", "target_list", "biomarker_list", "biomarker_mentioned",
     "nct_ids", "companies_normalized", "drugs_mentioned", "source",
+    "summary_ko", "enrich_src", "llm_confidence",
 ]
 # 저자는 첫 저자의 표시용 필드만
 AUTHOR_KEEP = ["name", "affiliation", "country"]
