@@ -13,6 +13,10 @@
 import glob
 import json
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from normalize_biomarkers import normalize_biomarker_list  # noqa: E402
 
 OUT = "data/frontend"
 
@@ -41,6 +45,9 @@ DRUG_KEEP = [
 
 def _lite_record(a):
     rec = {k: a.get(k) for k in ABS_KEEP if k in a}
+    # 바이오마커 유전자 기준 정규화 (변이형/표기변형 합치기, 항목 제거는 안 함)
+    if "biomarker_list" in rec:
+        rec["biomarker_list"] = normalize_biomarker_list(rec.get("biomarker_list"))
     if rec.get("authors"):
         rec["authors"] = [{k: au.get(k) for k in AUTHOR_KEEP} for au in rec["authors"][:1]]
     # source는 doi만 (url 제거 — 용량)
@@ -108,7 +115,7 @@ def build_facets():
                 modalities.add(d["modality"])
             if d.get("target") and d["target"] != "Unknown":
                 targets[d["target"]] += 1
-            for b in d.get("biomarker_list") or []:
+            for b in normalize_biomarker_list(d.get("biomarker_list")):
                 biomarkers[b] += 1
             if d.get("company_normalized"):
                 companies[d["company_normalized"]] += 1
@@ -124,7 +131,7 @@ def build_facets():
             for t in a.get("target_list") or []:
                 if t and t != "Unknown":
                     targets[t] += 1
-            for b in a.get("biomarker_list") or []:
+            for b in normalize_biomarker_list(a.get("biomarker_list")):
                 biomarkers[b] += 1
             for co in a.get("companies_normalized") or []:
                 companies[co] += 1
@@ -157,6 +164,9 @@ def build_pipeline():
         return
     d = json.load(open(src, encoding="utf-8"))
     drugs = [{k: x.get(k) for k in DRUG_KEEP if k in x} for x in d["drugs"]]
+    for x in drugs:  # 바이오마커 유전자 기준 정규화 (초록과 동일 체계)
+        if "biomarker_list" in x:
+            x["biomarker_list"] = normalize_biomarker_list(x.get("biomarker_list"))
     out = {"metadata": d.get("metadata", {}), "drugs": drugs}
     os.makedirs(OUT, exist_ok=True)
     path = f"{OUT}/pipeline.json"
