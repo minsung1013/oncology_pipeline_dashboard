@@ -56,12 +56,18 @@ export function clearedConferenceFilters() {
   return next
 }
 
-// 활성 필터 여부 (검색 의도)
+// 활성 필터 여부 (검색 의도 — 전 연도 로드 판단용; year/conference 제외)
 export function conferenceFilterActive(filters, nctParam) {
   return Boolean(
     filters.keyword || filters.affiliation || filters.authorName || nctParam ||
     filters.cancers.length || filters.phases.length || filters.modalities.length ||
     filters.companies.length || filters.targets.length || filters.biomarkers.length ||
-    filters.countries.length,
+    (filters.institutions?.length ?? 0) || filters.countries.length,
   )
+}
+
+// 어떤 필터든 선택되어 있는지 (Clear all 버튼 노출용 — year/conference 포함)
+export function anyConferenceFilter(filters, nctParam) {
+  return conferenceFilterActive(filters, nctParam) ||
+    filters.years.length > 0 || filters.conferences.length > 0
 }

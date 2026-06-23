@@ -4,6 +4,7 @@ import DistributionBarChart from '../components/visualize/DistributionBarChart'
 import AbstractsByYearChart from '../components/visualize/AbstractsByYearChart'
 import TrendLineChart from '../components/visualize/TrendLineChart'
 import ConferenceFilterBar from '../components/conferences/ConferenceFilterBar'
+import ConferenceActiveChips from '../components/conferences/ConferenceActiveChips'
 import {
   aggregateAbstractsByYear,
   aggregateAbstractListField,
@@ -16,7 +17,7 @@ import {
   phaseLabel,
 } from '../utils/visualizeAggregations'
 import { applyAbstractFilters, getAbstractFilterOptions } from '../utils/abstractFilters'
-import { buildConferenceFilters, setConferenceFilter, clearedConferenceFilters } from '../utils/conferenceFilters'
+import { buildConferenceFilters, setConferenceFilter, clearedConferenceFilters, anyConferenceFilter } from '../utils/conferenceFilters'
 import { getTabState, setTabState } from '../utils/filterStore'
 import { getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
@@ -26,17 +27,6 @@ const TREND_N = 6
 // CDx 친화 신호: 타겟/모달리티 강조 (Pipeline 시각화와 동일 신호 체계)
 const CDX_TARGETS = new Set(['HER2', 'PD-L1', 'TROP2', 'EGFR', 'CLDN18.2', 'MET'])
 const CDX_MODALITIES = new Set(['ADC', 'Bispecific Antibody', 'CAR-T', 'Cell Therapy'])
-
-// 클릭 가능한 차트가 토글하는 공유 필터 축
-const CHIP_META = {
-  modalities: 'Modality',
-  targets: 'Target',
-  biomarkers: 'Biomarker',
-  cancers: 'Cancer',
-  companies: 'Company',
-  institutions: 'Institution',
-  phases: 'Phase',
-}
 
 function Card({ label, value, accent }) {
   return (
@@ -120,9 +110,7 @@ export default function ConferenceVisualizePage() {
   const phaseData = useMemo(() => aggregateAbstractsByPhase(filtered), [filtered])
   const countryData = useMemo(() => aggregateAbstractsByCountry(filtered, topN), [filtered, topN])
 
-  const activeChips = Object.keys(CHIP_META)
-    .flatMap((key) => (filters[key] ?? []).map((value) => ({ key, value })))
-  const hasActive = activeChips.length > 0
+  const hasActive = anyConferenceFilter(filters, null)
 
   if (error) {
     return (
@@ -178,23 +166,8 @@ export default function ConferenceVisualizePage() {
           />
         </div>
 
-        {/* Active filter chips (차트 클릭/선택 표시 + 개별 제거) */}
-        {activeChips.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap mt-2">
-            {activeChips.map(({ key, value }) => (
-              <button
-                key={`${key}:${value}`}
-                onClick={() => toggleFilter(key, value)}
-                className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                title="Remove filter"
-              >
-                <span className="text-blue-400">{CHIP_META[key]}:</span>
-                {key === 'phases' ? phaseLabel(value) : value}
-                <span className="text-blue-400">✕</span>
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Active filter chips (모든 선택 항목 — 개별 ✕ 제거) */}
+        <ConferenceActiveChips filters={filters} onChange={setFilter} />
       </div>
 
       {/* Charts */}
