@@ -16,6 +16,7 @@ const SHARED_DEFAULT = {
   institutions: [],
   statuses: [],
   startYear: { from: 'all', to: 'all' },
+  keyword: '',  // Pipeline ↔ Visualize 자유검색 공유
 }
 
 const store = {

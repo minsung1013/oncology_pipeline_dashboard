@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
-import FilterBar from '../components/pipeline/FilterBar'
+import DrugFilterBar from '../components/common/DrugFilterBar'
 import CompanyList from '../components/pipeline/CompanyList'
 import PipelineTable from '../components/pipeline/PipelineTable'
-import { applyFilters, getFilterOptions, groupByCompany } from '../utils/filters'
+import { applyDrugFilters, getDrugFilterOptions, groupByCompany } from '../utils/drugFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 
 import { PIPELINE_URL, DATA_BASE } from '../utils/dataSource'
@@ -15,27 +15,27 @@ const LOCAL_DEFAULT = {
   regimen: 'all',
   needsReview: false,
   completionYear: { from: 'all', to: 'all' },
-  keyword: '',
 }
 
-// 공유 스토어 + 로컬 슬라이스 → FilterBar용 단일 filters 객체
+// 공유 스토어(표준 축) + Pipeline 로컬 슬라이스 → 단일 filters 객체 (canonical 키)
 function buildFilters() {
   const s = getShared()
   const l = getTabState('pipeline') ?? LOCAL_DEFAULT
   return {
-    cancerCategories: s.cancers,
-    modalities: s.modalities,
-    phases: s.phases,
-    overallStatuses: s.statuses,
     companies: s.companies,
+    drugs: s.drugs,
+    cancers: s.cancers,
+    phases: s.phases,
+    modalities: s.modalities,
     targets: s.targets,
     biomarkers: s.biomarkers,
+    statuses: s.statuses,
     startYear: s.startYear,
+    keyword: s.keyword ?? '',
+    completionYear: l.completionYear ?? { from: 'all', to: 'all' },
     partnershipStatus: l.partnershipStatus ?? 'all',
     regimen: l.regimen ?? 'all',
     needsReview: l.needsReview ?? false,
-    completionYear: l.completionYear ?? { from: 'all', to: 'all' },
-    keyword: l.keyword ?? '',
   }
 }
 
@@ -59,21 +59,22 @@ export default function PipelinePage() {
     setFiltersState(next)
     setShared({
       ...getShared(),
-      cancers: next.cancerCategories,
+      companies: next.companies,
+      drugs: next.drugs,
+      cancers: next.cancers,
       modalities: next.modalities,
       phases: next.phases,
-      statuses: next.overallStatuses,
-      companies: next.companies,
+      statuses: next.statuses,
       targets: next.targets,
       biomarkers: next.biomarkers,
       startYear: next.startYear,
+      keyword: next.keyword,
     })
     persistLocal({
       partnershipStatus: next.partnershipStatus,
       regimen: next.regimen,
       needsReview: next.needsReview,
       completionYear: next.completionYear,
-      keyword: next.keyword,
     })
   }
 
@@ -95,10 +96,10 @@ export default function PipelinePage() {
   const allDrugs = data?.drugs ?? []
   const metadata = data?.metadata
 
-  const filterOptions = useMemo(() => getFilterOptions(allDrugs), [allDrugs])
+  const filterOptions = useMemo(() => getDrugFilterOptions(allDrugs), [allDrugs])
 
   const filteredDrugs = useMemo(
-    () => applyFilters(allDrugs, filters),
+    () => applyDrugFilters(allDrugs, filters),
     [allDrugs, filters],
   )
 
@@ -154,8 +155,14 @@ export default function PipelinePage() {
         </div>
       </header>
 
-      {/* 필터 바 */}
-      <FilterBar options={filterOptions} filters={filters} onChange={setFilters} />
+      {/* 필터 바 (공용) + Pipeline 고유 컨트롤 */}
+      <DrugFilterBar
+        options={filterOptions}
+        filters={filters}
+        onChange={setFilters}
+        showCompletion
+        extras={<PipelineExtras filters={filters} onChange={setFilters} />}
+      />
 
       {/* 메인 */}
       <div className="flex flex-1 overflow-hidden">
@@ -196,5 +203,40 @@ export default function PipelinePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Pipeline 전용 필터 컨트롤 (공용 FilterBar의 extras 슬롯에 주입)
+function PipelineExtras({ filters, onChange }) {
+  const set = (key, value) => onChange({ ...filters, [key]: value })
+  const sel = 'border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Partnership</span>
+        <select value={filters.partnershipStatus} onChange={(e) => set('partnershipStatus', e.target.value)} className={sel}>
+          <option value="all">All</option>
+          <option value="solo">Solo</option>
+          <option value="partnered">Partnered</option>
+        </select>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Regimen</span>
+        <select value={filters.regimen} onChange={(e) => set('regimen', e.target.value)} className={sel}>
+          <option value="all">All</option>
+          <option value="mono">Monotherapy</option>
+          <option value="combo">Combination</option>
+        </select>
+      </div>
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={filters.needsReview}
+          onChange={(e) => set('needsReview', e.target.checked)}
+          className="w-4 h-4 accent-orange-500"
+        />
+        <span className="text-slate-600">Unknown target only</span>
+      </label>
+    </>
   )
 }

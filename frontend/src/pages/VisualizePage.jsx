@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import VisualizeFilterBar from '../components/visualize/VisualizeFilterBar'
+import DrugFilterBar from '../components/common/DrugFilterBar'
 import SummaryCards from '../components/visualize/SummaryCards'
 import CompanyDistributionChart from '../components/visualize/CompanyDistributionChart'
 import DrugDistributionChart from '../components/visualize/DrugDistributionChart'
@@ -12,8 +12,6 @@ import StatusDistributionChart from '../components/visualize/StatusDistributionC
 import AbstractsByYearChart from '../components/visualize/AbstractsByYearChart'
 import { statusLabel } from '../components/visualize/statusMeta'
 import {
-  getVisualizeOptions,
-  applyVisualizeFilters,
   aggregateByField,
   aggregateByPhaseStatus,
   aggregateByStatus,
@@ -25,13 +23,11 @@ import {
   getSummaryStats,
   phaseLabel,
 } from '../utils/visualizeAggregations'
+import { getDrugFilterOptions, applyDrugFilters, DRUG_FILTER_DEFAULT } from '../utils/drugFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 import { PIPELINE_URL, getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
-const EMPTY_FILTERS = {
-  cancers: [], phases: [], modalities: [], companies: [], drugs: [], targets: [], biomarkers: [],
-  statuses: [], startYear: { from: 'all', to: 'all' },
-}
+const EMPTY_FILTERS = DRUG_FILTER_DEFAULT
 
 // 필터칩 표시용 (key → 라벨, 값 렌더러)
 const CHIP_META = {
@@ -57,7 +53,14 @@ export default function VisualizePage() {
   function setFilters(updater) {
     setFiltersState((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater
-      setShared(next)
+      // 공유 축만 store에 병합 (institutions 등 타 탭 키 보존)
+      setShared({
+        ...getShared(),
+        companies: next.companies, drugs: next.drugs, cancers: next.cancers,
+        phases: next.phases, modalities: next.modalities, targets: next.targets,
+        biomarkers: next.biomarkers, statuses: next.statuses,
+        startYear: next.startYear, keyword: next.keyword,
+      })
       return next
     })
   }
@@ -103,8 +106,8 @@ export default function VisualizePage() {
     return abstractManifest ? manifestByYear(abstractManifest) : null
   }, [abstractFilterActive, allAbstracts, abstractManifest, filters])
 
-  const options = useMemo(() => getVisualizeOptions(allDrugs), [allDrugs])
-  const drugs = useMemo(() => applyVisualizeFilters(allDrugs, filters), [allDrugs, filters])
+  const options = useMemo(() => getDrugFilterOptions(allDrugs), [allDrugs])
+  const drugs = useMemo(() => applyDrugFilters(allDrugs, filters), [allDrugs, filters])
 
   // 그래프 클릭 → 해당 축 필터 토글
   const toggleFilter = (key, value) => {
@@ -170,12 +173,22 @@ export default function VisualizePage() {
             <p className="text-xs text-slate-400 mt-0.5">{summary}</p>
           </div>
         </div>
-        <VisualizeFilterBar
+        <DrugFilterBar
           options={options}
           filters={filters}
           onChange={setFilters}
-          topN={topN}
-          onTopNChange={setTopN}
+          extras={
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <span>Top N</span>
+              <select
+                value={topN}
+                onChange={(e) => setTopN(Number(e.target.value))}
+                className="border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+              >
+                {[5, 10, 15, 20, 30].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          }
         />
 
         {/* Active filter chips */}
