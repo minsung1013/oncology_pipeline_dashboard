@@ -22,7 +22,7 @@ function Logo({ size = 40 }) {
 
 const SOURCES = [
   { name: 'ClinicalTrials.gov', desc: 'Trial records via the official API v2 (industry-sponsored cancer studies).' },
-  { name: 'Crossref', desc: 'ASCO (J Clin Oncol) & AACR (Cancer Research) abstract metadata + full text.' },
+  { name: 'Crossref + OpenAlex', desc: 'ASCO (J Clin Oncol) & AACR (Cancer Research) abstracts with full text; ESMO (Annals of Oncology) titles, with author affiliations backfilled from OpenAlex.' },
   { name: 'Enrichment', desc: 'Rule-based dictionaries + a local LLM (Qwen3) for modality / target / biomarker, plus institution / country / company normalization and Korean summaries.' },
 ]
 
@@ -64,7 +64,7 @@ export default function LandingPage() {
     { n: counts.drugs ? counts.drugs.toLocaleString() : '—', l: 'industry trials' },
     { n: counts.abstracts ? counts.abstracts.toLocaleString() : '—', l: 'conference abstracts' },
     { n: counts.companies ? counts.companies.toLocaleString() : '—', l: 'companies' },
-    { n: 'ASCO · AACR', l: '2022–2026' },
+    { n: 'ASCO·AACR·ESMO', l: 'US & Europe, 2022–26' },
   ]
 
   return (
@@ -78,10 +78,11 @@ export default function LandingPage() {
           </span>
         </div>
         <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight">
-          What the biopharma industry is researching — and building
+          <span className="whitespace-nowrap">What biopharma is researching</span>{' '}
+          <span className="whitespace-nowrap text-blue-600">— and building</span>
         </h1>
         <p className="mt-4 text-base text-slate-500 max-w-2xl mx-auto leading-relaxed">
-          See who is studying which targets, cancers and biomarkers at <b>ASCO &amp; AACR</b>,
+          See who is studying which targets, cancers and biomarkers at <b>ASCO, AACR &amp; ESMO</b> (US &amp; Europe),
           and how those translate into <b>industry clinical pipelines</b> — the research signal and
           the commercial solution, side by side. Set a filter once, explore both.
         </p>
@@ -125,7 +126,7 @@ export default function LandingPage() {
             >
               <div className="text-xs font-semibold text-purple-600 uppercase tracking-wide">Research</div>
               <div className="mt-1 text-base font-bold text-slate-800">Conference Abstracts →</div>
-              <div className="mt-1 text-xs text-slate-500">ASCO &amp; AACR studies, trends by year, players &amp; targets.</div>
+              <div className="mt-1 text-xs text-slate-500">ASCO, AACR &amp; ESMO studies, trends by year, players &amp; targets.</div>
             </button>
             <button
               onClick={() => go('/visualize')}
@@ -159,10 +160,11 @@ export default function LandingPage() {
         <div className="grid md:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-700">Research signal</span>
-            <h3 className="mt-3 text-base font-bold text-slate-800">5 years of ASCO &amp; AACR</h3>
+            <h3 className="mt-3 text-base font-bold text-slate-800">ASCO, AACR &amp; ESMO</h3>
             <p className="mt-2 text-sm text-slate-500 leading-relaxed">
-              64k abstracts (2022–2026) enriched with modality / target / biomarker, normalized
-              institutions &amp; countries, Korean summaries, and NCT cross-links to the matching trial.
+              ~73k abstracts (US 2022–2026, Europe/ESMO 2022–2025) enriched with modality / target /
+              biomarker, normalized institutions &amp; countries, Korean summaries, and NCT cross-links
+              to the matching trial.
             </p>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -196,7 +198,7 @@ export default function LandingPage() {
           ))}
         </div>
         <p className="mt-6 text-xs text-slate-400 text-center">
-          Data refreshed periodically · abstracts cover ASCO &amp; AACR 2022–2026 · for business-development &amp; CDx research.
+          Data refreshed periodically · abstracts cover ASCO &amp; AACR 2022–2026 and ESMO 2022–2025 · for business-development &amp; CDx research.
         </p>
       </div>
 
