@@ -18,6 +18,7 @@ export default function ConferenceFilterBar({ options, filters, onChange, onClea
     <div className="flex items-center gap-2 flex-wrap">
       {ms('conferences', 'Source')}
       {ms('years', 'Year')}
+      {ms('presentationKinds', 'Type')}
       {ms('cancers', 'Cancer')}
       {ms('phases', 'Phase', phaseLabel)}
       {ms('modalities', 'Modality')}

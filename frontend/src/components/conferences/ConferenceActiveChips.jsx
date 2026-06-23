@@ -3,7 +3,8 @@ import { phaseLabel } from '../../utils/visualizeAggregations'
 // 선택된 모든 conference 필터를 제거 가능한 칩으로 표시 (두 conference 페이지 공용).
 // onChange(key, value): 해당 축의 새 전체값. 어떤 선택이든 ✕로 해제 가능.
 const AXES = [
-  ['conferences', 'Source'], ['years', 'Year'], ['cancers', 'Cancer'], ['phases', 'Phase'],
+  ['conferences', 'Source'], ['years', 'Year'], ['presentationKinds', 'Type'],
+  ['cancers', 'Cancer'], ['phases', 'Phase'],
   ['modalities', 'Modality'], ['countries', 'Country'], ['companies', 'Company'],
   ['targets', 'Target'], ['biomarkers', 'Biomarker'], ['institutions', 'Institution'],
 ]

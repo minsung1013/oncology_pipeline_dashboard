@@ -7,7 +7,8 @@ import { getShared, setShared, getTabState, setTabState } from './filterStore'
 const SHARED = ['cancers', 'phases', 'modalities', 'companies', 'targets', 'biomarkers', 'institutions', 'keyword']
 
 export const CONF_LOCAL_DEFAULT = {
-  conferences: [], years: [], countries: [], affiliation: '', authorName: '', showEmbargoed: false,
+  conferences: [], years: [], countries: [], presentationKinds: [],
+  affiliation: '', authorName: '', showEmbargoed: false,
 }
 
 export function buildConferenceFilters() {
@@ -17,6 +18,7 @@ export function buildConferenceFilters() {
     cancers: s.cancers, phases: s.phases, modalities: s.modalities, companies: s.companies,
     targets: s.targets, biomarkers: s.biomarkers, institutions: s.institutions ?? [], keyword: s.keyword ?? '',
     conferences: l.conferences ?? [], years: l.years ?? [], countries: l.countries ?? [],
+    presentationKinds: l.presentationKinds ?? [],
     affiliation: l.affiliation ?? '', authorName: l.authorName ?? '', showEmbargoed: l.showEmbargoed ?? false,
   }
 }
@@ -33,6 +35,7 @@ function syncShared(next) {
 function persistLocal(next) {
   setTabState('conferences', {
     conferences: next.conferences, years: next.years, countries: next.countries,
+    presentationKinds: next.presentationKinds,
     affiliation: next.affiliation, authorName: next.authorName, showEmbargoed: next.showEmbargoed,
   })
 }
@@ -62,7 +65,8 @@ export function conferenceFilterActive(filters, nctParam) {
     filters.keyword || filters.affiliation || filters.authorName || nctParam ||
     filters.cancers.length || filters.phases.length || filters.modalities.length ||
     filters.companies.length || filters.targets.length || filters.biomarkers.length ||
-    (filters.institutions?.length ?? 0) || filters.countries.length,
+    (filters.institutions?.length ?? 0) || filters.countries.length ||
+    (filters.presentationKinds?.length ?? 0),
   )
 }
 
@@ -76,7 +80,7 @@ export function anyConferenceFilter(filters, nctParam) {
 export function nctOnlyFilters(nct) {
   return {
     cancers: [], phases: [], modalities: [], companies: [], targets: [], biomarkers: [], institutions: [],
-    conferences: [], years: [], countries: [], affiliation: '', authorName: '', keyword: '',
+    conferences: [], years: [], countries: [], presentationKinds: [], affiliation: '', authorName: '', keyword: '',
     nctId: nct, showEmbargoed: true,
   }
 }

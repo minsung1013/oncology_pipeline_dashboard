@@ -1,9 +1,10 @@
 import { normalizeCountry, normalizeAffiliation } from './dataClean'
+import { presentationKind, PRESENTATION_KINDS } from './abstractMeta'
 
 export function applyAbstractFilters(abstracts, filters) {
   const {
     conferences, years, phases, modalities, cancers, countries, companies,
-    targets = [], biomarkers = [], institutions = [], affiliation,
+    targets = [], biomarkers = [], institutions = [], presentationKinds = [], affiliation,
     authorName, keyword, nctId, showEmbargoed,
   } = filters
 
@@ -25,6 +26,7 @@ export function applyAbstractFilters(abstracts, filters) {
     if (targets.length > 0 && !(a.target_list ?? []).some((t) => targets.includes(t))) return false
     if (biomarkers.length > 0 && !(a.biomarker_list ?? []).some((b) => biomarkers.includes(b))) return false
     if (institutions.length > 0 && !institutions.includes(normalizeAffiliation(a.authors?.[0]?.affiliation))) return false
+    if (presentationKinds.length > 0 && !presentationKinds.includes(presentationKind(a))) return false
     if (affilQ && !(a.authors?.[0]?.affiliation ?? '').toLowerCase().includes(affilQ)) return false
     if (authorName && a.authors?.[0]?.name !== authorName) return false
     if (nctId && !(a.nct_ids ?? []).includes(nctId)) return false
@@ -94,5 +96,8 @@ export function getAbstractFilterOptions(abstracts) {
     ...new Set(abstracts.flatMap((a) => a.biomarker_list ?? []).filter(Boolean)),
   ].sort()
 
-  return { conferences, years, phases, modalities, cancers, countries, companies, targets, biomarkers }
+  const present = new Set(abstracts.map((a) => presentationKind(a)).filter(Boolean))
+  const presentationKinds = PRESENTATION_KINDS.filter((k) => present.has(k))
+
+  return { conferences, years, phases, modalities, cancers, countries, companies, targets, biomarkers, presentationKinds }
 }

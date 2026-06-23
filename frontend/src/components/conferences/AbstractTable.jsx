@@ -9,6 +9,7 @@ import {
 import { useState } from 'react'
 import AuthorCell from './AuthorCell'
 import { normalizeCountry, normalizeAffiliation } from '../../utils/dataClean'
+import { presentationKind, presentationKindClass } from '../../utils/abstractMeta'
 
 const col = createColumnHelper()
 
@@ -34,19 +35,6 @@ function PhaseBadge({ phases }) {
       })}
     </div>
   )
-}
-
-// abstract_id 접두 등에서 발표 종류 파생 (메타데이터에 poster/oral 구분은 없음)
-function presentationKind(a) {
-  const id = String(a.abstract_id || '')
-  const u = id.toUpperCase()
-  if (a.is_lba || u.startsWith('LBA') || /^LB\d/.test(u)) return { label: 'Late-Breaking', cls: 'bg-amber-100 text-amber-700' }
-  if (u.startsWith('TPS')) return { label: 'Trials in Progress', cls: 'bg-sky-100 text-sky-700' }
-  if (u.startsWith('CT')) return { label: 'Clinical Trial', cls: 'bg-blue-100 text-blue-700' }
-  if (/^(SY|PL|ED|NG|ND|SS|LE)/.test(u)) return { label: 'Symposium', cls: 'bg-violet-100 text-violet-700' }
-  if (a.presentation_type === 'e-abstract' || (a.conference === 'ASCO' && /^E\d/.test(u))) return { label: 'Online only', cls: 'bg-slate-100 text-slate-500' }
-  if (/^\d/.test(id)) return { label: 'Presented', cls: 'bg-emerald-100 text-emerald-700' }
-  return null
 }
 
 function TagList({ items, colorCls = 'bg-slate-100 text-slate-600', max = 3 }) {
@@ -199,13 +187,13 @@ const COLUMNS = [
     size: 90,
   }),
 
-  col.accessor((row) => presentationKind(row)?.label ?? '', {
+  col.accessor((row) => presentationKind(row) ?? '', {
     id: 'presentation',
     header: 'Type',
-    cell: ({ row }) => {
-      const k = presentationKind(row.original)
-      if (!k) return <span className="text-slate-300">—</span>
-      return <span className={`inline-block text-xs font-semibold px-1.5 py-0.5 rounded ${k.cls}`}>{k.label}</span>
+    cell: ({ getValue }) => {
+      const label = getValue()
+      if (!label) return <span className="text-slate-300">—</span>
+      return <span className={`inline-block text-xs font-semibold px-1.5 py-0.5 rounded ${presentationKindClass(label)}`}>{label}</span>
     },
     size: 130,
   }),
