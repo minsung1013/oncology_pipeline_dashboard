@@ -3,9 +3,8 @@ import ChartCard from '../components/visualize/ChartCard'
 import DistributionBarChart from '../components/visualize/DistributionBarChart'
 import AbstractsByYearChart from '../components/visualize/AbstractsByYearChart'
 import TrendLineChart from '../components/visualize/TrendLineChart'
-import FilterMultiSelect from '../components/common/FilterMultiSelect'
+import ConferenceFilterBar from '../components/conferences/ConferenceFilterBar'
 import {
-  filterAbstractsForVisualize,
   aggregateAbstractsByYear,
   aggregateAbstractListField,
   aggregateAbstractsByCompany,
@@ -16,8 +15,9 @@ import {
   getAbstractSummaryStats,
   phaseLabel,
 } from '../utils/visualizeAggregations'
-import { getAbstractFilterOptions } from '../utils/abstractFilters'
-import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
+import { applyAbstractFilters, getAbstractFilterOptions } from '../utils/abstractFilters'
+import { buildConferenceFilters, setConferenceFilter, clearedConferenceFilters } from '../utils/conferenceFilters'
+import { getTabState, setTabState } from '../utils/filterStore'
 import { getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
 // 트렌드 라인은 가독성을 위해 상위 6개 값만 (히스토그램 옆 동반 차트)
@@ -61,17 +61,19 @@ function SummaryCards({ stats }) {
 export default function ConferenceVisualizePage() {
   const [abstracts, setAbstracts] = useState(null)
   const [error, setError] = useState(null)
-  const [filters, setFiltersState] = useState(getShared)
+  // 테이블과 동일한 필터 모델 (공유 축 + conference 고유 축)
+  const [filters, setFiltersState] = useState(buildConferenceFilters)
   const [topN, setTopNState] = useState(() => getTabState('conference-visualize')?.topN ?? 10)
 
-  // 공유 축 변경 → store.shared 동기화 (다른 탭과 필터 공유)
-  function setFilters(updater) {
+  // 필터 변경 → 공유/로컬 store 반영 (테이블과 동일 로직)
+  const setFilter = (key, value) => setFiltersState((prev) => setConferenceFilter(prev, key, value))
+  const toggleFilter = (key, value) =>
     setFiltersState((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater
-      setShared(next)
-      return next
+      const cur = prev[key] ?? []
+      const nextVal = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]
+      return setConferenceFilter(prev, key, nextVal)
     })
-  }
+  const clearAll = () => setFiltersState(clearedConferenceFilters())
   function setTopN(v) {
     setTopNState(v)
     setTabState('conference-visualize', { topN: v })
@@ -85,23 +87,14 @@ export default function ConferenceVisualizePage() {
       .catch((e) => setError(e.message))
   }, [])
 
-  const toggleFilter = (key, value) => {
-    setFilters((prev) => {
-      const cur = prev[key] ?? []
-      const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]
-      return { ...prev, [key]: next }
-    })
-  }
-  const setAxis = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
-
   // 드롭다운 필터 옵션 (로드된 전체 초록 기준)
   const options = useMemo(
-    () => (abstracts ? getAbstractFilterOptions(abstracts) : { cancers: [], modalities: [], targets: [], biomarkers: [], companies: [], phases: [] }),
+    () => (abstracts ? getAbstractFilterOptions(abstracts) : { cancers: [], modalities: [], targets: [], biomarkers: [], companies: [], phases: [], conferences: [], years: [], countries: [] }),
     [abstracts],
   )
 
   const filtered = useMemo(
-    () => (abstracts ? filterAbstractsForVisualize(abstracts, filters) : []),
+    () => (abstracts ? applyAbstractFilters(abstracts, filters) : []),
     [abstracts, filters],
   )
 
@@ -174,18 +167,19 @@ export default function ConferenceVisualizePage() {
           </label>
         </div>
 
-        {/* 필터 바 (드롭다운으로 직접 필터 추가 — 차트 클릭과 동일 축) */}
-        <div className="flex items-center gap-2 flex-wrap mt-2">
-          <FilterMultiSelect label="Cancer" options={options.cancers} selected={filters.cancers ?? []} onChange={(v) => setAxis('cancers', v)} />
-          <FilterMultiSelect label="Modality" options={options.modalities} selected={filters.modalities ?? []} onChange={(v) => setAxis('modalities', v)} />
-          <FilterMultiSelect label="Target" options={options.targets} selected={filters.targets ?? []} onChange={(v) => setAxis('targets', v)} />
-          <FilterMultiSelect label="Biomarker" options={options.biomarkers} selected={filters.biomarkers ?? []} onChange={(v) => setAxis('biomarkers', v)} />
-          <FilterMultiSelect label="Company" options={options.companies} selected={filters.companies ?? []} onChange={(v) => setAxis('companies', v)} />
-          <FilterMultiSelect label="Phase" options={options.phases} selected={filters.phases ?? []} onChange={(v) => setAxis('phases', v)} renderLabel={phaseLabel} />
+        {/* 필터 바 — Conference 테이블과 완전히 동일 */}
+        <div className="mt-2">
+          <ConferenceFilterBar
+            options={options}
+            filters={filters}
+            onChange={setFilter}
+            onClear={clearAll}
+            hasActive={hasActive}
+          />
         </div>
 
-        {/* Active filter chips */}
-        {hasActive && (
+        {/* Active filter chips (차트 클릭/선택 표시 + 개별 제거) */}
+        {activeChips.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap mt-2">
             {activeChips.map(({ key, value }) => (
               <button
@@ -199,14 +193,6 @@ export default function ConferenceVisualizePage() {
                 <span className="text-blue-400">✕</span>
               </button>
             ))}
-            <button
-              onClick={() => setFilters((prev) => ({
-                ...prev, modalities: [], targets: [], biomarkers: [], cancers: [], companies: [], institutions: [], phases: [],
-              }))}
-              className="text-xs text-slate-400 hover:text-slate-600 ml-1"
-            >
-              Clear all
-            </button>
           </div>
         )}
       </div>

@@ -1,9 +1,9 @@
-import { normalizeCountry } from './dataClean'
+import { normalizeCountry, normalizeAffiliation } from './dataClean'
 
 export function applyAbstractFilters(abstracts, filters) {
   const {
     conferences, years, phases, modalities, cancers, countries, companies,
-    targets = [], biomarkers = [], affiliation,
+    targets = [], biomarkers = [], institutions = [], affiliation,
     authorName, keyword, nctId, showEmbargoed,
   } = filters
 
@@ -24,6 +24,7 @@ export function applyAbstractFilters(abstracts, filters) {
     if (companies?.length > 0 && !(a.companies_normalized ?? []).some((c) => companies.includes(c))) return false
     if (targets.length > 0 && !(a.target_list ?? []).some((t) => targets.includes(t))) return false
     if (biomarkers.length > 0 && !(a.biomarker_list ?? []).some((b) => biomarkers.includes(b))) return false
+    if (institutions.length > 0 && !institutions.includes(normalizeAffiliation(a.authors?.[0]?.affiliation))) return false
     if (affilQ && !(a.authors?.[0]?.affiliation ?? '').toLowerCase().includes(affilQ)) return false
     if (authorName && a.authors?.[0]?.name !== authorName) return false
     if (nctId && !(a.nct_ids ?? []).includes(nctId)) return false
