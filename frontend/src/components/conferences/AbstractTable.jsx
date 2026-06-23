@@ -333,19 +333,20 @@ const COLUMNS = [
     size: 130,
   }),
 
-  col.accessor((row) => row.source?.doi, {
+  col.accessor((row) => row.source?.doi || row.source?.pmid, {
     id: 'source',
     header: 'Source',
     enableSorting: false,
-    cell: ({ getValue }) => {
-      const doi = getValue()
-      if (!doi) return <span className="text-slate-300">—</span>
+    cell: ({ row }) => {
+      const s = row.original.source || {}
+      const href = s.doi ? `https://doi.org/${s.doi}` : (s.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${s.pmid}/` : null)
+      if (!href) return <span className="text-slate-300">—</span>
       return (
         <a
-          href={`https://doi.org/${doi}`}
+          href={href}
           target="_blank"
           rel="noreferrer"
-          title={`Open original abstract · doi:${doi}`}
+          title={s.doi ? `Open original · doi:${s.doi}` : `Open on PubMed · PMID ${s.pmid}`}
           className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
         >
           Original ↗

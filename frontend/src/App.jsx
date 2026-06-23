@@ -3,7 +3,8 @@ import { BrowserRouter, Routes, Route, NavLink, Link, Outlet } from 'react-route
 import LandingPage from './pages/LandingPage'
 import PipelinePage from './pages/PipelinePage'
 import ConferencesPage from './pages/ConferencesPage'
-import { prefetchPipeline, prefetchAbstracts } from './utils/dataSource'
+import PublicationsPage from './pages/PublicationsPage'
+import { prefetchPipeline, prefetchAbstracts, prefetchPublications } from './utils/dataSource'
 
 // recharts가 무거워 시각화 탭은 코드 분할(방문 시에만 로드)
 const VisualizePage = lazy(() => import('./pages/VisualizePage'))
@@ -27,6 +28,9 @@ function DashboardLayout() {
         <NavLink to="/conference-visualize" className={navClass} onMouseEnter={prefetchAbstracts}>
           <span className="hidden sm:inline">Conference </span>Visualize
         </NavLink>
+        <span className="shrink-0 w-px h-5 bg-slate-200 mx-1 sm:mx-2" aria-hidden="true" />
+        {/* Publications 축 (hover 시 논문 프리페치) */}
+        <NavLink to="/publications" className={navClass} onMouseEnter={prefetchPublications}>Publications</NavLink>
         <span className="shrink-0 w-px h-5 bg-slate-200 mx-1 sm:mx-2" aria-hidden="true" />
         {/* Pipeline 쌍 (hover 시 파이프라인 프리페치; Visualize는 둘 다 사용) */}
         <NavLink to="/pipeline" className={navClass} onMouseEnter={prefetchPipeline}>Pipeline</NavLink>
@@ -57,6 +61,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/conferences" element={<ConferencesPage />} />
           <Route path="/conference-visualize" element={<ConferenceVisualizePage />} />
+          <Route path="/publications" element={<PublicationsPage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/visualize" element={<VisualizePage />} />
         </Route>

@@ -81,3 +81,35 @@ export async function loadAbstractFiles(items) {
   }))
   return lists.flat()
 }
+
+// ── 퍼블리케이션(저널 논문) 연도별 lazy 로딩 ────────────────────────────────
+let _pubIndex = null
+export async function getPublicationIndex() {
+  if (!_pubIndex) {
+    const r = await fetch(`${DATA_BASE}/pub_index.json`, REVALIDATE)
+    if (!r.ok) throw new Error(`pub_index HTTP ${r.status}`)
+    _pubIndex = (await r.json()).publications // [{year, count, file}, ...]
+  }
+  return _pubIndex
+}
+// 초록 파일과 동일 캐시(_files) 공유 → file 경로로 구분
+export async function loadPublicationFiles(items) {
+  const lists = await Promise.all(items.map(async (m) => {
+    if (!_files.has(m.file)) {
+      const r = await fetch(abstractFileUrl(m.file), REVALIDATE)
+      if (!r.ok) throw new Error(`${m.file} HTTP ${r.status}`)
+      _files.set(m.file, (await r.json()).abstracts)
+    }
+    return _files.get(m.file)
+  }))
+  return lists.flat()
+}
+export function prefetchPublications() {
+  getPublicationIndex()
+    .then((idx) => {
+      if (!idx?.length) return
+      const latest = Math.max(...idx.map((m) => m.year))
+      return loadPublicationFiles(idx.filter((m) => m.year === latest))
+    })
+    .catch(() => {})
+}

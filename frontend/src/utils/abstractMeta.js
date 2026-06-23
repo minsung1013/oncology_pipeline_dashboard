@@ -1,6 +1,7 @@
 // 초록 발표 종류. ESMO는 데이터에 presentation_type(Poster/Oral 등)이 있고,
 // ASCO/AACR은 abstract_id 접두에서 파생. (메타데이터에 poster/oral 구분이 없는 ASCO는 'Presented')
 const KINDS = [
+  // 학회 발표 유형
   { label: 'Late-Breaking', cls: 'bg-amber-100 text-amber-700' },
   { label: 'Trials in Progress', cls: 'bg-sky-100 text-sky-700' },
   { label: 'Oral', cls: 'bg-rose-100 text-rose-700' },
@@ -11,6 +12,21 @@ const KINDS = [
   { label: 'Symposium', cls: 'bg-violet-100 text-violet-700' },
   { label: 'Online only', cls: 'bg-slate-100 text-slate-500' },
   { label: 'Presented', cls: 'bg-emerald-100 text-emerald-700' },
+  // 저널 출판 유형 (publications)
+  { label: 'RCT', cls: 'bg-green-100 text-green-700' },
+  { label: 'Phase III Trial', cls: 'bg-emerald-100 text-emerald-700' },
+  { label: 'Phase II Trial', cls: 'bg-teal-100 text-teal-700' },
+  { label: 'Phase I Trial', cls: 'bg-cyan-100 text-cyan-700' },
+  { label: 'Phase IV Trial', cls: 'bg-lime-100 text-lime-700' },
+  { label: 'Controlled Trial', cls: 'bg-green-100 text-green-700' },
+  { label: 'Meta-Analysis', cls: 'bg-indigo-100 text-indigo-700' },
+  { label: 'Systematic Review', cls: 'bg-violet-100 text-violet-700' },
+  { label: 'Observational', cls: 'bg-amber-100 text-amber-700' },
+  { label: 'Multicenter', cls: 'bg-sky-100 text-sky-700' },
+  { label: 'Comparative', cls: 'bg-slate-100 text-slate-600' },
+  { label: 'Review', cls: 'bg-slate-100 text-slate-500' },
+  { label: 'Case Report', cls: 'bg-slate-100 text-slate-500' },
+  { label: 'Journal Article', cls: 'bg-slate-100 text-slate-500' },
 ]
 const CLS = Object.fromEntries(KINDS.map((k) => [k.label, k.cls]))
 
@@ -22,9 +38,9 @@ export function presentationKindClass(label) {
 }
 
 export function presentationKind(a) {
-  // ESMO 등 명시적 발표타입 우선 (Poster/Oral/Mini Oral/Poster Discussion/Trials in Progress/Late-Breaking)
+  // 명시적 발표/출판 유형 우선 (ESMO: Poster/Oral…, 논문: RCT/Phase II/Review…)
   const pt = a?.presentation_type
-  if (pt && pt !== 'e-abstract' && CLS[pt]) return pt
+  if (pt && pt !== 'e-abstract') return pt
 
   // ASCO/AACR: abstract_id 접두에서 파생
   const id = String(a?.abstract_id || '')

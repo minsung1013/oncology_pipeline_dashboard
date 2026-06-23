@@ -63,8 +63,8 @@ export default function LandingPage() {
   const stats = [
     { n: counts.drugs ? counts.drugs.toLocaleString() : '—', l: 'industry trials' },
     { n: counts.abstracts ? counts.abstracts.toLocaleString() : '—', l: 'conference abstracts' },
+    { n: counts.publications ? counts.publications.toLocaleString() : '—', l: 'journal publications' },
     { n: counts.companies ? counts.companies.toLocaleString() : '—', l: 'companies' },
-    { n: 'ASCO·AACR·ESMO', l: 'US & Europe, 2022–26' },
   ]
 
   return (

@@ -29,11 +29,12 @@ function DrugCell({ d, nctIndex }) {
   const ncts = d.nct_ids ?? []
   const combo = d.combo_drugs ?? []
   const primaryUrl = d.clinicaltrials_url || (ncts[0] ? `https://clinicaltrials.gov/study/${ncts[0]}` : null)
-  const abstrNct = ncts.find((nct) => nctIndex?.[nct]?.length)
-  // nct_index: NCT → [{uid, conference, year}]. 매칭 학회들을 배지 라벨로.
-  const abstrConfs = abstrNct
-    ? [...new Set((nctIndex[abstrNct] || []).map((e) => e.conference))].join('/')
-    : null
+  // nct_index: NCT → [{uid, axis, conference|journal, year}]. 학회 발표 + 논문 둘 다 배지로.
+  const linkNct = ncts.find((nct) => nctIndex?.[nct]?.length)
+  const entries = linkNct ? (nctIndex[linkNct] || []) : []
+  const confLabel = [...new Set(entries.filter((e) => e.axis !== 'publication').map((e) => e.conference))]
+    .filter(Boolean).join('/')
+  const pubCount = entries.filter((e) => e.axis === 'publication').length
 
   return (
     <div>
@@ -47,13 +48,22 @@ function DrugCell({ d, nctIndex }) {
         ) : (
           <span className="font-medium">{d.drug_name}</span>
         )}
-        {abstrNct && (
+        {confLabel && (
           <Link
-            to={`/conferences?nct=${abstrNct}`}
+            to={`/conferences?nct=${linkNct}`}
             className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold hover:bg-amber-200 transition-colors"
-            title={`Conference abstract (${abstrConfs}) · ${abstrNct}`}
+            title={`Conference abstract (${confLabel}) · ${linkNct}`}
           >
-            {abstrConfs || 'Abstr'}
+            {confLabel}
+          </Link>
+        )}
+        {pubCount > 0 && (
+          <Link
+            to={`/publications?nct=${linkNct}`}
+            className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold hover:bg-emerald-200 transition-colors"
+            title={`${pubCount} journal publication(s) · ${linkNct}`}
+          >
+            {pubCount} Pub
           </Link>
         )}
         {ncts.length > 1 && (

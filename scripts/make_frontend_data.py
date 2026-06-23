@@ -28,6 +28,9 @@ ABS_KEEP = [
     "nct_ids", "companies_normalized", "drugs_mentioned", "source",
     "summary_ko", "enrich_src", "llm_confidence",
 ]
+# 퍼블리케이션 lite 보존 필드 (초록 + 저널/PMID/출판유형)
+PUB_KEEP = ABS_KEEP + ["journal", "pmid", "publication_type"]
+
 # 저자는 첫 저자의 표시용 필드만
 AUTHOR_KEEP = ["name", "affiliation", "country"]
 
@@ -43,18 +46,44 @@ DRUG_KEEP = [
 ]
 
 
-def _lite_record(a):
-    rec = {k: a.get(k) for k in ABS_KEEP if k in a}
+def _lite_record(a, keep=ABS_KEEP):
+    rec = {k: a.get(k) for k in keep if k in a}
     # 바이오마커 유전자 기준 정규화 (변이형/표기변형 합치기, 항목 제거는 안 함)
     if "biomarker_list" in rec:
         rec["biomarker_list"] = normalize_biomarker_list(rec.get("biomarker_list"))
     if rec.get("authors"):
         rec["authors"] = [{k: au.get(k) for k in AUTHOR_KEEP} for au in rec["authors"][:1]]
-    # source는 doi만 (url 제거 — 용량)
+    # source는 doi/pmid만 (url 제거 — 용량)
     if rec.get("source"):
-        rec["source"] = {"doi": rec["source"].get("doi")}
+        s = rec["source"]
+        rec["source"] = {k: s.get(k) for k in ("doi", "pmid") if s.get(k)}
     rec["has_body"] = bool(a.get("abstract_text"))
     return rec
+
+
+def build_publications():
+    """저널 논문 lite(연도별) + manifest. 레코드 conference 필드 = 저널 약어(Source 필터)."""
+    files = sorted(glob.glob("data/parsed/publications_*.json"))
+    if not files:
+        print("publications 없음 — 스킵")
+        return
+    os.makedirs(f"{OUT}/publications", exist_ok=True)
+    manifest = []
+    for fp in files:
+        d = json.load(open(fp, encoding="utf-8"))
+        m = d.get("metadata", {})
+        year = m.get("year")
+        recs = [_lite_record(a, PUB_KEEP) for a in d["abstracts"]]
+        path = f"{OUT}/publications/{year}.json"
+        json.dump({"metadata": m, "abstracts": recs}, open(path, "w", encoding="utf-8"),
+                  ensure_ascii=False, separators=(",", ":"))
+        mb = os.path.getsize(path) / 1024 / 1024
+        manifest.append({"year": year, "count": len(recs), "file": f"publications/{year}.json", "mb": round(mb, 1)})
+        print(f"  pub {year}: {len(recs)} -> {path} ({mb:.1f} MB)")
+    json.dump({"publications": manifest}, open(f"{OUT}/pub_index.json", "w", encoding="utf-8"),
+              ensure_ascii=False, indent=2)
+    print(f"pub manifest -> {OUT}/pub_index.json ({len(manifest)} files, "
+          f"{sum(x['count'] for x in manifest)} pubs total)")
 
 
 def build_abstracts():
@@ -81,14 +110,20 @@ def build_abstracts():
 
 
 def build_nct_index():
-    """NCT → [{uid, conference, year}] (Pipeline→Conferences 크로스링크용)."""
+    """NCT → [{uid, axis, conference/journal, year}] (Pipeline ↔ Conferences ↔ Publications 크로스링크)."""
     idx = {}
     for fp in sorted(glob.glob("data/parsed/abstracts_*.json")):
         d = json.load(open(fp, encoding="utf-8"))
         for a in d["abstracts"]:
             for nct in a.get("nct_ids", []):
                 idx.setdefault(nct, []).append(
-                    {"uid": a["uid"], "conference": a["conference"], "year": a["year"]})
+                    {"uid": a["uid"], "axis": "conference", "conference": a["conference"], "year": a["year"]})
+    for fp in sorted(glob.glob("data/parsed/publications_*.json")):
+        d = json.load(open(fp, encoding="utf-8"))
+        for a in d["abstracts"]:
+            for nct in a.get("nct_ids", []):
+                idx.setdefault(nct, []).append(
+                    {"uid": a["uid"], "axis": "publication", "journal": a.get("conference"), "year": a["year"]})
     os.makedirs(OUT, exist_ok=True)
     path = f"{OUT}/nct_index.json"
     json.dump(idx, open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
@@ -101,7 +136,7 @@ def build_facets():
 
     cancers, modalities = set(), set()
     targets, biomarkers, companies = Counter(), Counter(), Counter()
-    n_drugs = n_abstracts = 0
+    n_drugs = n_abstracts = n_pubs = 0
 
     # 파이프라인 (스칼라 필드)
     pl = "data/parsed/pipeline.json"
@@ -136,11 +171,27 @@ def build_facets():
             for co in a.get("companies_normalized") or []:
                 companies[co] += 1
 
+    # 퍼블리케이션 (초록과 동일 리스트 필드)
+    for fp in sorted(glob.glob("data/parsed/publications_*.json")):
+        for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
+            n_pubs += 1
+            for c in a.get("cancer_category") or []:
+                cancers.add(c)
+            for m in a.get("modality_list") or []:
+                modalities.add(m)
+            for t in a.get("target_list") or []:
+                if t and t != "Unknown":
+                    targets[t] += 1
+            for b in normalize_biomarker_list(a.get("biomarker_list")):
+                biomarkers[b] += 1
+            for co in a.get("companies_normalized") or []:
+                companies[co] += 1
+
     def top(counter, n):
         return [k for k, _ in counter.most_common(n)]
 
     facets = {
-        "counts": {"drugs": n_drugs, "abstracts": n_abstracts,
+        "counts": {"drugs": n_drugs, "abstracts": n_abstracts, "publications": n_pubs,
                    "companies": len(companies), "targets": len(targets),
                    "biomarkers": len(biomarkers)},
         "cancers": sorted(c for c in cancers if c),
@@ -178,13 +229,16 @@ def build_pipeline():
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", choices=["abstracts", "pipeline", "facets"], default=None,
+    ap.add_argument("--only", choices=["abstracts", "pipeline", "facets", "publications"], default=None,
                     help="일부만 빌드 (CI에서 pipeline만 갱신 등)")
     only = ap.parse_args().only
-    if only != "pipeline" and only != "facets":
+    if only in (None, "abstracts"):
         build_abstracts()
-        build_nct_index()
-    if only != "abstracts" and only != "facets":
+    if only in (None, "publications"):
+        build_publications()
+    if only in (None, "abstracts", "publications"):
+        build_nct_index()  # conference + publication 두 축 반영
+    if only in (None, "pipeline"):
         build_pipeline()
-    if only != "abstracts" and only != "pipeline":
+    if only in (None, "facets"):
         build_facets()

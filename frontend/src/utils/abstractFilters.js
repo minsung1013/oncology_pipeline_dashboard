@@ -96,8 +96,11 @@ export function getAbstractFilterOptions(abstracts) {
     ...new Set(abstracts.flatMap((a) => a.biomarker_list ?? []).filter(Boolean)),
   ].sort()
 
-  const present = new Set(abstracts.map((a) => presentationKind(a)).filter(Boolean))
-  const presentationKinds = PRESENTATION_KINDS.filter((k) => present.has(k))
+  const present = [...new Set(abstracts.map((a) => presentationKind(a)).filter(Boolean))]
+  const presentationKinds = [
+    ...PRESENTATION_KINDS.filter((k) => present.includes(k)),
+    ...present.filter((k) => !PRESENTATION_KINDS.includes(k)).sort(),
+  ]
 
   return { conferences, years, phases, modalities, cancers, countries, companies, targets, biomarkers, presentationKinds }
 }
