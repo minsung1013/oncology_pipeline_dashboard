@@ -54,7 +54,9 @@ function TagList({ items, colorCls = 'bg-slate-100 text-slate-600', max = 3 }) {
 
 function TitleCell({ a }) {
   const [expanded, setExpanded] = useState(false)
-  const hasText = a.abstract_text && a.abstract_text.length > 10
+  const summaryKo = a.summary_ko && a.summary_ko.length > 5 ? a.summary_ko : null
+  const fullText = a.abstract_text && a.abstract_text.length > 10 ? a.abstract_text : null
+  const hasMore = summaryKo || fullText
 
   return (
     <div>
@@ -64,17 +66,34 @@ function TitleCell({ a }) {
       >
         {a.title || <span className="text-slate-400 italic">Embargoed</span>}
       </div>
-      {hasText && (
+      {hasMore && (
         <button
           onClick={() => setExpanded((v) => !v)}
           className="text-xs text-blue-500 hover:text-blue-700 mt-0.5"
         >
-          {expanded ? '▲ Collapse' : '▼ Abstract'}
+          {expanded ? '▲ Collapse' : summaryKo ? '▼ 한국어 요약' : '▼ Abstract'}
         </button>
       )}
-      {expanded && hasText && (
+      {expanded && summaryKo && (
+        <div className="mt-1.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+              AI 요약
+            </span>
+            {a.llm_confidence != null && (
+              <span className="text-[10px] text-slate-400">
+                신뢰도 {Math.round(a.llm_confidence * 100)}%
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-slate-700 leading-relaxed border-l-2 border-indigo-200 pl-2 whitespace-pre-wrap">
+            {summaryKo}
+          </div>
+        </div>
+      )}
+      {expanded && fullText && (
         <div className="mt-1.5 text-xs text-slate-600 leading-relaxed border-l-2 border-slate-200 pl-2 whitespace-pre-wrap max-h-60 overflow-auto">
-          {a.abstract_text}
+          {fullText}
         </div>
       )}
     </div>
