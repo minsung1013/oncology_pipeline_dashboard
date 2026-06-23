@@ -48,6 +48,21 @@ CONFS = {
         "lba_suppl": None,
         "window": ("{y}-01-01", "{y}-12-31"),
     },
+    "esmo": {
+        "issn": "0923-7534", "name": "ESMO",  # Annals of Oncology (본문 없음, 제목 기반)
+        "mode": "title",
+        # DOI에 연도만: 10.1016/j.annonc.2023.09.2777
+        "year_re": re.compile(r"annonc\.(\d{4})\.", re.I),
+        # 제목 앞 초록번호+발표타입: "1829P ...", "LBA5 ...", "10O ...", "1234MO ...", "567TiP ..."
+        "title_id_re": re.compile(r"^\s*(LBA\d+|\d+)(MO|TiP|TPS|PD|PB|MPB|P|O)?\b", re.I),
+        "window": ("{y}-09-01", "{y}-10-31"),  # ESMO Congress: 9~10월
+    },
+}
+
+# ESMO 발표타입 코드 → 표시명
+_ESMO_PTYPE = {
+    "O": "Oral", "MO": "Mini Oral", "P": "Poster", "PD": "Poster Discussion",
+    "PB": "Poster", "MPB": "Poster", "TiP": "Trials in Progress", "TPS": "Trials in Progress",
 }
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -89,18 +104,35 @@ def crossref_page(issn, frm, until, cursor):
 def build_record(work, conf, year):
     cfg = CONFS[conf]
     doi = work.get("DOI", "")
-    m = cfg["doi_re"].search(doi)
-    if not m or int(m.group(1)) != year:
-        return None
-    groups = m.groups()
-    suppl = groups[1] if len(groups) == 3 else None
-    num = groups[-1]
-    is_lba = num.upper().startswith("LB") or (cfg["lba_suppl"] and suppl == cfg["lba_suppl"])
-    abstract_id = num.upper() if num[:2].upper() in ("LB", "TP") else num
-    uid = f"{conf}-{year}-{abstract_id.lower()}"
-
     raw_title = (work.get("title") or [""])[0]
-    title = clean_text(re.sub(r"^Abstract\s+[A-Za-z0-9]+:\s*", "", raw_title))
+    pres = None
+
+    if cfg.get("mode") == "title":
+        # ESMO: 연도는 DOI, 초록번호+발표타입은 제목 앞에서 추출 (본문 없음)
+        ym = cfg["year_re"].search(doi)
+        if not ym or int(ym.group(1)) != year:
+            return None
+        tm = cfg["title_id_re"].match(raw_title)
+        if not tm:
+            return None  # ESMO Congress 초록 아님 (일반 논문·사설 등)
+        ptype = (tm.group(2) or "").strip()
+        abstract_id = (tm.group(1) + ptype).upper()
+        is_lba = tm.group(1).upper().startswith("LB")
+        pres = "Late-Breaking" if is_lba else _ESMO_PTYPE.get(
+            ptype, _ESMO_PTYPE.get(ptype.capitalize(), None))
+        title = clean_text(raw_title[tm.end():])
+    else:
+        m = cfg["doi_re"].search(doi)
+        if not m or int(m.group(1)) != year:
+            return None
+        groups = m.groups()
+        suppl = groups[1] if len(groups) == 3 else None
+        num = groups[-1]
+        is_lba = num.upper().startswith("LB") or (cfg["lba_suppl"] and suppl == cfg["lba_suppl"])
+        abstract_id = num.upper() if num[:2].upper() in ("LB", "TP") else num
+        title = clean_text(re.sub(r"^Abstract\s+[A-Za-z0-9]+:\s*", "", raw_title))
+
+    uid = f"{conf}-{year}-{abstract_id.lower()}"
     body = jats_strip(work.get("abstract", ""))
     author_raw = author_raw_from(work.get("author"))
     author = parse_author(author_raw) if author_raw else None
@@ -111,7 +143,8 @@ def build_record(work, conf, year):
     nct_ids = extract_nct_ids(full)
     phases = extract_phases(full)
     biomarker_list = infer_biomarker_list(full)
-    pres = "e-abstract" if abstract_id.lower().startswith("e") else None
+    if pres is None and cfg.get("mode") != "title" and abstract_id.lower().startswith("e"):
+        pres = "e-abstract"  # ASCO online-only (ESMO pres는 위에서 설정)
 
     return {
         "uid": uid, "conference": cfg["name"], "year": year, "abstract_id": abstract_id,
