@@ -49,14 +49,16 @@ export default function ConferencesPage() {
   }, [])
 
   // 필요한 연도 파일을 lazy 로드 (캐시됨). 검색 활성 시 전 연도.
+  // NCT로 넘어오면 연도/학회 필터를 무시하고 전 연도 로드 (해당 시험 초록이 어느 연도든 잡히게).
   useEffect(() => {
     if (!index) return
-    const items = neededItems(index, filters, searchActive)
+    const loadFilters = nctParam ? { years: [], conferences: [] } : filters
+    const items = neededItems(index, loadFilters, searchActive)
     setLoading(true)
     loadAbstractFiles(items)
       .then((list) => { setAbstracts(list); setLoading(false) })
       .catch((e) => { setError(e.message); setLoading(false) })
-  }, [index, filters.conferences, filters.years, searchActive])
+  }, [index, filters.conferences, filters.years, searchActive, nctParam])
 
   // 학회·연도 옵션은 manifest에서(아직 로드 안 한 것도 선택 가능), 나머지는 로드된 데이터에서
   const filterOptions = useMemo(() => {
