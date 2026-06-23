@@ -25,7 +25,7 @@ import {
 } from '../utils/visualizeAggregations'
 import { getDrugFilterOptions, applyDrugFilters, DRUG_FILTER_DEFAULT } from '../utils/drugFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
-import { PIPELINE_URL, getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
+import { getPipeline, getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
 const EMPTY_FILTERS = DRUG_FILTER_DEFAULT
 
@@ -70,13 +70,7 @@ export default function VisualizePage() {
   }
 
   useEffect(() => {
-    fetch(PIPELINE_URL)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then(setData)
-      .catch((e) => setError(e.message))
+    getPipeline().then(setData).catch((e) => setError(e.message))
 
     // 통합 "연도별 초록 수" 차트: manifest만 사용 (초록 전체 로드 불필요)
     getAbstractIndex().then(setAbstractManifest).catch(() => {})

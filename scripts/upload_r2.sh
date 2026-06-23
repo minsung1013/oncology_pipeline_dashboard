@@ -16,11 +16,17 @@ set -euo pipefail
 BUCKET="${R2_BUCKET:?R2_BUCKET 환경변수 필요 (예: R2_BUCKET=oncology-data)}"
 SRC="data/frontend"
 
-upload() {  # $1 = 로컬경로(상대 SRC), content-type
+upload() {  # $1 = 로컬경로(상대 SRC)
   local rel="$1"
-  echo "  -> $rel"
+  # gzip + Content-Encoding: gzip 으로 업로드 → 전송량 ~5배 감소(브라우저 자동 해제).
+  # R2 dev URL은 자동 압축을 안 하므로 직접 압축 저장한다.
+  local gz; gz="$(mktemp)"
+  gzip -9 -c "$SRC/$rel" > "$gz"
+  echo "  -> $rel ($(du -h "$gz" | cut -f1) gz)"
   npx --yes wrangler r2 object put "$BUCKET/$rel" \
-    --file "$SRC/$rel" --content-type "application/json" --remote
+    --file "$gz" --content-type "application/json" \
+    --content-encoding gzip --remote
+  rm -f "$gz"
 }
 
 echo "[R2] uploading data/frontend/ to bucket: $BUCKET"

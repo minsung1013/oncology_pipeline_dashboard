@@ -15,6 +15,26 @@ const _files = new Map() // file -> abstracts[]
 // R2 dev URL은 Cache-Control을 안 주므로 옵션 없이 fetch하면 휴리스틱 캐싱으로 옛 데이터가 남는다.
 const REVALIDATE = { cache: 'no-cache' }
 
+// pipeline.json(대용량)은 세션 내 1회만 로드 → 탭 전환마다 53MB 재다운로드 방지.
+let _pipeline = null
+export async function getPipeline() {
+  if (!_pipeline) {
+    const r = await fetch(PIPELINE_URL, REVALIDATE)
+    if (!r.ok) throw new Error(`pipeline HTTP ${r.status}`)
+    _pipeline = await r.json()
+  }
+  return _pipeline
+}
+
+let _nctIndex = null
+export async function getNctIndex() {
+  if (!_nctIndex) {
+    const r = await fetch(`${DATA_BASE}/nct_index.json`, REVALIDATE)
+    _nctIndex = r.ok ? await r.json() : {}
+  }
+  return _nctIndex
+}
+
 export async function getAbstractIndex() {
   if (!_index) {
     const r = await fetch(INDEX_URL, REVALIDATE)

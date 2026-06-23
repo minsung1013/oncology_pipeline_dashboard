@@ -5,9 +5,7 @@ import PipelineTable from '../components/pipeline/PipelineTable'
 import { applyDrugFilters, getDrugFilterOptions, groupByCompany } from '../utils/drugFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 
-import { PIPELINE_URL, DATA_BASE } from '../utils/dataSource'
-
-const NCT_INDEX_URL = `${DATA_BASE}/nct_index.json`  // 있으면 ASCO 배지, 없으면 무시
+import { getPipeline, getNctIndex } from '../utils/dataSource'
 
 // Pipeline 고유(비공유) 필터 기본값
 const LOCAL_DEFAULT = {
@@ -79,18 +77,8 @@ export default function PipelinePage() {
   }
 
   useEffect(() => {
-    fetch(PIPELINE_URL, { cache: 'no-store' })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then(setData)
-      .catch((e) => setError(e.message))
-
-    fetch(NCT_INDEX_URL, { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : {})
-      .then(setNctIndex)
-      .catch(() => {})
+    getPipeline().then(setData).catch((e) => setError(e.message))
+    getNctIndex().then(setNctIndex).catch(() => {})
   }, [])
 
   const allDrugs = data?.drugs ?? []
