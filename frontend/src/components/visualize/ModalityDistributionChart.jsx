@@ -10,10 +10,6 @@ const EMPHASIS_COLORS = {
 }
 const MUTED = ['#94a3b8', '#cbd5e1', '#b8c2cf', '#a3aebd', '#d8dee6', '#e2e8f0', '#9aa6b5']
 
-function colorFor(name, mutedIdx) {
-  return EMPHASIS_COLORS[name] ?? MUTED[mutedIdx % MUTED.length]
-}
-
 export default function ModalityDistributionChart({ data, onSelect, selected = [] }) {
   let mutedIdx = 0
   const colored = data.map((d) => {
