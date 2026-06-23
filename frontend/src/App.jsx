@@ -10,7 +10,7 @@ const VisualizePage = lazy(() => import('./pages/VisualizePage'))
 const ConferenceVisualizePage = lazy(() => import('./pages/ConferenceVisualizePage'))
 
 const navClass = ({ isActive }) =>
-  `text-sm px-3 py-1.5 rounded font-medium transition-colors ${
+  `shrink-0 whitespace-nowrap text-sm px-2.5 sm:px-3 py-1.5 rounded font-medium transition-colors ${
     isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
   }`
 
@@ -18,17 +18,21 @@ const navClass = ({ isActive }) =>
 function DashboardLayout() {
   return (
     <div className="flex flex-col h-screen bg-slate-50">
-      <nav className="bg-white border-b border-slate-200 px-4 py-2 flex items-center gap-1 shrink-0">
-        <Link to="/" className="text-sm font-bold text-slate-700 mr-4 hover:opacity-80" title="Home">
+      <nav className="bg-white border-b border-slate-200 px-3 sm:px-4 py-2 flex items-center gap-1 shrink-0 overflow-x-auto">
+        <Link to="/" className="shrink-0 text-sm font-bold text-slate-700 mr-2 sm:mr-4 hover:opacity-80" title="Home">
           <span className="text-blue-600">Onco</span>lyzer
         </Link>
         {/* Conference 쌍 (hover 시 초록 데이터 프리페치) */}
         <NavLink to="/conferences" className={navClass} onMouseEnter={prefetchAbstracts}>Conferences</NavLink>
-        <NavLink to="/conference-visualize" className={navClass} onMouseEnter={prefetchAbstracts}>Conference Visualize</NavLink>
-        <span className="w-px h-5 bg-slate-200 mx-2" aria-hidden="true" />
+        <NavLink to="/conference-visualize" className={navClass} onMouseEnter={prefetchAbstracts}>
+          <span className="hidden sm:inline">Conference </span>Visualize
+        </NavLink>
+        <span className="shrink-0 w-px h-5 bg-slate-200 mx-1 sm:mx-2" aria-hidden="true" />
         {/* Pipeline 쌍 (hover 시 파이프라인 프리페치; Visualize는 둘 다 사용) */}
         <NavLink to="/pipeline" className={navClass} onMouseEnter={prefetchPipeline}>Pipeline</NavLink>
-        <NavLink to="/visualize" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>Pipeline Visualize</NavLink>
+        <NavLink to="/visualize" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>
+          <span className="hidden sm:inline">Pipeline </span>Visualize
+        </NavLink>
       </nav>
       <div className="flex-1 overflow-hidden">
         <Suspense

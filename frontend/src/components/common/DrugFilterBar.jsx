@@ -22,6 +22,7 @@ const AXES = [
 ]
 
 export default function DrugFilterBar({ options, filters, onChange, extras = null, showCompletion = false }) {
+  const [barOpen, setBarOpen] = useState(false)
   const set = (key, value) => onChange({ ...filters, [key]: value })
   const toggle = (key, value) => {
     const cur = filters[key] ?? []
@@ -39,7 +40,18 @@ export default function DrugFilterBar({ options, filters, onChange, extras = nul
     (filters.needsReview ? 1 : 0)
 
   return (
-    <div className="bg-white border-b border-slate-200 px-4 py-3 flex flex-wrap gap-x-4 gap-y-2 items-center text-sm">
+    <div className="bg-white border-b border-slate-200 px-4 py-2 text-sm">
+      {/* 모바일: 필터 접기 토글 */}
+      <button
+        onClick={() => setBarOpen((o) => !o)}
+        className="md:hidden flex items-center gap-2 text-xs font-semibold text-slate-600 border border-slate-200 rounded px-3 py-1.5"
+      >
+        Filters
+        {activeCount > 0 && <span className="bg-blue-500 text-white rounded-full px-1.5">{activeCount}</span>}
+        <span className="text-slate-400">{barOpen ? '▲' : '▼'}</span>
+      </button>
+
+      <div className={`${barOpen ? 'flex' : 'hidden'} md:flex flex-wrap gap-x-4 gap-y-2 items-center pt-2 md:pt-0`}>
       {/* Keyword search */}
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Search</span>
@@ -101,6 +113,7 @@ export default function DrugFilterBar({ options, filters, onChange, extras = nul
           Clear filters
         </button>
       )}
+      </div>
     </div>
   )
 }
