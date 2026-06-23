@@ -24,7 +24,7 @@ export default function TrendLineChart({ title, subtitle, data, keys, height = 3
             {keys.map((k, i) => (
               <Line
                 key={k}
-                type="monotone"
+                type="linear"
                 dataKey={k}
                 stroke={COLORS[i % COLORS.length]}
                 strokeWidth={2}
