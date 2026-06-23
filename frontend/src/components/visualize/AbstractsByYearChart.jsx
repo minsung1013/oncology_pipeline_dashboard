@@ -31,10 +31,10 @@ export default function AbstractsByYearChart({ data, confs, filtered, loading })
             <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
             <Tooltip formatter={(v) => v.toLocaleString()} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            {(confs ?? []).map((c, i) => (
-              <Bar key={c} dataKey={c} name={c} stackId="conf"
+            {(confs ?? []).map((c) => (
+              <Bar key={c} dataKey={c} name={c}
                    fill={CONF_COLORS[c] ?? '#94a3b8'}
-                   radius={i === (confs.length - 1) ? [3, 3, 0, 0] : 0} />
+                   radius={[3, 3, 0, 0]} />
             ))}
           </BarChart>
         </ResponsiveContainer>

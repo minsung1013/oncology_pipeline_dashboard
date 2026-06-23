@@ -20,13 +20,8 @@ import { getAbstractFilterOptions } from '../utils/abstractFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 import { getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
-// 연도 트렌드 차원 선택지 (리스트 필드)
-const TREND_DIMS = [
-  { key: 'cancer_category', label: 'Cancer type' },
-  { key: 'modality_list', label: 'Modality' },
-  { key: 'target_list', label: 'Target' },
-  { key: 'biomarker_list', label: 'Biomarker' },
-]
+// 트렌드 라인은 가독성을 위해 상위 6개 값만 (히스토그램 옆 동반 차트)
+const TREND_N = 6
 
 // CDx 친화 신호: 타겟/모달리티 강조 (Pipeline 시각화와 동일 신호 체계)
 const CDX_TARGETS = new Set(['HER2', 'PD-L1', 'TROP2', 'EGFR', 'CLDN18.2', 'MET'])
@@ -68,7 +63,6 @@ export default function ConferenceVisualizePage() {
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(getShared)
   const [topN, setTopNState] = useState(() => getTabState('conference-visualize')?.topN ?? 10)
-  const [trendDim, setTrendDim] = useState('cancer_category')
 
   // 공유 축 변경 → store.shared 동기화 (다른 탭과 필터 공유)
   function setFilters(updater) {
@@ -111,10 +105,11 @@ export default function ConferenceVisualizePage() {
     [abstracts, filters],
   )
 
-  const trend = useMemo(
-    () => aggregateTrendByYear(filtered, trendDim, 8, { excludeUnknown: trendDim === 'target_list' }),
-    [filtered, trendDim],
-  )
+  // 차원별 연도 트렌드 (각 분포 히스토그램 옆에 동반)
+  const modalityTrend = useMemo(() => aggregateTrendByYear(filtered, 'modality_list', TREND_N), [filtered])
+  const targetTrend = useMemo(() => aggregateTrendByYear(filtered, 'target_list', TREND_N, { excludeUnknown: true }), [filtered])
+  const biomarkerTrend = useMemo(() => aggregateTrendByYear(filtered, 'biomarker_list', TREND_N), [filtered])
+  const cancerTrend = useMemo(() => aggregateTrendByYear(filtered, 'cancer_category', TREND_N), [filtered])
 
   const confList = useMemo(
     () => (abstracts ? [...new Set(abstracts.map((a) => a.conference))].sort() : []),
@@ -222,23 +217,7 @@ export default function ConferenceVisualizePage() {
 
         <AbstractsByYearChart data={yearData} confs={confList} filtered={hasActive} loading={false} />
 
-        {/* 연도별 트렌드: 차원 선택(암종/모달리티/타겟/바이오마커)별 연구 수 추이 */}
-        <TrendLineChart
-          title="Research Trend by Year"
-          subtitle={`Abstracts per year for the top 8 ${TREND_DIMS.find((d) => d.key === trendDim)?.label.toLowerCase()} values${hasActive ? ' (filtered)' : ''}`}
-          data={trend.rows}
-          keys={trend.keys}
-          action={
-            <select
-              value={trendDim}
-              onChange={(e) => setTrendDim(e.target.value)}
-              className="border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
-            >
-              {TREND_DIMS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
-            </select>
-          }
-        />
-
+        {/* 각 분포 히스토그램 + 그 옆에 연도별 트렌드(상위 6개 값) 동반 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <DistributionBarChart
             title="Modality Distribution"
@@ -250,6 +229,13 @@ export default function ConferenceVisualizePage() {
             selectedColor="#6d28d9"
             onSelect={(v) => toggleFilter('modalities', v)}
           />
+          <TrendLineChart
+            title="Modality Trend by Year"
+            subtitle="Abstracts per year — top 6 modalities"
+            data={modalityTrend.rows}
+            keys={modalityTrend.keys}
+          />
+
           <DistributionBarChart
             title="Target Distribution"
             subtitle="Drug targets in abstracts — click a bar to filter (IHC-friendly highlighted)"
@@ -258,6 +244,13 @@ export default function ConferenceVisualizePage() {
             highlight={CDX_TARGETS}
             onSelect={(v) => toggleFilter('targets', v)}
           />
+          <TrendLineChart
+            title="Target Trend by Year"
+            subtitle="Abstracts per year — top 6 targets"
+            data={targetTrend.rows}
+            keys={targetTrend.keys}
+          />
+
           <DistributionBarChart
             title="Biomarker Distribution"
             subtitle="Patient-selection / prognostic biomarkers — click a bar to filter"
@@ -267,6 +260,13 @@ export default function ConferenceVisualizePage() {
             selectedColor="#be123c"
             onSelect={(v) => toggleFilter('biomarkers', v)}
           />
+          <TrendLineChart
+            title="Biomarker Trend by Year"
+            subtitle="Abstracts per year — top 6 biomarkers"
+            data={biomarkerTrend.rows}
+            keys={biomarkerTrend.keys}
+          />
+
           <DistributionBarChart
             title="Cancer Type Distribution"
             subtitle="Abstracts per cancer category — click a bar to filter"
@@ -277,6 +277,13 @@ export default function ConferenceVisualizePage() {
             yWidth={110}
             onSelect={(v) => toggleFilter('cancers', v)}
           />
+          <TrendLineChart
+            title="Cancer Type Trend by Year"
+            subtitle="Abstracts per year — top 6 cancer types"
+            data={cancerTrend.rows}
+            keys={cancerTrend.keys}
+          />
+
           <DistributionBarChart
             title="Top Companies"
             subtitle="Normalized company presence across abstracts — click a bar to filter"
