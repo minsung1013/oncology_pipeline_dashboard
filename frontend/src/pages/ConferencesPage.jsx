@@ -5,14 +5,29 @@ import { applyAbstractFilters, getAbstractFilterOptions } from '../utils/abstrac
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 import { getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
-// 현재 필터(학회·연도)로 로드할 manifest 파일 결정. 미선택 시 최신연도×전체학회.
-function neededItems(index, filters) {
+// 로드할 manifest 파일 결정.
+//  - 연도 미선택 + 검색/필터 없음 → 최신연도만 (기본 뷰, 빠름)
+//  - 연도 미선택 + 검색/필터 활성 → 전 연도 로드 (검색이 전 연도에 걸리도록)
+//  - 연도 선택 시 → 그 연도들
+function neededItems(index, filters, searchActive) {
   if (!index?.length) return []
   const allYears = [...new Set(index.map((m) => m.year))]
   const allConfs = [...new Set(index.map((m) => m.conference))]
-  const years = filters.years.length ? filters.years.map(Number) : [Math.max(...allYears)]
+  const years = filters.years.length
+    ? filters.years.map(Number)
+    : (searchActive ? allYears : [Math.max(...allYears)])
   const confs = filters.conferences.length ? filters.conferences : allConfs
   return index.filter((m) => years.includes(m.year) && confs.includes(m.conference))
+}
+
+// 연도/학회 외의 검색·필터 의도가 있는지 (있으면 전 연도 로드)
+function isSearchActive(filters, nctParam) {
+  return Boolean(
+    filters.keyword || filters.affiliation || filters.authorName || nctParam ||
+    filters.cancers.length || filters.phases.length || filters.modalities.length ||
+    filters.companies.length || filters.targets.length || filters.biomarkers.length ||
+    filters.countries.length,
+  )
 }
 
 // 공유 축(세 탭 공통) — cancer/phase/modality/company/target/biomarker/keyword.
@@ -137,21 +152,23 @@ export default function ConferencesPage() {
   }
 
   const nctParam = searchParams.get('nct')
+  // 검색·필터 의도가 있으면 전 연도 로드 (그래야 다른 연도 결과도 검색됨)
+  const searchActive = isSearchActive(filters, nctParam)
 
   // manifest 로드
   useEffect(() => {
     getAbstractIndex().then(setIndex).catch((e) => setError(e.message))
   }, [])
 
-  // 선택된 학회·연도에 맞는 파일을 lazy 로드 (캐시됨)
+  // 필요한 연도 파일을 lazy 로드 (캐시됨). 검색 활성 시 전 연도.
   useEffect(() => {
     if (!index) return
-    const items = neededItems(index, filters)
+    const items = neededItems(index, filters, searchActive)
     setLoading(true)
     loadAbstractFiles(items)
       .then((list) => { setAbstracts(list); setLoading(false) })
       .catch((e) => { setError(e.message); setLoading(false) })
-  }, [index, filters.conferences, filters.years])
+  }, [index, filters.conferences, filters.years, searchActive])
 
   // 학회·연도 옵션은 manifest에서(아직 로드 안 한 것도 선택 가능), 나머지는 로드된 데이터에서
   const filterOptions = useMemo(() => {
@@ -231,7 +248,13 @@ export default function ConferencesPage() {
   }
 
   const totalAvailable = index.reduce((s, m) => s + m.count, 0)
-  const loadedYears = [...new Set(abstracts.map((a) => `${a.conference} ${a.year}`))].sort().join(', ')
+  const loadedYearSet = [...new Set(abstracts.map((a) => a.year))].sort()
+  const allYearsLoaded = loadedYearSet.length >= new Set(index.map((m) => m.year)).size
+  const loadedYears = abstracts.length === 0
+    ? '—'
+    : allYearsLoaded
+      ? `all years (${loadedYearSet[0]}–${loadedYearSet[loadedYearSet.length - 1]})`
+      : loadedYearSet.join(', ')
 
   return (
     <div className="flex flex-col h-full">
@@ -244,7 +267,7 @@ export default function ConferencesPage() {
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               {index.length} datasets · {totalAvailable.toLocaleString()} abstracts total ·
-              {' '}loaded: {loadedYears || '—'}{loading && ' · loading…'}
+              {' '}loaded: {loadedYears}{loading && ' · loading…'}
             </p>
           </div>
           <div className="text-right text-xs text-slate-500">
