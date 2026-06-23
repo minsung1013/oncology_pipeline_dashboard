@@ -16,13 +16,15 @@ import { getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 //  - 연도 선택 시 → 그 연도들
 function neededItems(index, filters, searchActive) {
   if (!index?.length) return []
-  const allYears = [...new Set(index.map((m) => m.year))]
   const allConfs = [...new Set(index.map((m) => m.conference))]
+  const confs = filters.conferences.length ? filters.conferences : allConfs
+  // 선택 학회 범위 안에서 연도 결정 (학회마다 연도가 달라서 — ESMO는 2026 없음)
+  const scope = index.filter((m) => confs.includes(m.conference))
+  const scopeYears = [...new Set(scope.map((m) => m.year))]
   const years = filters.years.length
     ? filters.years.map(Number)
-    : (searchActive ? allYears : [Math.max(...allYears)])
-  const confs = filters.conferences.length ? filters.conferences : allConfs
-  return index.filter((m) => years.includes(m.year) && confs.includes(m.conference))
+    : (searchActive ? scopeYears : [Math.max(...scopeYears)])
+  return scope.filter((m) => years.includes(m.year))
 }
 
 export default function ConferencesPage() {
