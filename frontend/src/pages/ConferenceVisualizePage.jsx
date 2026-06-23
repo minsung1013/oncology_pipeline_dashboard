@@ -14,7 +14,6 @@ import {
   aggregateAbstractsByPhase,
   aggregateTrendByYear,
   getAbstractSummaryStats,
-  phaseLabel,
 } from '../utils/visualizeAggregations'
 import { applyAbstractFilters, getAbstractFilterOptions } from '../utils/abstractFilters'
 import { buildConferenceFilters, setConferenceFilter, clearedConferenceFilters, anyConferenceFilter } from '../utils/conferenceFilters'
@@ -129,7 +128,7 @@ export default function ConferenceVisualizePage() {
   }
 
   const summary = hasActive
-    ? `${filtered.length.toLocaleString()} of ${abstracts.length.toLocaleString()} abstracts match ${activeChips.length} filter${activeChips.length > 1 ? 's' : ''}`
+    ? `${filtered.length.toLocaleString()} of ${abstracts.length.toLocaleString()} abstracts match the current filters`
     : `All conferences — ${abstracts.length.toLocaleString()} abstracts`
 
   return (
