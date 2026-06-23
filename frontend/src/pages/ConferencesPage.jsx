@@ -6,9 +6,8 @@ import ConferenceActiveChips from '../components/conferences/ConferenceActiveChi
 import { applyAbstractFilters, getAbstractFilterOptions } from '../utils/abstractFilters'
 import {
   buildConferenceFilters, setConferenceFilter, clearedConferenceFilters,
-  conferenceFilterActive, anyConferenceFilter,
+  conferenceFilterActive, anyConferenceFilter, nctOnlyFilters,
 } from '../utils/conferenceFilters'
-import { getTabState, setTabState } from '../utils/filterStore'
 import { getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
 // 로드할 manifest 파일 결정.
@@ -35,11 +34,9 @@ export default function ConferencesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
 
-  // NCT 클릭 → Pipeline 탭으로 이동, 해당 NCT로 키워드 필터(포커스)
+  // NCT 클릭 → Pipeline 탭으로 이동, 해당 시험만 필터 (?nct= 파라미터)
   function focusInPipeline(nct) {
-    const cur = getTabState('pipeline') ?? {}
-    setTabState('pipeline', { ...cur, keyword: nct })
-    navigate('/pipeline')
+    navigate(`/pipeline?nct=${encodeURIComponent(nct)}`)
   }
 
   const nctParam = searchParams.get('nct')
@@ -71,8 +68,9 @@ export default function ConferencesPage() {
     return base
   }, [abstracts, index])
 
+  // NCT로 넘어오면 해당 시험만 (다른 필터 무시), 아니면 일반 필터
   const activeFilters = useMemo(
-    () => ({ ...filters, nctId: nctParam || null }),
+    () => (nctParam ? nctOnlyFilters(nctParam) : { ...filters, nctId: null }),
     [filters, nctParam],
   )
 

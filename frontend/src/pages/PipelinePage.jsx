@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import DrugFilterBar from '../components/common/DrugFilterBar'
 import CompanyList from '../components/pipeline/CompanyList'
 import PipelineTable from '../components/pipeline/PipelineTable'
@@ -42,6 +43,8 @@ export default function PipelinePage() {
   const [nctIndex, setNctIndex] = useState({})
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(buildFilters)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const nctParam = searchParams.get('nct')  // Conference에서 NCT 클릭 시 → 해당 시험만
   const [selectedCompany, setSelectedCompany] = useState(() => getTabState('pipeline')?.selectedCompany ?? null)
   // 회사 목록 사이드바: 데스크톱 기본 펼침, 모바일 기본 접힘
   const [showCompanies, setShowCompanies] = useState(
@@ -86,17 +89,18 @@ export default function PipelinePage() {
 
   const filterOptions = useMemo(() => getDrugFilterOptions(allDrugs), [allDrugs])
 
-  const filteredDrugs = useMemo(
-    () => applyDrugFilters(allDrugs, filters),
-    [allDrugs, filters],
-  )
+  // NCT로 넘어오면 해당 시험만 (다른 필터 무시), 아니면 일반 필터
+  const filteredDrugs = useMemo(() => {
+    if (nctParam) return allDrugs.filter((d) => (d.nct_ids ?? []).includes(nctParam))
+    return applyDrugFilters(allDrugs, filters)
+  }, [allDrugs, filters, nctParam])
 
   const companies = useMemo(() => groupByCompany(filteredDrugs), [filteredDrugs])
 
   const tableDrugs = useMemo(() => {
-    if (!selectedCompany) return filteredDrugs
+    if (nctParam || !selectedCompany) return filteredDrugs
     return filteredDrugs.filter((d) => d.company === selectedCompany)
-  }, [filteredDrugs, selectedCompany])
+  }, [filteredDrugs, selectedCompany, nctParam])
 
   function handleSelectCompany(company) {
     setSelectedCompany((prev) => {
@@ -142,6 +146,25 @@ export default function PipelinePage() {
           <div>Updated: {metadata?.last_updated?.slice(0, 10)}</div>
         </div>
       </header>
+
+      {/* Conference에서 넘어온 NCT 포커스 배너 (해제 가능) */}
+      {nctParam && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 flex items-center gap-2 text-xs shrink-0">
+          <span className="text-amber-800">Showing trial</span>
+          <span className="font-mono font-semibold text-amber-900">{nctParam}</span>
+          <a
+            href={`https://clinicaltrials.gov/study/${nctParam}`}
+            target="_blank" rel="noreferrer"
+            className="text-amber-600 hover:text-amber-800"
+            title="Open on ClinicalTrials.gov"
+          >↗</a>
+          <button
+            onClick={() => setSearchParams({})}
+            className="ml-1 text-amber-500 hover:text-amber-700"
+            title="Clear NCT filter"
+          >✕ clear</button>
+        </div>
+      )}
 
       {/* 필터 바 (공용) + Pipeline 고유 컨트롤 */}
       <DrugFilterBar

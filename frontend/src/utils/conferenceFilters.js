@@ -71,3 +71,12 @@ export function anyConferenceFilter(filters, nctParam) {
   return conferenceFilterActive(filters, nctParam) ||
     filters.years.length > 0 || filters.conferences.length > 0
 }
+
+// Pipeline에서 NCT로 넘어왔을 때: 다른 축 무시하고 해당 시험만 (공유필터에 가려지지 않게)
+export function nctOnlyFilters(nct) {
+  return {
+    cancers: [], phases: [], modalities: [], companies: [], targets: [], biomarkers: [], institutions: [],
+    conferences: [], years: [], countries: [], affiliation: '', authorName: '', keyword: '',
+    nctId: nct, showEmbargoed: true,
+  }
+}
