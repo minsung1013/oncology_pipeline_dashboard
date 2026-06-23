@@ -2,7 +2,8 @@ import { normalizeCountry } from './dataClean'
 
 export function applyAbstractFilters(abstracts, filters) {
   const {
-    conferences, years, phases, modalities, cancers, countries, companies, affiliation,
+    conferences, years, phases, modalities, cancers, countries, companies,
+    targets = [], biomarkers = [], affiliation,
     authorName, keyword, nctId, showEmbargoed,
   } = filters
 
@@ -21,6 +22,8 @@ export function applyAbstractFilters(abstracts, filters) {
     if (cancers.length > 0 && !(a.cancer_category ?? []).some((c) => cancers.includes(c))) return false
     if (countries?.length > 0 && !countries.includes(normalizeCountry(a.authors?.[0]?.country))) return false
     if (companies?.length > 0 && !(a.companies_normalized ?? []).some((c) => companies.includes(c))) return false
+    if (targets.length > 0 && !(a.target_list ?? []).some((t) => targets.includes(t))) return false
+    if (biomarkers.length > 0 && !(a.biomarker_list ?? []).some((b) => biomarkers.includes(b))) return false
     if (affilQ && !(a.authors?.[0]?.affiliation ?? '').toLowerCase().includes(affilQ)) return false
     if (authorName && a.authors?.[0]?.name !== authorName) return false
     if (nctId && !(a.nct_ids ?? []).includes(nctId)) return false
@@ -82,5 +85,13 @@ export function getAbstractFilterOptions(abstracts) {
     ...new Set(abstracts.flatMap((a) => a.companies_normalized ?? []).filter(Boolean)),
   ].sort()
 
-  return { conferences, years, phases, modalities, cancers, countries, companies }
+  const targets = [
+    ...new Set(abstracts.flatMap((a) => a.target_list ?? []).filter((t) => t && t !== 'Unknown')),
+  ].sort()
+
+  const biomarkers = [
+    ...new Set(abstracts.flatMap((a) => a.biomarker_list ?? []).filter(Boolean)),
+  ].sort()
+
+  return { conferences, years, phases, modalities, cancers, countries, companies, targets, biomarkers }
 }

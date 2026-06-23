@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, NavLink, Link, Outlet } from 'react-route
 import LandingPage from './pages/LandingPage'
 import PipelinePage from './pages/PipelinePage'
 import ConferencesPage from './pages/ConferencesPage'
+import { prefetchPipeline, prefetchAbstracts } from './utils/dataSource'
 
 // recharts가 무거워 시각화 탭은 코드 분할(방문 시에만 로드)
 const VisualizePage = lazy(() => import('./pages/VisualizePage'))
@@ -21,13 +22,13 @@ function DashboardLayout() {
         <Link to="/" className="text-sm font-bold text-slate-700 mr-4 hover:opacity-80" title="Home">
           <span className="text-blue-600">Onco</span>lyzer
         </Link>
-        {/* Conference 쌍 */}
-        <NavLink to="/conferences" className={navClass}>Conferences</NavLink>
-        <NavLink to="/conference-visualize" className={navClass}>Conference Visualize</NavLink>
+        {/* Conference 쌍 (hover 시 초록 데이터 프리페치) */}
+        <NavLink to="/conferences" className={navClass} onMouseEnter={prefetchAbstracts}>Conferences</NavLink>
+        <NavLink to="/conference-visualize" className={navClass} onMouseEnter={prefetchAbstracts}>Conference Visualize</NavLink>
         <span className="w-px h-5 bg-slate-200 mx-2" aria-hidden="true" />
-        {/* Pipeline 쌍 */}
-        <NavLink to="/pipeline" className={navClass}>Pipeline</NavLink>
-        <NavLink to="/visualize" className={navClass}>Pipeline Visualize</NavLink>
+        {/* Pipeline 쌍 (hover 시 파이프라인 프리페치; Visualize는 둘 다 사용) */}
+        <NavLink to="/pipeline" className={navClass} onMouseEnter={prefetchPipeline}>Pipeline</NavLink>
+        <NavLink to="/visualize" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>Pipeline Visualize</NavLink>
       </nav>
       <div className="flex-1 overflow-hidden">
         <Suspense

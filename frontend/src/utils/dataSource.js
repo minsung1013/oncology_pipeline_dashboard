@@ -44,6 +44,20 @@ export async function getAbstractIndex() {
   return _index
 }
 
+// 네비 hover 시 캐시 워밍 → 탭 클릭하면 즉시 표시 (실패는 무시).
+export function prefetchPipeline() {
+  getPipeline().catch(() => {})
+}
+export function prefetchAbstracts() {
+  getAbstractIndex()
+    .then((idx) => {
+      if (!idx?.length) return
+      const latest = Math.max(...idx.map((m) => m.year))
+      return loadAbstractFiles(idx.filter((m) => m.year === latest))
+    })
+    .catch(() => {})
+}
+
 // manifest 항목들의 파일을 로드(캐시) → 합친 초록 배열
 export async function loadAbstractFiles(items) {
   const lists = await Promise.all(items.map(async (m) => {

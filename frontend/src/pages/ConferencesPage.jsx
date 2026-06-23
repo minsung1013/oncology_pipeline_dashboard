@@ -15,8 +15,9 @@ function neededItems(index, filters) {
   return index.filter((m) => years.includes(m.year) && confs.includes(m.conference))
 }
 
-// cancer/phase/modality/company는 공유 축 (company는 정규 제약사명으로 통일), 나머지는 Conferences 고유
-const SHARED_KEYS = new Set(['cancers', 'phases', 'modalities', 'companies'])
+// 공유 축(세 탭 공통) — cancer/phase/modality/company/target/biomarker/keyword.
+// 없는 축(Source/Year/Country/Affiliation/Author 등)은 각 탭 고유로 자동 무시된다.
+const SHARED_KEYS = new Set(['cancers', 'phases', 'modalities', 'companies', 'targets', 'biomarkers', 'keyword'])
 
 const LOCAL_DEFAULT = {
   conferences: [],
@@ -24,7 +25,6 @@ const LOCAL_DEFAULT = {
   countries: [],
   affiliation: '',
   authorName: '',
-  keyword: '',
   showEmbargoed: false,
 }
 
@@ -36,20 +36,28 @@ function buildFilters() {
     phases: s.phases,
     modalities: s.modalities,
     companies: s.companies,
+    targets: s.targets,
+    biomarkers: s.biomarkers,
+    keyword: s.keyword ?? '',
     conferences: l.conferences ?? [],
     years: l.years ?? [],
     countries: l.countries ?? [],
     affiliation: l.affiliation ?? '',
     authorName: l.authorName ?? '',
-    keyword: l.keyword ?? '',
     showEmbargoed: l.showEmbargoed ?? false,
   }
 }
 
 function MultiSelect({ label, options, selected, onChange }) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const toggle = (val) =>
     onChange(selected.includes(val) ? selected.filter((v) => v !== val) : [...selected, val])
+
+  // 옵션이 많으면 검색창 노출 + 200개로 제한(렌더 폭주 방지)
+  const searchable = options.length > 12
+  const q = query.trim().toLowerCase()
+  const shown = (q ? options.filter((o) => String(o).toLowerCase().includes(q)) : options).slice(0, 200)
 
   return (
     <div className="relative">
@@ -73,7 +81,20 @@ function MultiSelect({ label, options, selected, onChange }) {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-slate-200 rounded shadow-lg min-w-44 max-h-60 overflow-auto">
-            {options.map((opt) => (
+            {searchable && (
+              <div className="p-2 border-b border-slate-100 sticky top-0 bg-white">
+                <input
+                  autoFocus
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={`Search ${label.toLowerCase()}…`}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                />
+              </div>
+            )}
+            {shown.length === 0 && <div className="px-3 py-2 text-xs text-slate-400">No matches</div>}
+            {shown.map((opt) => (
               <label
                 key={opt}
                 className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer text-xs"
@@ -84,9 +105,14 @@ function MultiSelect({ label, options, selected, onChange }) {
                   onChange={() => toggle(opt)}
                   className="accent-blue-500"
                 />
-                <span className="text-slate-700">{opt}</span>
+                <span className="text-slate-700 truncate">{opt}</span>
               </label>
             ))}
+            {searchable && q === '' && options.length > 200 && (
+              <div className="px-3 py-1.5 text-xs text-slate-400 italic">
+                Showing first 200 — type to search all {options.length.toLocaleString()}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -151,30 +177,35 @@ export default function ConferencesPage() {
     setTabState('conferences', {
       conferences: next.conferences, years: next.years, countries: next.countries,
       affiliation: next.affiliation, authorName: next.authorName,
-      keyword: next.keyword, showEmbargoed: next.showEmbargoed,
+      showEmbargoed: next.showEmbargoed,
+    })
+  }
+
+  function syncShared(next) {
+    setShared({
+      ...getShared(),
+      cancers: next.cancers, phases: next.phases,
+      modalities: next.modalities, companies: next.companies,
+      targets: next.targets, biomarkers: next.biomarkers, keyword: next.keyword,
     })
   }
 
   function setFilter(key, value) {
     setFiltersState((prev) => {
       const next = { ...prev, [key]: value }
-      if (SHARED_KEYS.has(key)) {
-        setShared({
-          ...getShared(),
-          cancers: next.cancers, phases: next.phases,
-          modalities: next.modalities, companies: next.companies,
-        })
-      } else {
-        persistLocal(next)
-      }
+      if (SHARED_KEYS.has(key)) syncShared(next)
+      else persistLocal(next)
       return next
     })
   }
 
   function clearAll() {
-    const next = { cancers: [], phases: [], modalities: [], companies: [], ...LOCAL_DEFAULT }
+    const next = {
+      cancers: [], phases: [], modalities: [], companies: [],
+      targets: [], biomarkers: [], keyword: '', ...LOCAL_DEFAULT,
+    }
     setFiltersState(next)
-    setShared({ ...getShared(), cancers: [], phases: [], modalities: [], companies: [] })
+    syncShared(next)
     setTabState('conferences', LOCAL_DEFAULT)
     clearNct()
   }
@@ -299,6 +330,20 @@ export default function ConferencesPage() {
             onChange={(v) => setFilter('companies', v)}
           />
 
+          <MultiSelect
+            label="Target"
+            options={filterOptions.targets}
+            selected={filters.targets}
+            onChange={(v) => setFilter('targets', v)}
+          />
+
+          <MultiSelect
+            label="Biomarker"
+            options={filterOptions.biomarkers}
+            selected={filters.biomarkers}
+            onChange={(v) => setFilter('biomarkers', v)}
+          />
+
           <input
             type="text"
             placeholder="Affiliation…"
@@ -332,6 +377,8 @@ export default function ConferencesPage() {
             filters.modalities.length > 0 ||
             filters.countries.length > 0 ||
             filters.companies.length > 0 ||
+            filters.targets.length > 0 ||
+            filters.biomarkers.length > 0 ||
             filters.affiliation ||
             filters.authorName ||
             filters.keyword ||
@@ -350,6 +397,7 @@ export default function ConferencesPage() {
           const META = {
             conferences: 'Source', years: 'Year', cancers: 'Cancer',
             phases: 'Phase', modalities: 'Modality', countries: 'Country', companies: 'Company',
+            targets: 'Target', biomarkers: 'Biomarker',
           }
           const chips = Object.entries(META).flatMap(([key, label]) =>
             (filters[key] || []).map((value) => ({ key, label, value })),
