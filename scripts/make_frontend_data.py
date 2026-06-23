@@ -88,6 +88,68 @@ def build_nct_index():
     print(f"nct_index: {len(idx)} NCT IDs -> {path} ({os.path.getsize(path)/1024/1024:.1f} MB)")
 
 
+def build_facets():
+    """랜딩 통합 필터용 경량 옵션 파일. pipeline(drugs)+abstracts 합집합."""
+    from collections import Counter
+
+    cancers, modalities = set(), set()
+    targets, biomarkers, companies = Counter(), Counter(), Counter()
+    n_drugs = n_abstracts = 0
+
+    # 파이프라인 (스칼라 필드)
+    pl = "data/parsed/pipeline.json"
+    if os.path.exists(pl):
+        drugs = json.load(open(pl, encoding="utf-8"))["drugs"]
+        n_drugs = len(drugs)
+        for d in drugs:
+            if d.get("cancer_category"):
+                cancers.add(d["cancer_category"])
+            if d.get("modality"):
+                modalities.add(d["modality"])
+            if d.get("target") and d["target"] != "Unknown":
+                targets[d["target"]] += 1
+            for b in d.get("biomarker_list") or []:
+                biomarkers[b] += 1
+            if d.get("company_normalized"):
+                companies[d["company_normalized"]] += 1
+
+    # 초록 (리스트 필드)
+    for fp in sorted(glob.glob("data/parsed/abstracts_*.json")):
+        for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
+            n_abstracts += 1
+            for c in a.get("cancer_category") or []:
+                cancers.add(c)
+            for m in a.get("modality_list") or []:
+                modalities.add(m)
+            for t in a.get("target_list") or []:
+                if t and t != "Unknown":
+                    targets[t] += 1
+            for b in a.get("biomarker_list") or []:
+                biomarkers[b] += 1
+            for co in a.get("companies_normalized") or []:
+                companies[co] += 1
+
+    def top(counter, n):
+        return [k for k, _ in counter.most_common(n)]
+
+    facets = {
+        "counts": {"drugs": n_drugs, "abstracts": n_abstracts,
+                   "companies": len(companies), "targets": len(targets),
+                   "biomarkers": len(biomarkers)},
+        "cancers": sorted(c for c in cancers if c),
+        "modalities": sorted(m for m in modalities if m),
+        "phases": ["EARLY_PHASE1", "PHASE1", "PHASE2", "PHASE3", "PHASE4", "NA"],
+        "targets": top(targets, 300),
+        "biomarkers": top(biomarkers, 300),
+        "companies": top(companies, 500),
+    }
+    os.makedirs(OUT, exist_ok=True)
+    path = f"{OUT}/facets.json"
+    json.dump(facets, open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    print(f"facets -> {path}  (cancers {len(facets['cancers'])}, modalities {len(facets['modalities'])}, "
+          f"targets {len(facets['targets'])}, biomarkers {len(facets['biomarkers'])}, companies {len(facets['companies'])})")
+
+
 def build_pipeline():
     src = "data/parsed/pipeline.json"
     if not os.path.exists(src):
@@ -106,11 +168,13 @@ def build_pipeline():
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", choices=["abstracts", "pipeline"], default=None,
+    ap.add_argument("--only", choices=["abstracts", "pipeline", "facets"], default=None,
                     help="일부만 빌드 (CI에서 pipeline만 갱신 등)")
     only = ap.parse_args().only
-    if only != "pipeline":
+    if only != "pipeline" and only != "facets":
         build_abstracts()
         build_nct_index()
-    if only != "abstracts":
+    if only != "abstracts" and only != "facets":
         build_pipeline()
+    if only != "abstracts" and only != "pipeline":
+        build_facets()

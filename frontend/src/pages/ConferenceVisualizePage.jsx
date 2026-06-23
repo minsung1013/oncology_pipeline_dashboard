@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import ChartCard from '../components/visualize/ChartCard'
 import DistributionBarChart from '../components/visualize/DistributionBarChart'
 import AbstractsByYearChart from '../components/visualize/AbstractsByYearChart'
+import TrendLineChart from '../components/visualize/TrendLineChart'
+import FilterMultiSelect from '../components/common/FilterMultiSelect'
 import {
   filterAbstractsForVisualize,
   aggregateAbstractsByYear,
@@ -10,11 +12,21 @@ import {
   aggregateAbstractsByInstitution,
   aggregateAbstractsByCountry,
   aggregateAbstractsByPhase,
+  aggregateTrendByYear,
   getAbstractSummaryStats,
   phaseLabel,
 } from '../utils/visualizeAggregations'
+import { getAbstractFilterOptions } from '../utils/abstractFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 import { getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
+
+// 연도 트렌드 차원 선택지 (리스트 필드)
+const TREND_DIMS = [
+  { key: 'cancer_category', label: 'Cancer type' },
+  { key: 'modality_list', label: 'Modality' },
+  { key: 'target_list', label: 'Target' },
+  { key: 'biomarker_list', label: 'Biomarker' },
+]
 
 // CDx 친화 신호: 타겟/모달리티 강조 (Pipeline 시각화와 동일 신호 체계)
 const CDX_TARGETS = new Set(['HER2', 'PD-L1', 'TROP2', 'EGFR', 'CLDN18.2', 'MET'])
@@ -56,6 +68,7 @@ export default function ConferenceVisualizePage() {
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(getShared)
   const [topN, setTopNState] = useState(() => getTabState('conference-visualize')?.topN ?? 10)
+  const [trendDim, setTrendDim] = useState('cancer_category')
 
   // 공유 축 변경 → store.shared 동기화 (다른 탭과 필터 공유)
   function setFilters(updater) {
@@ -85,10 +98,22 @@ export default function ConferenceVisualizePage() {
       return { ...prev, [key]: next }
     })
   }
+  const setAxis = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
+
+  // 드롭다운 필터 옵션 (로드된 전체 초록 기준)
+  const options = useMemo(
+    () => (abstracts ? getAbstractFilterOptions(abstracts) : { cancers: [], modalities: [], targets: [], biomarkers: [], companies: [], phases: [] }),
+    [abstracts],
+  )
 
   const filtered = useMemo(
     () => (abstracts ? filterAbstractsForVisualize(abstracts, filters) : []),
     [abstracts, filters],
+  )
+
+  const trend = useMemo(
+    () => aggregateTrendByYear(filtered, trendDim, 8, { excludeUnknown: trendDim === 'target_list' }),
+    [filtered, trendDim],
   )
 
   const confList = useMemo(
@@ -154,6 +179,16 @@ export default function ConferenceVisualizePage() {
           </label>
         </div>
 
+        {/* 필터 바 (드롭다운으로 직접 필터 추가 — 차트 클릭과 동일 축) */}
+        <div className="flex items-center gap-2 flex-wrap mt-2">
+          <FilterMultiSelect label="Cancer" options={options.cancers} selected={filters.cancers ?? []} onChange={(v) => setAxis('cancers', v)} />
+          <FilterMultiSelect label="Modality" options={options.modalities} selected={filters.modalities ?? []} onChange={(v) => setAxis('modalities', v)} />
+          <FilterMultiSelect label="Target" options={options.targets} selected={filters.targets ?? []} onChange={(v) => setAxis('targets', v)} />
+          <FilterMultiSelect label="Biomarker" options={options.biomarkers} selected={filters.biomarkers ?? []} onChange={(v) => setAxis('biomarkers', v)} />
+          <FilterMultiSelect label="Company" options={options.companies} selected={filters.companies ?? []} onChange={(v) => setAxis('companies', v)} />
+          <FilterMultiSelect label="Phase" options={options.phases} selected={filters.phases ?? []} onChange={(v) => setAxis('phases', v)} renderLabel={phaseLabel} />
+        </div>
+
         {/* Active filter chips */}
         {hasActive && (
           <div className="flex items-center gap-1.5 flex-wrap mt-2">
@@ -186,6 +221,23 @@ export default function ConferenceVisualizePage() {
         <SummaryCards stats={stats} />
 
         <AbstractsByYearChart data={yearData} confs={confList} filtered={hasActive} loading={false} />
+
+        {/* 연도별 트렌드: 차원 선택(암종/모달리티/타겟/바이오마커)별 연구 수 추이 */}
+        <TrendLineChart
+          title="Research Trend by Year"
+          subtitle={`Abstracts per year for the top 8 ${TREND_DIMS.find((d) => d.key === trendDim)?.label.toLowerCase()} values${hasActive ? ' (filtered)' : ''}`}
+          data={trend.rows}
+          keys={trend.keys}
+          action={
+            <select
+              value={trendDim}
+              onChange={(e) => setTrendDim(e.target.value)}
+              className="border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+            >
+              {TREND_DIMS.map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+            </select>
+          }
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <DistributionBarChart

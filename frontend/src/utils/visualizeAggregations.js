@@ -84,6 +84,7 @@ export function aggregateByPhaseStatus(drugs) {
 // 초록에 공유 필터(암종·단계·모달리티·회사·타겟·바이오마커) 적용 (리스트 필드는 교집합)
 export function filterAbstractsForVisualize(abstracts, f) {
   const has = (sel) => sel && sel.length > 0
+  const kw = (f.keyword ?? '').trim().toLowerCase()
   return abstracts.filter((a) => {
     if (has(f.cancers) && !(a.cancer_category ?? []).some((c) => f.cancers.includes(c))) return false
     if (has(f.phases) && !(a.phases ?? []).some((p) => f.phases.includes(p))) return false
@@ -92,6 +93,14 @@ export function filterAbstractsForVisualize(abstracts, f) {
     if (has(f.targets) && !(a.target_list ?? []).some((t) => f.targets.includes(t))) return false
     if (has(f.biomarkers) && !(a.biomarker_list ?? []).some((b) => f.biomarkers.includes(b))) return false
     if (has(f.institutions) && !f.institutions.includes(normalizeAffiliation(a.authors?.[0]?.affiliation))) return false
+    if (kw) {
+      const blob = [
+        a.title, a.author_raw, a.abstract_id,
+        ...(a.target_list ?? []), ...(a.biomarker_list ?? []), ...(a.nct_ids ?? []),
+        ...(a.drugs_mentioned ?? []), ...(a.companies_normalized ?? []), ...(a.cancer_category ?? []),
+      ].filter(Boolean).join(' ').toLowerCase()
+      if (!blob.includes(kw)) return false
+    }
     return true
   })
 }
@@ -156,6 +165,33 @@ export function aggregateAbstractListField(abstracts, field, topN, { excludeUnkn
   const otherCount = rest.reduce((s, r) => s + r.count, 0)
   if (otherCount > 0) top.push({ name: `Other (${rest.length})`, count: otherCount, isOther: true })
   return top
+}
+
+// 연도별 트렌드: 리스트 필드(cancer_category/modality_list/target_list/biomarker_list)의
+// Top-N 값에 대해 연도별 초록(연구) 수를 집계 → recharts용 rows + keys.
+// rows: [{year, [valueA]: n, [valueB]: n, ...}], keys: [valueA, valueB, ...]
+export function aggregateTrendByYear(abstracts, field, topN = 8, { excludeUnknown = false } = {}) {
+  const totals = new Map()
+  for (const a of abstracts) {
+    for (const v of a[field] ?? []) {
+      if (!v || (excludeUnknown && v === 'Unknown')) continue
+      totals.set(v, (totals.get(v) ?? 0) + 1)
+    }
+  }
+  const keys = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, topN).map(([k]) => k)
+  const keySet = new Set(keys)
+  const years = [...new Set(abstracts.map((a) => a.year).filter(Boolean))].sort((a, b) => a - b)
+  const byYear = new Map(years.map((y) => [y, Object.fromEntries(keys.map((k) => [k, 0]))]))
+  for (const a of abstracts) {
+    const row = byYear.get(a.year)
+    if (!row) continue
+    const seen = new Set()
+    for (const v of a[field] ?? []) {
+      if (keySet.has(v) && !seen.has(v)) { row[v] += 1; seen.add(v) }
+    }
+  }
+  const rows = years.map((y) => ({ year: y, ...byYear.get(y) }))
+  return { rows, keys }
 }
 
 // 초록 제1저자 국가 분포 → Top N + Other

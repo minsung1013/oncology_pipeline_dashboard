@@ -35,6 +35,17 @@ export async function getNctIndex() {
   return _nctIndex
 }
 
+// 랜딩 통합 필터용 경량 옵션(facets) — 데이터 전체 로드 없이 옵션만.
+let _facets = null
+export async function getFacets() {
+  if (!_facets) {
+    const r = await fetch(`${DATA_BASE}/facets.json`, REVALIDATE)
+    if (!r.ok) throw new Error(`facets HTTP ${r.status}`)
+    _facets = await r.json()
+  }
+  return _facets
+}
+
 export async function getAbstractIndex() {
   if (!_index) {
     const r = await fetch(INDEX_URL, REVALIDATE)
