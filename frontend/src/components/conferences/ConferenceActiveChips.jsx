@@ -16,10 +16,18 @@ export default function ConferenceActiveChips({ filters, onChange }) {
   }
   if (filters.affiliation) chips.push({ key: 'affiliation', label: 'Affiliation', value: filters.affiliation })
   if (filters.keyword) chips.push({ key: 'keyword', label: 'Search', value: filters.keyword })
-  if (filters.authorName) chips.push({ key: 'authorName', label: 'Author', value: filters.authorName })
+  if (filters.authorName) {
+    chips.push({
+      key: 'authorName', label: 'Author',
+      value: filters.authorName + (filters.authorAffil ? ` · ${filters.authorAffil}` : ''),
+    })
+  }
   if (chips.length === 0) return null
 
-  const remove = (c) => onChange(c.key, c.arr ? (filters[c.key] ?? []).filter((v) => v !== c.value) : '')
+  const remove = (c) => {
+    onChange(c.key, c.arr ? (filters[c.key] ?? []).filter((v) => v !== c.value) : '')
+    if (c.key === 'authorName') onChange('authorAffil', '')  // 저자 해제 시 소속도 함께
+  }
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap mt-2">
