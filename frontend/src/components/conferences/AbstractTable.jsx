@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table'
 import { useState, useMemo, useEffect } from 'react'
 import AuthorCell from './AuthorCell'
-import { getAuthorCounts } from '../../utils/dataSource'
+import { getAuthorCounts, authorKey } from '../../utils/dataSource'
 import { normalizeCountry, normalizeAffiliation } from '../../utils/dataClean'
 import { presentationKind, presentationKindClass } from '../../utils/abstractMeta'
 
@@ -233,12 +233,12 @@ const COLUMNS = [
   col.accessor('author_raw', {
     header: ({ table }) => table.options.meta?.authorLabel ?? 'Corresponding Author',
     cell: ({ getValue, row, table }) => {
-      const nm = row.original.authors?.[0]?.name
+      const au = row.original.authors?.[0]
       return (
         <AuthorCell
           raw={getValue()}
-          name={nm}
-          count={table.options.meta?.authorCounts?.get(nm)}
+          name={au?.name}
+          count={au?.name ? table.options.meta?.authorCounts?.get(authorKey(au)) : undefined}
           onClick={table.options.meta?.onAuthorClick}
         />
       )
@@ -388,8 +388,8 @@ export default function AbstractTable({ abstracts, onAuthorClick, onNctClick, au
   const localCounts = useMemo(() => {
     const m = new Map()
     for (const a of abstracts) {
-      const nm = a.authors?.[0]?.name
-      if (nm) m.set(nm, (m.get(nm) ?? 0) + 1)
+      const au = a.authors?.[0]
+      if (au?.name) { const k = authorKey(au); m.set(k, (m.get(k) ?? 0) + 1) }
     }
     return m
   }, [abstracts])

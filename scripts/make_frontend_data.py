@@ -302,8 +302,12 @@ def build_whatsnew(window_days=8):
           f"신규논문 {len(new_pubs)}, 새타겟 {len(emerging)})")
 
 
+AUTHOR_KEY_SEP = ""  # 이름+소속 결합 구분자 (데이터에 안 나타나는 제어문자)
+
+
 def build_author_counts():
     """전체 코퍼스 교신저자별 기록 수 (학회 초록 + 논문 합산). 저자명 옆 배지용.
+    동명이인 구분을 위해 키 = 이름+소속(authors[0].affiliation, OpenAlex 기관명).
     대부분 1건이라 count>=2만 저장(파일 크기 축소). 파싱 파일 없으면 기존 보존."""
     from collections import Counter
     files = glob.glob("data/parsed/abstracts_*.json") + glob.glob("data/parsed/publications_*.json")
@@ -313,14 +317,15 @@ def build_author_counts():
     c = Counter()
     for fp in files:
         for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
-            nm = (a.get("authors") or [{}])[0].get("name")
+            au = (a.get("authors") or [{}])[0]
+            nm = au.get("name")
             if nm:
-                c[nm] += 1
+                c[nm + AUTHOR_KEY_SEP + (au.get("affiliation") or "")] += 1
     out = {k: v for k, v in c.items() if v >= 2}
     os.makedirs(OUT, exist_ok=True)
     path = f"{OUT}/author_counts.json"
     json.dump(out, open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
-    print(f"author_counts -> {path}  ({len(out)} authors >=2 of {len(c)} total, "
+    print(f"author_counts -> {path}  ({len(out)} name+affil >=2 of {len(c)} total, "
           f"{os.path.getsize(path)/1024:.0f}KB)")
 
 

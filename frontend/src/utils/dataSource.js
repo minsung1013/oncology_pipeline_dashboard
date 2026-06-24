@@ -56,6 +56,10 @@ export async function getWhatsNew() {
   return _whatsnew
 }
 
+// 저자 집계 키 = 이름 + 소속 (동명이인 구분). 백엔드(make_frontend_data)와 동일.
+// 구분자는 데이터에 없는 제어문자(US, \x1f).
+export const authorKey = (a) => `${a?.name ?? ''}\x1f${a?.affiliation ?? ''}`
+
 // 전체 코퍼스 교신저자별 기록 수 (학회+논문 합산, count>=2). 저자명 옆 배지용.
 let _authorCounts = null
 export async function getAuthorCounts() {
