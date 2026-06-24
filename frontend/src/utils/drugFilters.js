@@ -3,11 +3,11 @@
 
 const PHASE_ORDER = ['EARLY_PHASE1', 'PHASE1', 'PHASE2', 'PHASE3', 'PHASE4', 'NA']
 
-// 약물의 전체 관여 회사 = 메인 스폰서 + 정규화된 협력사(파트너).
-// companies_all(백엔드 생성)이 있으면 사용, 없으면 메인만(구버전 데이터 호환).
+// 약물에 표시되는 모든 회사 = 메인 스폰서(company) + 협력사(collaborators).
+// 파이프라인 테이블의 Company 칸(볼드=company, 회색 +=collaborators)과 동일한 원시 값.
+// 사이드바 통계/선택이 테이블 표시와 정확히 일치하도록 한다.
 export const drugCompanies = (d) =>
-  (d.companies_all && d.companies_all.length ? d.companies_all
-    : (d.company_normalized ? [d.company_normalized] : []))
+  [d.company, ...(d.collaborators ?? [])].filter(Boolean)
 
 // 모든 약물 필터의 표준(canonical) 기본값 — 빈 필터.
 export const DRUG_FILTER_DEFAULT = {
@@ -39,7 +39,7 @@ const yr = (v) => (v && v !== 'all' ? parseInt(v) : null)
 
 // 각 축의 선택지. company/cancer/modality는 알파벳, drug/target/biomarker는 빈도순.
 export function getDrugFilterOptions(drugs) {
-  const companies = [...new Set(drugs.flatMap(drugCompanies))].sort()
+  const companies = [...new Set(drugs.map((d) => d.company_normalized).filter(Boolean))].sort()
   const drugNames = byFrequency(drugs, (d) => d.drug_name)
   const cancers = [...new Set(drugs.map((d) => d.cancer_category).filter(Boolean))].sort()
   const modalities = [...new Set(drugs.map((d) => d.modality).filter(Boolean))].sort()
@@ -82,7 +82,7 @@ export function applyDrugFilters(drugs, f = {}) {
   const needsReview = !!f.needsReview
 
   return drugs.filter((d) => {
-    if (companies.size > 0 && !drugCompanies(d).some((c) => companies.has(c))) return false
+    if (companies.size > 0 && !companies.has(d.company_normalized)) return false
     if (drugSet.size > 0 && !drugSet.has(d.drug_name)) return false
     if (cancers.size > 0 && !cancers.has(d.cancer_category)) return false
     if (mods.size > 0 && !mods.has(d.modality)) return false
