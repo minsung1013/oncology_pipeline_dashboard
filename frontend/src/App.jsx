@@ -9,6 +9,7 @@ import { prefetchPipeline, prefetchAbstracts, prefetchPublications } from './uti
 // recharts가 무거워 시각화 탭은 코드 분할(방문 시에만 로드)
 const VisualizePage = lazy(() => import('./pages/VisualizePage'))
 const ConferenceVisualizePage = lazy(() => import('./pages/ConferenceVisualizePage'))
+const PublicationVisualizePage = lazy(() => import('./pages/PublicationVisualizePage'))
 
 const navClass = ({ isActive }) =>
   `shrink-0 whitespace-nowrap text-sm px-2.5 sm:px-3 py-1.5 rounded font-medium transition-colors ${
@@ -29,8 +30,11 @@ function DashboardLayout() {
           <span className="hidden sm:inline">Conference </span>Visualize
         </NavLink>
         <span className="shrink-0 w-px h-5 bg-slate-200 mx-1 sm:mx-2" aria-hidden="true" />
-        {/* Publications 축 (hover 시 논문 프리페치) */}
+        {/* Publications 쌍 (hover 시 논문 프리페치) */}
         <NavLink to="/publications" className={navClass} onMouseEnter={prefetchPublications}>Publications</NavLink>
+        <NavLink to="/publication-visualize" className={navClass} onMouseEnter={prefetchPublications}>
+          <span className="hidden sm:inline">Publication </span>Visualize
+        </NavLink>
         <span className="shrink-0 w-px h-5 bg-slate-200 mx-1 sm:mx-2" aria-hidden="true" />
         {/* Pipeline 쌍 (hover 시 파이프라인 프리페치; Visualize는 둘 다 사용) */}
         <NavLink to="/pipeline" className={navClass} onMouseEnter={prefetchPipeline}>Pipeline</NavLink>
@@ -62,6 +66,7 @@ export default function App() {
           <Route path="/conferences" element={<ConferencesPage />} />
           <Route path="/conference-visualize" element={<ConferenceVisualizePage />} />
           <Route path="/publications" element={<PublicationsPage />} />
+          <Route path="/publication-visualize" element={<PublicationVisualizePage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/visualize" element={<VisualizePage />} />
         </Route>

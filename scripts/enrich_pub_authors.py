@@ -99,8 +99,8 @@ def parse_work(w):
     return {"name": name, "affiliations": affs, "country": country, "companies": companies}
 
 
-def main():
-    files = sorted(glob.glob("data/parsed/publications_*.json"))
+def main(glob_pattern="data/parsed/publications_*.json"):
+    files = sorted(glob.glob(glob_pattern))
     doi_to_recs = {}
     for fp in files:
         for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
@@ -153,4 +153,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--glob", default="data/parsed/publications_*.json",
+                    help="대상 파일 (conference: 'data/parsed/abstracts_*.json')")
+    main(ap.parse_args().glob)

@@ -167,6 +167,33 @@ export function aggregateAbstractListField(abstracts, field, topN, { excludeUnkn
   return top
 }
 
+// 스칼라 필드(저널/출판유형 등) Top-N 카운트 (+ Other)
+export function aggregateAbstractScalar(abstracts, accessor, topN, { excludeUnknown = false } = {}) {
+  const counts = new Map()
+  for (const a of abstracts) {
+    const v = accessor(a)
+    if (!v || (excludeUnknown && v === 'Unknown')) continue
+    counts.set(v, (counts.get(v) ?? 0) + 1)
+  }
+  const sorted = [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+  if (!topN || sorted.length <= topN) return sorted
+  const top = sorted.slice(0, topN)
+  const rest = sorted.slice(topN)
+  const otherCount = rest.reduce((s, r) => s + r.count, 0)
+  if (otherCount > 0) top.push({ name: `Other (${rest.length})`, count: otherCount, isOther: true })
+  return top
+}
+
+// 연도별 단일 시리즈 카운트 [{year, [label]: n}] (학회별 분리 없는 by-year 막대용)
+export function aggregateByYearSingle(abstracts, label = 'count') {
+  const byYear = new Map()
+  for (const a of abstracts) {
+    if (!byYear.has(a.year)) byYear.set(a.year, { year: a.year, [label]: 0 })
+    byYear.get(a.year)[label] += 1
+  }
+  return [...byYear.values()].sort((x, y) => x.year - y.year)
+}
+
 // 연도별 트렌드: 리스트 필드(cancer_category/modality_list/target_list/biomarker_list)의
 // Top-N 값에 대해 연도별 초록(연구) 수를 집계 → recharts용 rows + keys.
 // rows: [{year, [valueA]: n, [valueB]: n, ...}], keys: [valueA, valueB, ...]

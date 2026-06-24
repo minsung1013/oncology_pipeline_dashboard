@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import FilterMultiSelect from '../components/common/FilterMultiSelect'
 import { phaseLabel } from '../utils/visualizeAggregations'
 import { getShared, setShared } from '../utils/filterStore'
-import { getFacets, prefetchPipeline, prefetchAbstracts } from '../utils/dataSource'
+import { getFacets, prefetchPipeline, prefetchAbstracts, prefetchPublications } from '../utils/dataSource'
 
 function Logo({ size = 40 }) {
   return (
@@ -22,7 +22,7 @@ function Logo({ size = 40 }) {
 
 const SOURCES = [
   { name: 'ClinicalTrials.gov', desc: 'Trial records via the official API v2 (industry-sponsored cancer studies).' },
-  { name: 'Crossref + OpenAlex', desc: 'ASCO (J Clin Oncol) & AACR (Cancer Research) abstracts with full text; ESMO (Annals of Oncology) titles, with author affiliations backfilled from OpenAlex.' },
+  { name: 'Crossref · PubMed · OpenAlex', desc: 'Conference abstracts (ASCO/AACR full text, ESMO titles) via Crossref; NCT-linked journal papers via PubMed; corresponding author, institution & company affiliation resolved with OpenAlex.' },
   { name: 'Enrichment', desc: 'Rule-based dictionaries + a local LLM (Qwen3) for modality / target / biomarker, plus institution / country / company normalization and Korean summaries.' },
 ]
 
@@ -60,6 +60,7 @@ export default function LandingPage() {
   }
 
   const counts = facets?.counts ?? {}
+  const updated = facets?.generated_at ? new Date(facets.generated_at).toLocaleDateString('en-CA') : '—'
   const stats = [
     { n: counts.drugs ? counts.drugs.toLocaleString() : '—', l: 'industry trials' },
     { n: counts.abstracts ? counts.abstracts.toLocaleString() : '—', l: 'conference abstracts' },
@@ -86,6 +87,24 @@ export default function LandingPage() {
           and how those translate into <b>industry clinical pipelines</b> — the research signal and
           the commercial solution, side by side. Set a filter once, explore both.
         </p>
+      </div>
+
+      {/* Update panel — 항상 표시 (최신 갱신일 + 구성 + 주간 갱신) */}
+      <div className="max-w-4xl mx-auto px-6 mb-4">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-xl border border-slate-200 bg-white/70 px-4 py-2 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Live
+          </span>
+          <span>Updated <b className="text-slate-700">{updated}</b></span>
+          <span className="text-slate-300">·</span>
+          <span><b className="text-slate-700">{(counts.drugs || 0).toLocaleString()}</b> trials</span>
+          <span className="text-slate-300">·</span>
+          <span><b className="text-slate-700">{(counts.abstracts || 0).toLocaleString()}</b> abstracts</span>
+          <span className="text-slate-300">·</span>
+          <span><b className="text-slate-700">{(counts.publications || 0).toLocaleString()}</b> publications</span>
+          <span className="text-slate-300">·</span>
+          <span>refreshed weekly (Mon)</span>
+        </div>
       </div>
 
       {/* Unified filter — center */}
@@ -117,16 +136,25 @@ export default function LandingPage() {
             <FilterMultiSelect label="Phase" options={facets?.phases ?? []} selected={f.phases} onChange={(v) => set('phases', v)} renderLabel={phaseLabel} />
           </div>
 
-          {/* Two destinations */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+          {/* Three destinations (axes) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
             <button
               onClick={() => go('/conference-visualize')}
               onMouseEnter={prefetchAbstracts}
               className="group text-left rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 hover:border-purple-300 transition-colors p-4"
             >
-              <div className="text-xs font-semibold text-purple-600 uppercase tracking-wide">Research</div>
-              <div className="mt-1 text-base font-bold text-slate-800">Conference Abstracts →</div>
-              <div className="mt-1 text-xs text-slate-500">ASCO, AACR &amp; ESMO studies, trends by year, players &amp; targets.</div>
+              <div className="text-xs font-semibold text-purple-600 uppercase tracking-wide">Conferences</div>
+              <div className="mt-1 text-base font-bold text-slate-800">Abstracts →</div>
+              <div className="mt-1 text-xs text-slate-500">ASCO · AACR · ESMO — early/interim research signal.</div>
+            </button>
+            <button
+              onClick={() => go('/publication-visualize')}
+              onMouseEnter={prefetchPublications}
+              className="group text-left rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 transition-colors p-4"
+            >
+              <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Publications</div>
+              <div className="mt-1 text-base font-bold text-slate-800">Journal Papers →</div>
+              <div className="mt-1 text-xs text-slate-500">NCT-linked peer-reviewed papers — mature/final evidence.</div>
             </button>
             <button
               onClick={() => go('/visualize')}
@@ -135,11 +163,14 @@ export default function LandingPage() {
             >
               <div className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Industry</div>
               <div className="mt-1 text-base font-bold text-slate-800">Clinical Pipeline →</div>
-              <div className="mt-1 text-xs text-slate-500">Industry-sponsored trials, partnership &amp; CDx opportunities.</div>
+              <div className="mt-1 text-xs text-slate-500">Industry-sponsored trials, partnership &amp; CDx.</div>
             </button>
           </div>
           <p className="mt-3 text-center text-xs text-slate-400">
-            Filters apply to both views. Prefer tables? Open <button onClick={() => go('/conferences')} className="text-purple-600 hover:underline">Abstracts</button> or <button onClick={() => go('/pipeline')} className="text-blue-600 hover:underline">Pipeline</button>.
+            Filters apply to all views. Prefer tables? Open{' '}
+            <button onClick={() => go('/conferences')} className="text-purple-600 hover:underline">Abstracts</button>,{' '}
+            <button onClick={() => go('/publications')} className="text-emerald-600 hover:underline">Publications</button> or{' '}
+            <button onClick={() => go('/pipeline')} className="text-blue-600 hover:underline">Pipeline</button>.
           </p>
         </div>
       </div>
@@ -159,28 +190,29 @@ export default function LandingPage() {
         <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">What's inside</h2>
         <div className="grid md:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-700">Research signal</span>
-            <h3 className="mt-3 text-base font-bold text-slate-800">ASCO, AACR &amp; ESMO</h3>
+            <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-700">Conferences</span>
+            <h3 className="mt-3 text-base font-bold text-slate-800">ASCO · AACR · ESMO</h3>
             <p className="mt-2 text-sm text-slate-500 leading-relaxed">
-              ~73k abstracts (US 2022–2026, Europe/ESMO 2022–2025) enriched with modality / target /
-              biomarker, normalized institutions &amp; countries, Korean summaries, and NCT cross-links
-              to the matching trial.
+              Conference abstracts (US 2022–2026, Europe/ESMO 2022–2025) — the <b>early/interim</b>
+              research signal, enriched with modality / target / biomarker, normalized institutions &amp;
+              countries, Korean summaries, and NCT links.
             </p>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-700">Industry solution</span>
-            <h3 className="mt-3 text-base font-bold text-slate-800">Industry clinical pipeline</h3>
+            <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">Publications</span>
+            <h3 className="mt-3 text-base font-bold text-slate-800">NCT-linked journal papers</h3>
             <p className="mt-2 text-sm text-slate-500 leading-relaxed">
-              33k industry-sponsored oncology trials across 6k companies — phase, status,
-              partnership and CDx-relevant targets, with linked papers.
+              ~28k peer-reviewed oncology papers tied to a trial (PubMed, 2020–) — the <b>mature/final</b>
+              evidence, with corresponding author, institution &amp; industry-company affiliation. Compare
+              interim (conference) vs final (journal) for the same NCT.
             </p>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded bg-teal-100 text-teal-700">One lens</span>
-            <h3 className="mt-3 text-base font-bold text-slate-800">Research → market, connected</h3>
+            <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-700">Pipeline</span>
+            <h3 className="mt-3 text-base font-bold text-slate-800">Industry clinical trials</h3>
             <p className="mt-2 text-sm text-slate-500 leading-relaxed">
-              Shared filters (cancer, modality, target, biomarker, company) carry across both views,
-              so a target's academic momentum and its commercial pipeline read as one story.
+              33k industry-sponsored oncology trials across 6k companies — phase, status, partnership
+              and CDx-relevant targets. Shared filters carry across all three axes, linked by NCT.
             </p>
           </div>
         </div>

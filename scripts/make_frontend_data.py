@@ -14,6 +14,7 @@ import glob
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from normalize_biomarkers import normalize_biomarker_list  # noqa: E402
@@ -191,6 +192,7 @@ def build_facets():
         return [k for k, _ in counter.most_common(n)]
 
     facets = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "counts": {"drugs": n_drugs, "abstracts": n_abstracts, "publications": n_pubs,
                    "companies": len(companies), "targets": len(targets),
                    "biomarkers": len(biomarkers)},
