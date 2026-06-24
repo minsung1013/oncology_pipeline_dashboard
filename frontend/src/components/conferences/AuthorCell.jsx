@@ -8,10 +8,10 @@ export default function AuthorCell({ raw, name: parsedName, onClick, count }) {
   // 우선 파싱된 author name 사용, 없으면 raw에서 첫 콤마 앞부분
   const name = parsedName || (commaIdx > -1 ? clean.slice(0, commaIdx).trim() : clean)
   const affil = commaIdx > -1 ? clean.slice(commaIdx + 1).trim() : ''
-  // 이 저자가 (현재 데이터에서) 교신저자로 등장한 기록 수
+  // 이 저자가 전체 코퍼스(학회+논문)에서 교신저자로 등장한 총 기록 수
   const badge = count > 1 ? (
     <span
-      title={`${count} records by this corresponding author (current view)`}
+      title={`${count} total records by this corresponding author (conferences + publications)`}
       className="ml-1 inline-flex items-center rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold px-1.5 leading-4 align-middle"
     >
       {count}

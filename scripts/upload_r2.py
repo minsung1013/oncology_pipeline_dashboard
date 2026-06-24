@@ -100,7 +100,7 @@ def main():
     files = ["data/frontend/index.json", "data/frontend/pub_index.json",
              "data/frontend/nct_index.json", "data/frontend/facets.json",
              "data/frontend/whatsnew.json", "data/frontend/snapshot.json",
-             "data/frontend/pipeline.json"]
+             "data/frontend/author_counts.json", "data/frontend/pipeline.json"]
     files = [f for f in files if os.path.exists(f)]
     files += sorted(glob.glob("data/frontend/abstracts/*.json"))
     files += sorted(glob.glob("data/frontend/publications/*.json"))

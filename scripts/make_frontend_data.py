@@ -302,6 +302,28 @@ def build_whatsnew(window_days=8):
           f"신규논문 {len(new_pubs)}, 새타겟 {len(emerging)})")
 
 
+def build_author_counts():
+    """전체 코퍼스 교신저자별 기록 수 (학회 초록 + 논문 합산). 저자명 옆 배지용.
+    대부분 1건이라 count>=2만 저장(파일 크기 축소). 파싱 파일 없으면 기존 보존."""
+    from collections import Counter
+    files = glob.glob("data/parsed/abstracts_*.json") + glob.glob("data/parsed/publications_*.json")
+    if not files:
+        print("author_counts: 파싱 파일 없음 — 스킵(기존 보존)")
+        return
+    c = Counter()
+    for fp in files:
+        for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
+            nm = (a.get("authors") or [{}])[0].get("name")
+            if nm:
+                c[nm] += 1
+    out = {k: v for k, v in c.items() if v >= 2}
+    os.makedirs(OUT, exist_ok=True)
+    path = f"{OUT}/author_counts.json"
+    json.dump(out, open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    print(f"author_counts -> {path}  ({len(out)} authors >=2 of {len(c)} total, "
+          f"{os.path.getsize(path)/1024:.0f}KB)")
+
+
 def build_pipeline():
     src = "data/parsed/pipeline.json"
     if not os.path.exists(src):
@@ -323,8 +345,8 @@ def build_pipeline():
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", choices=["abstracts", "pipeline", "facets", "publications", "whatsnew"], default=None,
-                    help="일부만 빌드 (CI에서 pipeline만 갱신 등)")
+    ap.add_argument("--only", choices=["abstracts", "pipeline", "facets", "publications", "whatsnew", "authorcounts"],
+                    default=None, help="일부만 빌드 (CI에서 pipeline만 갱신 등)")
     only = ap.parse_args().only
     if only in (None, "abstracts"):
         build_abstracts()
@@ -332,6 +354,8 @@ if __name__ == "__main__":
         build_publications()
     if only in (None, "abstracts", "publications"):
         build_nct_index()  # conference + publication 두 축 반영
+    if only in (None, "abstracts", "publications", "authorcounts"):
+        build_author_counts()  # 전체 교신저자 기록 수(배지)
     if only in (None, "pipeline"):
         build_pipeline()
     if only in (None, "facets"):

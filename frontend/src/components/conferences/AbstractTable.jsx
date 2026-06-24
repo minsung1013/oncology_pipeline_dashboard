@@ -6,8 +6,9 @@ import {
   flexRender,
   createColumnHelper,
 } from '@tanstack/react-table'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import AuthorCell from './AuthorCell'
+import { getAuthorCounts } from '../../utils/dataSource'
 import { normalizeCountry, normalizeAffiliation } from '../../utils/dataClean'
 import { presentationKind, presentationKindClass } from '../../utils/abstractMeta'
 
@@ -381,8 +382,10 @@ export default function AbstractTable({ abstracts, onAuthorClick, onNctClick, au
   const [sorting, setSorting] = useState([])
   const [columnSizing, setColumnSizing] = useState({})
 
-  // 교신저자별 기록 수 (현재 로드된 데이터 기준) — 저자명 옆 배지로 표시
-  const authorCounts = useMemo(() => {
+  // 교신저자별 기록 수 — 전체 코퍼스(학회+논문) 기준 글로벌 맵. 로드 전엔 현재 데이터로 폴백.
+  const [globalCounts, setGlobalCounts] = useState(null)
+  useEffect(() => { getAuthorCounts().then(setGlobalCounts).catch(() => {}) }, [])
+  const localCounts = useMemo(() => {
     const m = new Map()
     for (const a of abstracts) {
       const nm = a.authors?.[0]?.name
@@ -390,6 +393,7 @@ export default function AbstractTable({ abstracts, onAuthorClick, onNctClick, au
     }
     return m
   }, [abstracts])
+  const authorCounts = globalCounts ?? localCounts
 
   const table = useReactTable({
     data: abstracts,

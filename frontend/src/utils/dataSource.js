@@ -56,6 +56,16 @@ export async function getWhatsNew() {
   return _whatsnew
 }
 
+// 전체 코퍼스 교신저자별 기록 수 (학회+논문 합산, count>=2). 저자명 옆 배지용.
+let _authorCounts = null
+export async function getAuthorCounts() {
+  if (!_authorCounts) {
+    const r = await fetch(`${DATA_BASE}/author_counts.json`, REVALIDATE)
+    _authorCounts = new Map(r.ok ? Object.entries(await r.json()) : [])
+  }
+  return _authorCounts
+}
+
 export async function getAbstractIndex() {
   if (!_index) {
     const r = await fetch(INDEX_URL, REVALIDATE)
