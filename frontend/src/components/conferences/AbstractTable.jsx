@@ -37,6 +37,31 @@ function PhaseBadge({ phases }) {
   )
 }
 
+// 책임저자 소속(정규화) + 다중 소속이면 토글로 나머지 표시
+function AffiliationCell({ primary, author }) {
+  const [open, setOpen] = useState(false)
+  if (!primary) return <span className="text-slate-300">—</span>
+  const all = [...new Set((author?.affiliations || []).map(normalizeAffiliation).filter(Boolean))]
+  const extra = all.filter((a) => a !== primary)
+  return (
+    <div className="text-xs text-slate-600">
+      <span className="line-clamp-2" title={author?.affiliation}>{primary}</span>
+      {extra.length > 0 && (
+        <>
+          <button onClick={() => setOpen((o) => !o)} className="text-blue-500 hover:text-blue-700 mt-0.5 block">
+            {open ? '▲ less' : `+${extra.length} affil.`}
+          </button>
+          {open && (
+            <div className="mt-0.5 border-l-2 border-slate-200 pl-2 space-y-0.5">
+              {extra.map((a) => <div key={a}>{a}</div>)}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 function TagList({ items, colorCls = 'bg-slate-100 text-slate-600', max = 3 }) {
   if (!items?.length) return <span className="text-slate-300">—</span>
   return (
@@ -205,7 +230,7 @@ const COLUMNS = [
   }),
 
   col.accessor('author_raw', {
-    header: 'First Author',
+    header: ({ table }) => table.options.meta?.authorLabel ?? 'First Author',
     cell: ({ getValue, row, table }) => (
       <AuthorCell
         raw={getValue()}
@@ -220,16 +245,7 @@ const COLUMNS = [
     id: 'affiliation',
     header: 'Affiliation',
     sortUndefined: 'last',
-    cell: ({ getValue, row }) => {
-      const v = getValue()
-      if (!v) return <span className="text-slate-300">—</span>
-      // 표시는 기관 단위, 원문 전체는 hover 툴팁으로
-      return (
-        <span className="text-xs text-slate-600 line-clamp-2" title={row.original.authors?.[0]?.affiliation}>
-          {v}
-        </span>
-      )
-    },
+    cell: ({ getValue, row }) => <AffiliationCell primary={getValue()} author={row.original.authors?.[0]} />,
     size: 200,
   }),
 
@@ -357,7 +373,7 @@ const COLUMNS = [
   }),
 ]
 
-export default function AbstractTable({ abstracts, onAuthorClick, onNctClick }) {
+export default function AbstractTable({ abstracts, onAuthorClick, onNctClick, authorLabel }) {
   const [sorting, setSorting] = useState([])
   const [columnSizing, setColumnSizing] = useState({})
 
@@ -365,7 +381,7 @@ export default function AbstractTable({ abstracts, onAuthorClick, onNctClick }) 
     data: abstracts,
     columns: COLUMNS,
     state: { sorting, columnSizing },
-    meta: { onAuthorClick, onNctClick },
+    meta: { onAuthorClick, onNctClick, authorLabel },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
     columnResizeMode: 'onChange',

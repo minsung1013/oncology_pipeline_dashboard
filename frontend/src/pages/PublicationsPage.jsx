@@ -138,6 +138,7 @@ export default function PublicationsPage() {
         abstracts={filtered}
         onAuthorClick={(name) => setFilter('authorName', name)}
         onNctClick={focusInPipeline}
+        authorLabel="Lead Author"
       />
     </div>
   )

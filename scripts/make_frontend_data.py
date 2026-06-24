@@ -31,8 +31,8 @@ ABS_KEEP = [
 # 퍼블리케이션 lite 보존 필드 (초록 + 저널/PMID/출판유형)
 PUB_KEEP = ABS_KEEP + ["journal", "pmid", "publication_type"]
 
-# 저자는 첫 저자의 표시용 필드만
-AUTHOR_KEEP = ["name", "affiliation", "country"]
+# 저자는 대표 저자(학회=제1, 논문=교신/책임)의 표시용 필드 + 다중소속(토글용)
+AUTHOR_KEEP = ["name", "affiliation", "affiliations", "country", "role"]
 
 # pipeline lite 보존 필드 (프론트 테이블·필터·검색·배지에서 실제 사용)
 DRUG_KEEP = [
