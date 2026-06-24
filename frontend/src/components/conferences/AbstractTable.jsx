@@ -6,7 +6,7 @@ import {
   flexRender,
   createColumnHelper,
 } from '@tanstack/react-table'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import AuthorCell from './AuthorCell'
 import { normalizeCountry, normalizeAffiliation } from '../../utils/dataClean'
 import { presentationKind, presentationKindClass } from '../../utils/abstractMeta'
@@ -230,14 +230,18 @@ const COLUMNS = [
   }),
 
   col.accessor('author_raw', {
-    header: ({ table }) => table.options.meta?.authorLabel ?? 'First Author',
-    cell: ({ getValue, row, table }) => (
-      <AuthorCell
-        raw={getValue()}
-        name={row.original.authors?.[0]?.name}
-        onClick={table.options.meta?.onAuthorClick}
-      />
-    ),
+    header: ({ table }) => table.options.meta?.authorLabel ?? 'Corresponding Author',
+    cell: ({ getValue, row, table }) => {
+      const nm = row.original.authors?.[0]?.name
+      return (
+        <AuthorCell
+          raw={getValue()}
+          name={nm}
+          count={table.options.meta?.authorCounts?.get(nm)}
+          onClick={table.options.meta?.onAuthorClick}
+        />
+      )
+    },
     size: 180,
   }),
 
@@ -377,11 +381,21 @@ export default function AbstractTable({ abstracts, onAuthorClick, onNctClick, au
   const [sorting, setSorting] = useState([])
   const [columnSizing, setColumnSizing] = useState({})
 
+  // 교신저자별 기록 수 (현재 로드된 데이터 기준) — 저자명 옆 배지로 표시
+  const authorCounts = useMemo(() => {
+    const m = new Map()
+    for (const a of abstracts) {
+      const nm = a.authors?.[0]?.name
+      if (nm) m.set(nm, (m.get(nm) ?? 0) + 1)
+    }
+    return m
+  }, [abstracts])
+
   const table = useReactTable({
     data: abstracts,
     columns: COLUMNS,
     state: { sorting, columnSizing },
-    meta: { onAuthorClick, onNctClick, authorLabel },
+    meta: { onAuthorClick, onNctClick, authorLabel, authorCounts },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
     columnResizeMode: 'onChange',

@@ -252,7 +252,7 @@ export default function ConferenceVisualizePage() {
           />
           <DistributionBarChart
             title="Top Institutions"
-            subtitle="First-author affiliation, normalized to university / company level — click a bar to filter"
+            subtitle="Corresponding-author affiliation, normalized to university / company level — click a bar to filter"
             data={institutionData}
             selected={filters.institutions ?? []}
             baseColor="#6366f1"
@@ -268,7 +268,7 @@ export default function ConferenceVisualizePage() {
           />
           <DistributionBarChart
             title="Top Countries"
-            subtitle="First-author country across abstracts"
+            subtitle="Corresponding-author country across abstracts"
             data={countryData}
             baseColor="#0ea5e9"
             yWidth={120}

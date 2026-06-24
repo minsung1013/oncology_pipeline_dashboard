@@ -237,7 +237,7 @@ export function aggregateTrendByYear(abstracts, field, topN = 8, { excludeUnknow
   return { rows, keys }
 }
 
-// 초록 제1저자 국가 분포 → Top N + Other
+// 초록 교신저자 국가 분포 → Top N + Other
 export function aggregateAbstractsByCountry(abstracts, topN) {
   const counts = new Map()
   for (const a of abstracts) {
@@ -255,7 +255,7 @@ export function aggregateAbstractsByCountry(abstracts, topN) {
   return top
 }
 
-// 초록 제1저자 소속 기관(대학/회사) 분포 → Top N + Other
+// 초록 교신저자 소속 기관(대학/회사) 분포 → Top N + Other
 export function aggregateAbstractsByInstitution(abstracts, topN) {
   const counts = new Map()
   for (const a of abstracts) {

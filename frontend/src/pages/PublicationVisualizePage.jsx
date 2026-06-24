@@ -140,9 +140,9 @@ export default function PublicationVisualizePage() {
 
           <DistributionBarChart title="Top Companies" subtitle="Industry involvement (author affiliations) — click a bar to filter"
             data={companyData} selected={filters.companies ?? []} yWidth={120} onSelect={(v) => toggleFilter('companies', v)} />
-          <DistributionBarChart title="Top Institutions" subtitle="Lead-author institution — click a bar to filter"
+          <DistributionBarChart title="Top Institutions" subtitle="Corresponding-author institution — click a bar to filter"
             data={institutionData} selected={filters.institutions ?? []} baseColor="#6366f1" selectedColor="#4338ca" yWidth={150} onSelect={(v) => toggleFilter('institutions', v)} />
-          <DistributionBarChart title="Top Countries" subtitle="Lead-author country" data={countryData} baseColor="#0ea5e9" yWidth={120} />
+          <DistributionBarChart title="Top Countries" subtitle="Corresponding-author country" data={countryData} baseColor="#0ea5e9" yWidth={120} />
           <ChartCard title="Years" subtitle="Coverage" height={320}>
             <div className="h-full flex flex-col items-center justify-center gap-1 text-center">
               <span className="text-4xl font-bold text-slate-800">{stats.datasets}</span>
