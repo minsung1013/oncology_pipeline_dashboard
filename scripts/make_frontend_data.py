@@ -89,8 +89,11 @@ def build_publications():
 
 def build_abstracts():
     """연도·학회별 lite 파일 + manifest(index) 생성 → 프론트가 선택적 lazy 로드."""
-    os.makedirs(f"{OUT}/abstracts", exist_ok=True)
     files = sorted(glob.glob("data/parsed/abstracts_*.json"))
+    if not files:  # 안전장치: parsed 없으면 index 미생성(R2 기존 보존) — CI 번들 누락 시 라이브 보호
+        print("abstracts parsed 없음 — index 보존(스킵)")
+        return
+    os.makedirs(f"{OUT}/abstracts", exist_ok=True)
     manifest = []
     for fp in files:
         d = json.load(open(fp, encoding="utf-8"))
@@ -112,6 +115,9 @@ def build_abstracts():
 
 def build_nct_index():
     """NCT → [{uid, axis, conference/journal, year}] (Pipeline ↔ Conferences ↔ Publications 크로스링크)."""
+    if not glob.glob("data/parsed/abstracts_*.json") and not glob.glob("data/parsed/publications_*.json"):
+        print("abstracts/publications parsed 없음 — nct_index 보존(스킵)")
+        return
     idx = {}
     for fp in sorted(glob.glob("data/parsed/abstracts_*.json")):
         d = json.load(open(fp, encoding="utf-8"))
@@ -132,8 +138,11 @@ def build_nct_index():
 
 
 def build_facets():
-    """랜딩 통합 필터용 경량 옵션 파일. pipeline(drugs)+abstracts 합집합."""
+    """랜딩 통합 필터용 경량 옵션 파일. pipeline(drugs)+abstracts+publications 합집합."""
     from collections import Counter
+    if not glob.glob("data/parsed/abstracts_*.json") and not glob.glob("data/parsed/publications_*.json"):
+        print("abstracts/publications parsed 없음 — facets 보존(스킵)")
+        return
 
     cancers, modalities = set(), set()
     targets, biomarkers, companies = Counter(), Counter(), Counter()

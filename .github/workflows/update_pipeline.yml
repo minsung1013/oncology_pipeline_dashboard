@@ -1,4 +1,4 @@
-name: Update Oncology Pipeline Data
+name: Update Oncology Data (pipeline + publications)
 
 on:
   schedule:
@@ -8,6 +8,13 @@ on:
 # 필요 시크릿 (Settings > Secrets and variables > Actions):
 #   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_BASE_URL
 # 데이터는 git에 커밋하지 않고 Cloudflare R2로 업로드 (frontend가 R2에서 fetch).
+#
+# 주간 갱신 범위:
+#   - Clinical pipeline (ClinicalTrials.gov) 전체 재수집
+#   - Publications (PubMed) 현재 연도 재수집 + OpenAlex 저자/소속/회사 보강
+#   - 학회 초록은 행사 기반(연 1회성)이라 주간 재수집 안 함 — parsed 번들에서 유지
+#     (새 학회는 로컬에서 LLM 요약과 함께 갱신)
+#   - LLM 한국어 요약은 Ollama(로컬 GPU) 필요 → CI는 기존 값 유지(번들), 신규분은 로컬 보강
 
 jobs:
   update:
@@ -15,6 +22,12 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: write
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_BASE_URL: ${{ secrets.R2_BASE_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,34 +41,43 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # 증분 논문매칭 베이스: 직전 pipeline.json을 R2에서 받아옴 (git 커밋분 아님)
+      # 과거 parsed 코퍼스(학회 초록 + 논문, 한국어 요약 포함)를 R2에서 받아옴
+      - name: Pull parsed corpus from R2
+        run: |
+          python scripts/sync_parsed.py download "${R2_BASE_URL}" || \
+            echo "(no parsed corpus yet — conference/older pubs may be missing)"
+
+      # 증분 논문매칭 베이스: 직전 pipeline.json
       - name: Pull previous pipeline.json from R2
         run: |
           mkdir -p data/parsed
-          curl -fsSL "${{ secrets.R2_BASE_URL }}/pipeline.json" -o data/parsed/pipeline.json || \
+          curl -fsSL "${R2_BASE_URL}/pipeline.json" -o data/parsed/pipeline.json || \
             echo "(no previous pipeline.json — full build)"
 
-      - name: Refresh pipeline (ClinicalTrials.gov)
+      - name: Refresh clinical pipeline (ClinicalTrials.gov)
         run: python scripts/run_pipeline.py --mode full
 
-      # 커밋된 LLM 캐시 재적용(Ollama 없이 modality/target 보강 유지) + 값 정규화
-      - name: Re-apply LLM enrichment + normalize
+      - name: Refresh current-year publications (PubMed + OpenAlex)
+        run: |
+          YEAR=$(date -u +%Y)
+          python scripts/fetch_publications.py --years "$YEAR"
+          python scripts/enrich_pub_authors.py --glob "data/parsed/publications_${YEAR}.json"
+
+      # 커밋된 LLM 약물 캐시 재적용(modality/target 유지) + 정규화
+      - name: Re-apply enrichment + normalize
         run: |
           python scripts/llm_merge.py --write || true
           python scripts/normalize_fields.py --write || true
 
-      - name: Build lite frontend payload (pipeline)
-        run: python scripts/make_frontend_data.py --only pipeline
+      - name: Build lite frontend payload (full)
+        run: python scripts/make_frontend_data.py
 
-      - name: Upload to R2
-        env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-        run: python scripts/upload_r2.py
+      - name: Upload frontend + parsed corpus to R2
+        run: |
+          python scripts/upload_r2.py
+          python scripts/sync_parsed.py upload
 
-      # 갱신된 LLM 캐시(신규 약물 분류)만 git에 커밋 (소형)
+      # 갱신된 LLM 약물 캐시(신규 분류)만 git에 커밋 (소형)
       - name: Commit LLM cache
         run: |
           git config user.name "github-actions[bot]"

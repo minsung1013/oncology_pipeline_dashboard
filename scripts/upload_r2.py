@@ -97,9 +97,12 @@ def put_object(env, key, body: bytes, content_type="application/json", content_e
 
 def main():
     env = load_env()
-    files = ["data/frontend/index.json", "data/frontend/nct_index.json", "data/frontend/pipeline.json"]
+    files = ["data/frontend/index.json", "data/frontend/pub_index.json",
+             "data/frontend/nct_index.json", "data/frontend/facets.json",
+             "data/frontend/pipeline.json"]
     files = [f for f in files if os.path.exists(f)]
     files += sorted(glob.glob("data/frontend/abstracts/*.json"))
+    files += sorted(glob.glob("data/frontend/publications/*.json"))
     print(f"[R2] {env['R2_BUCKET']} 에 {len(files)}개 업로드 (gzip)")
     for fp in files:
         key = os.path.relpath(fp, "data/frontend").replace(os.sep, "/")
