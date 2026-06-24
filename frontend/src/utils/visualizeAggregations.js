@@ -21,12 +21,7 @@ export function phaseLabel(p) {
 }
 
 // 회사·암종·타겟 공용: field로 group-by count → Top N + Other
-export function aggregateByField(drugs, field, topN) {
-  const counts = new Map()
-  for (const d of drugs) {
-    const key = d[field] || 'Unknown'
-    counts.set(key, (counts.get(key) ?? 0) + 1)
-  }
+function topNFromCounts(counts, topN) {
   const sorted = [...counts.entries()]
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
@@ -38,6 +33,27 @@ export function aggregateByField(drugs, field, topN) {
   const otherCount = rest.reduce((sum, r) => sum + r.count, 0)
   if (otherCount > 0) top.push({ name: `Other (${rest.length})`, count: otherCount, isOther: true })
   return top
+}
+
+export function aggregateByField(drugs, field, topN) {
+  const counts = new Map()
+  for (const d of drugs) {
+    const key = d[field] || 'Unknown'
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return topNFromCounts(counts, topN)
+}
+
+// accessor가 약물당 여러 값(배열)을 반환 — 각 값에 1씩 카운트(회사: 메인+협력사).
+export function aggregateByAccessor(drugs, accessor, topN) {
+  const counts = new Map()
+  for (const d of drugs) {
+    const keys = accessor(d)
+    for (const key of (keys && keys.length ? keys : ['Unknown'])) {
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+  }
+  return topNFromCounts(counts, topN)
 }
 
 // Phase: 단일 phase 필드 기준 카운트 (콤보 라벨 그대로) — 스펙 §5②

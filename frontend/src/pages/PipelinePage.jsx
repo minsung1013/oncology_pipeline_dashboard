@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import DrugFilterBar from '../components/common/DrugFilterBar'
 import CompanyList from '../components/pipeline/CompanyList'
 import PipelineTable from '../components/pipeline/PipelineTable'
-import { applyDrugFilters, getDrugFilterOptions, groupByCompany } from '../utils/drugFilters'
+import { applyDrugFilters, getDrugFilterOptions, groupByCompany, drugCompanies } from '../utils/drugFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 
 import { getPipeline, getNctIndex } from '../utils/dataSource'
@@ -99,7 +99,7 @@ export default function PipelinePage() {
 
   const tableDrugs = useMemo(() => {
     if (nctParam || !selectedCompany) return filteredDrugs
-    return filteredDrugs.filter((d) => d.company === selectedCompany)
+    return filteredDrugs.filter((d) => drugCompanies(d).includes(selectedCompany))
   }, [filteredDrugs, selectedCompany, nctParam])
 
   function handleSelectCompany(company) {

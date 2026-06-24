@@ -13,6 +13,7 @@ import AbstractsByYearChart from '../components/visualize/AbstractsByYearChart'
 import { statusLabel } from '../components/visualize/statusMeta'
 import {
   aggregateByField,
+  aggregateByAccessor,
   aggregateByPhaseStatus,
   aggregateByStatus,
   aggregateByModality,
@@ -23,7 +24,7 @@ import {
   getSummaryStats,
   phaseLabel,
 } from '../utils/visualizeAggregations'
-import { getDrugFilterOptions, applyDrugFilters, DRUG_FILTER_DEFAULT } from '../utils/drugFilters'
+import { getDrugFilterOptions, applyDrugFilters, DRUG_FILTER_DEFAULT, drugCompanies } from '../utils/drugFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 import { getPipeline, getAbstractIndex, loadAbstractFiles } from '../utils/dataSource'
 
@@ -120,9 +121,9 @@ export default function VisualizePage() {
   const hasActive = activeCount > 0
 
   const stats = useMemo(() => getSummaryStats(drugs), [drugs])
-  // 정규 제약사명 기준 (미인식 회사는 제외 — 빅파마 활동 뷰)
+  // 정규 제약사명 기준, 메인 스폰서 + 협력사 동등 집계 (미인식 회사는 제외)
   const companyData = useMemo(
-    () => aggregateByField(drugs.filter((d) => d.company_normalized), 'company_normalized', topN),
+    () => aggregateByAccessor(drugs.filter((d) => drugCompanies(d).length), drugCompanies, topN),
     [drugs, topN],
   )
   const drugData = useMemo(() => aggregateByField(drugs, 'drug_name', topN), [drugs, topN])

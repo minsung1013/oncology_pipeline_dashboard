@@ -18,8 +18,29 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from normalize_biomarkers import normalize_biomarker_list  # noqa: E402
+from normalize_entities import normalize_companies  # noqa: E402
 
 OUT = "data/frontend"
+
+_co_cache = {}
+
+
+def drug_companies(d):
+    """약물의 전체 관여 회사 = 메인 스폰서 + 정규화된 협력사(collaborators).
+    파트너사를 메인과 동등하게 다루기 위함. 학술기관은 normalize_companies가 제외."""
+    out = []
+    main = d.get("company_normalized")
+    if main:
+        out.append(main)
+    for c in d.get("collaborators") or []:
+        norm = _co_cache.get(c)
+        if norm is None:
+            norm = normalize_companies(c) or []
+            _co_cache[c] = norm
+        for n in norm:
+            if n and n not in out:
+                out.append(n)
+    return out
 
 # 초록 lite에 보존할 필드 (본문 제외)
 ABS_KEEP = [
@@ -162,8 +183,8 @@ def build_facets():
                 targets[d["target"]] += 1
             for b in normalize_biomarker_list(d.get("biomarker_list")):
                 biomarkers[b] += 1
-            if d.get("company_normalized"):
-                companies[d["company_normalized"]] += 1
+            for co in drug_companies(d):  # 메인 + 협력사(정규화) 동등 집계
+                companies[co] += 1
 
     # 초록 (리스트 필드)
     for fp in sorted(glob.glob("data/parsed/abstracts_*.json")):
@@ -312,6 +333,7 @@ def build_pipeline():
     for x in drugs:  # 바이오마커 유전자 기준 정규화 (초록과 동일 체계)
         if "biomarker_list" in x:
             x["biomarker_list"] = normalize_biomarker_list(x.get("biomarker_list"))
+        x["companies_all"] = drug_companies(x)  # 메인 + 협력사(정규화) — 필터/사이드바 동등 처리
     out = {"metadata": d.get("metadata", {}), "drugs": drugs}
     os.makedirs(OUT, exist_ok=True)
     path = f"{OUT}/pipeline.json"
