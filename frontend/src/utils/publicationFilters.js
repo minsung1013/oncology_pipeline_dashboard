@@ -7,7 +7,7 @@ const SHARED = ['cancers', 'phases', 'modalities', 'companies', 'targets', 'biom
 
 export const PUB_LOCAL_DEFAULT = {
   conferences: [], years: [], countries: [], presentationKinds: [],
-  affiliation: '', authorName: '', showEmbargoed: true,
+  affiliation: '', authorName: '', authorAffil: '', showEmbargoed: true,
 }
 
 export function buildPublicationFilters() {
@@ -18,7 +18,8 @@ export function buildPublicationFilters() {
     targets: s.targets, biomarkers: s.biomarkers, institutions: s.institutions ?? [], keyword: s.keyword ?? '',
     conferences: l.conferences ?? [], years: l.years ?? [], countries: l.countries ?? [],
     presentationKinds: l.presentationKinds ?? [],
-    affiliation: l.affiliation ?? '', authorName: l.authorName ?? '', showEmbargoed: l.showEmbargoed ?? true,
+    affiliation: l.affiliation ?? '', authorName: l.authorName ?? '', authorAffil: l.authorAffil ?? '',
+    showEmbargoed: l.showEmbargoed ?? true,
   }
 }
 
@@ -34,7 +35,8 @@ function persistLocal(next) {
   setTabState('publications', {
     conferences: next.conferences, years: next.years, countries: next.countries,
     presentationKinds: next.presentationKinds,
-    affiliation: next.affiliation, authorName: next.authorName, showEmbargoed: next.showEmbargoed,
+    affiliation: next.affiliation, authorName: next.authorName, authorAffil: next.authorAffil,
+    showEmbargoed: next.showEmbargoed,
   })
 }
 

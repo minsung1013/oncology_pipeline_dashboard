@@ -160,8 +160,9 @@ export default function ConferencesPage() {
           {filters.authorName && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border border-violet-300 bg-violet-50 text-violet-800 font-medium">
               Author: {filters.authorName}
+              {filters.authorAffil && <span className="font-normal text-violet-500">· {filters.authorAffil}</span>}
               <button
-                onClick={() => setFilter('authorName', '')}
+                onClick={() => { setFilter('authorName', ''); setFilter('authorAffil', '') }}
                 className="ml-1 text-violet-500 hover:text-violet-700"
               >
                 ✕
@@ -185,7 +186,7 @@ export default function ConferencesPage() {
       {/* Table */}
       <AbstractTable
         abstracts={filtered}
-        onAuthorClick={(name) => setFilter('authorName', name)}
+        onAuthorClick={(name, affil) => { setFilter('authorName', name); setFilter('authorAffil', affil) }}
         onNctClick={focusInPipeline}
       />
     </div>

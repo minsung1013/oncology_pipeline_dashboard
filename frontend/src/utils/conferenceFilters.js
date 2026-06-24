@@ -8,7 +8,7 @@ const SHARED = ['cancers', 'phases', 'modalities', 'companies', 'targets', 'biom
 
 export const CONF_LOCAL_DEFAULT = {
   conferences: [], years: [], countries: [], presentationKinds: [],
-  affiliation: '', authorName: '', showEmbargoed: false,
+  affiliation: '', authorName: '', authorAffil: '', showEmbargoed: false,
 }
 
 export function buildConferenceFilters() {
@@ -19,7 +19,8 @@ export function buildConferenceFilters() {
     targets: s.targets, biomarkers: s.biomarkers, institutions: s.institutions ?? [], keyword: s.keyword ?? '',
     conferences: l.conferences ?? [], years: l.years ?? [], countries: l.countries ?? [],
     presentationKinds: l.presentationKinds ?? [],
-    affiliation: l.affiliation ?? '', authorName: l.authorName ?? '', showEmbargoed: l.showEmbargoed ?? false,
+    affiliation: l.affiliation ?? '', authorName: l.authorName ?? '', authorAffil: l.authorAffil ?? '',
+    showEmbargoed: l.showEmbargoed ?? false,
   }
 }
 
@@ -36,7 +37,8 @@ function persistLocal(next) {
   setTabState('conferences', {
     conferences: next.conferences, years: next.years, countries: next.countries,
     presentationKinds: next.presentationKinds,
-    affiliation: next.affiliation, authorName: next.authorName, showEmbargoed: next.showEmbargoed,
+    affiliation: next.affiliation, authorName: next.authorName, authorAffil: next.authorAffil,
+    showEmbargoed: next.showEmbargoed,
   })
 }
 
@@ -80,7 +82,7 @@ export function anyConferenceFilter(filters, nctParam) {
 export function nctOnlyFilters(nct) {
   return {
     cancers: [], phases: [], modalities: [], companies: [], targets: [], biomarkers: [], institutions: [],
-    conferences: [], years: [], countries: [], presentationKinds: [], affiliation: '', authorName: '', keyword: '',
+    conferences: [], years: [], countries: [], presentationKinds: [], affiliation: '', authorName: '', authorAffil: '', keyword: '',
     nctId: nct, showEmbargoed: true,
   }
 }

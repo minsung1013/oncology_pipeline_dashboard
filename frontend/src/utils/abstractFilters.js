@@ -5,7 +5,7 @@ export function applyAbstractFilters(abstracts, filters) {
   const {
     conferences, years, phases, modalities, cancers, countries, companies,
     targets = [], biomarkers = [], institutions = [], presentationKinds = [], affiliation,
-    authorName, keyword, nctId, showEmbargoed,
+    authorName, authorAffil, keyword, nctId, showEmbargoed,
   } = filters
 
   const affilQ = affiliation?.trim().toLowerCase()
@@ -29,6 +29,8 @@ export function applyAbstractFilters(abstracts, filters) {
     if (presentationKinds.length > 0 && !presentationKinds.includes(presentationKind(a))) return false
     if (affilQ && !(a.authors?.[0]?.affiliation ?? '').toLowerCase().includes(affilQ)) return false
     if (authorName && a.authors?.[0]?.name !== authorName) return false
+    // 동명이인 구분: 이름 클릭 시 소속도 함께 매칭 (authorAffil 지정 시)
+    if (authorAffil && (a.authors?.[0]?.affiliation ?? '') !== authorAffil) return false
     if (nctId && !(a.nct_ids ?? []).includes(nctId)) return false
 
     if (keyword) {

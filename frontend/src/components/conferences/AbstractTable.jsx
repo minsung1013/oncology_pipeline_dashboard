@@ -234,12 +234,13 @@ const COLUMNS = [
     header: ({ table }) => table.options.meta?.authorLabel ?? 'Corresponding Author',
     cell: ({ getValue, row, table }) => {
       const au = row.original.authors?.[0]
+      const cb = table.options.meta?.onAuthorClick
       return (
         <AuthorCell
           raw={getValue()}
           name={au?.name}
           count={au?.name ? table.options.meta?.authorCounts?.get(authorKey(au)) : undefined}
-          onClick={table.options.meta?.onAuthorClick}
+          onClick={cb && ((nm) => cb(nm, au?.affiliation ?? ''))}
         />
       )
     },

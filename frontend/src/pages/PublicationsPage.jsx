@@ -119,7 +119,8 @@ export default function PublicationsPage() {
           {filters.authorName && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border border-violet-300 bg-violet-50 text-violet-800 font-medium">
               Author: {filters.authorName}
-              <button onClick={() => setFilter('authorName', '')} className="ml-1 text-violet-500 hover:text-violet-700">✕</button>
+              {filters.authorAffil && <span className="font-normal text-violet-500">· {filters.authorAffil}</span>}
+              <button onClick={() => { setFilter('authorName', ''); setFilter('authorAffil', '') }} className="ml-1 text-violet-500 hover:text-violet-700">✕</button>
             </div>
           )}
           <ConferenceFilterBar
