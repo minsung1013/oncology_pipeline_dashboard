@@ -76,7 +76,8 @@ export function normalizeAffiliation(raw) {
   }
   const kept = parts.filter((p) => !SUBUNIT.test(p))
   const pool = kept.length ? kept : parts
-  let chosen = pool.find((p) => hasInst(p)) ?? pool[0]
+  // 가장 넓은 기관: university 포함 토막 우선 → 기관 키워드 → 첫 토막
+  let chosen = pool.find((p) => /universit/i.test(p)) ?? pool.find((p) => hasInst(p)) ?? pool[0]
   // 멀티캠퍼스 대학: 다음 토막이 캠퍼스/도시면 붙여 UCSF/UCLA 구분 유지
   if (MULTI_CAMPUS.test(chosen)) {
     const idx = parts.indexOf(chosen)
@@ -84,7 +85,10 @@ export function normalizeAffiliation(raw) {
     if (nxt && nxt.split(/\s+/).length <= 3 && !hasInst(nxt)) chosen = `${chosen}, ${nxt}`
   }
   for (const [rx, std] of AFFIL_CANON) if (rx.test(chosen)) return std
-  // "X University School/College/Faculty of …" → "X University"
+  // university 포함 기관명 끝의 부속(병원/헬스시스템/메디컬센터…) 제거 → 대학 단위로 광역화
+  // "Yonsei University Health System" → "Yonsei University", "The University of Tokyo Hospital" → "The University of Tokyo"
+  const trail = chosen.match(/^(.+?\buniversit\w*\b.*?)\s+(?:Health\s+System|Health\s+Network|Hospitals?|Medical\s+Cent(?:er|re)|College\s+of\s+Medicine|School\s+of\s+Medicine|Cancer\s+Cent(?:er|re)|Health)\s*$/i)
+  if (trail) return trail[1]
   const m = chosen.match(/^(.*\bUniversity)\s+(?:School|College|Faculty)\s+of\s+.+$/i)
   return m ? m[1] : chosen
 }

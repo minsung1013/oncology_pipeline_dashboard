@@ -21,6 +21,84 @@ from normalize_biomarkers import normalize_biomarker_list  # noqa: E402
 
 OUT = "data/frontend"
 
+# ── 소속(affiliation) → 기관(학교/회사) 최광역 단위 정규화 ──────────────────────
+# frontend/src/utils/dataClean.js 의 normalizeAffiliation 과 동일 규칙(+ university 우선,
+# "<X University> Health System/Hospital/Medical Center …" → "<X University>" 광역 합치기).
+import re as _re  # noqa: E402
+
+_AF_SUBUNIT = _re.compile(r"^(the\s+)?(department|dept|division|divisione|faculty|school|section|unit|"
+                          r"laboratory|lab|center for|centre for|programme?|service|chair|servicio|servizio|"
+                          r"dipartimento|abteilung|departement|departamento|"
+                          r"institute of (molecular|clinical|cancer research|oncology))\b", _re.I)
+_AF_CO_SUFFIX = _re.compile(r"^(inc|ltd|llc|gmbh|co|corp|corporation|company|ag|plc|s\.?a|sas|bv|"
+                            r"pvt\.?\s*ltd|pvt|aps|oy|ab)\.?$", _re.I)
+_AF_HAS_CO = _re.compile(r"\b(pharmaceuticals?|therapeutics|biosciences?|biopharma|biotech|oncology|"
+                         r"genomics|medicines?|sciences?)\b", _re.I)
+_AF_INST_KW = ["universit", "college", "hospital", "institute", "institut", "cancer cent", "medical cent",
+               "clinic", "klinik", "foundation", "school of medicine", "health system", "health network",
+               "centre", "center", "pharmaceutic", "therapeutics", "biosciences", "biotech",
+               "laboratories", "nhs", "academy", "clinica"]
+_AF_CANON = [
+    (_re.compile(r"md anderson", _re.I), "MD Anderson Cancer Center"),
+    (_re.compile(r"sloan.?kettering|mskcc|memorial sloan", _re.I), "Memorial Sloan Kettering Cancer Center"),
+    (_re.compile(r"dana.?farber", _re.I), "Dana-Farber Cancer Institute"),
+    (_re.compile(r"moffitt", _re.I), "Moffitt Cancer Center"),
+    (_re.compile(r"mayo clinic", _re.I), "Mayo Clinic"),
+    (_re.compile(r"cleveland clinic", _re.I), "Cleveland Clinic"),
+    (_re.compile(r"massachusetts general", _re.I), "Massachusetts General Hospital"),
+]
+_AF_MULTI_CAMPUS = _re.compile(r"^University of (California|Texas|Colorado|Washington|Pittsburgh|Wisconsin)$", _re.I)
+# university를 포함하는 기관명 끝의 부속(병원/헬스시스템/메디컬센터…)을 떼어 대학 단위로 광역화.
+# group1에 'universit' 필수, 접미사는 문자열 끝. "Yonsei University Health System"→"Yonsei University",
+# "The University of Tokyo Hospital"→"The University of Tokyo".
+_AF_UNIV_TRAIL = _re.compile(r"^(.+?\buniversit\w*\b.*?)\s+(?:Health\s+System|Health\s+Network|Hospitals?|"
+                             r"Medical\s+Cent(?:er|re)|College\s+of\s+Medicine|School\s+of\s+Medicine|"
+                             r"Cancer\s+Cent(?:er|re)|Health)\s*$", _re.I)
+_AF_SCHOOL_OF = _re.compile(r"^(.*\bUniversity)\s+(?:School|College|Faculty)\s+of\s+.+$", _re.I)
+_af_cache = {}
+
+
+def _af_has_inst(p):
+    pl = p.lower()
+    return any(k in pl for k in _AF_INST_KW) or bool(_AF_HAS_CO.search(p))
+
+
+def normalize_affiliation(raw):
+    if not raw:
+        return raw
+    if raw in _af_cache:
+        return _af_cache[raw]
+    segs = [s.strip() for s in _re.split(r"[;,]", str(raw)) if s.strip()]
+    if not segs:
+        return str(raw).strip()
+    parts = []
+    for p in segs:
+        if parts and _AF_CO_SUFFIX.match(p):
+            parts[-1] += f", {p}"
+        else:
+            parts.append(p)
+    kept = [p for p in parts if not _AF_SUBUNIT.match(p)]
+    pool = kept if kept else parts
+    # 가장 넓은 기관: university 포함 토막 우선 → 기관 키워드 → 첫 토막
+    chosen = (next((p for p in pool if "universit" in p.lower()), None)
+              or next((p for p in pool if _af_has_inst(p)), None) or pool[0])
+    if _AF_MULTI_CAMPUS.match(chosen):
+        idx = parts.index(chosen) if chosen in parts else -1
+        nxt = parts[idx + 1] if 0 <= idx < len(parts) - 1 else None
+        if nxt and len(nxt.split()) <= 3 and not _af_has_inst(nxt):
+            chosen = f"{chosen}, {nxt}"
+    out = chosen
+    for rx, std in _AF_CANON:
+        if rx.search(chosen):
+            out = std
+            break
+    else:
+        m = _AF_UNIV_TRAIL.match(chosen) or _AF_SCHOOL_OF.match(chosen)
+        if m:
+            out = m.group(1)
+    _af_cache[raw] = out
+    return out
+
 # 초록 lite에 보존할 필드 (본문 제외)
 ABS_KEEP = [
     "uid", "conference", "year", "abstract_id", "is_lba", "status", "presentation_type",
@@ -53,7 +131,21 @@ def _lite_record(a, keep=ABS_KEEP):
     if "biomarker_list" in rec:
         rec["biomarker_list"] = normalize_biomarker_list(rec.get("biomarker_list"))
     if rec.get("authors"):
-        rec["authors"] = [{k: au.get(k) for k in AUTHOR_KEEP} for au in rec["authors"][:1]]
+        out_au = []
+        for au in rec["authors"][:1]:
+            o = {k: au.get(k) for k in AUTHOR_KEEP}
+            if o.get("affiliation"):  # 기관 최광역 단위로 정규화 (표시·필터·카운트 단일 소스)
+                o["affiliation"] = normalize_affiliation(o["affiliation"])
+            if o.get("affiliations"):
+                seen, norm = set(), []
+                for x in o["affiliations"]:
+                    n = normalize_affiliation(x)
+                    if n and n not in seen:
+                        seen.add(n)
+                        norm.append(n)
+                o["affiliations"] = norm
+            out_au.append(o)
+        rec["authors"] = out_au
     # source는 doi/pmid만 (url 제거 — 용량)
     if rec.get("source"):
         s = rec["source"]
@@ -319,8 +411,8 @@ def build_author_counts():
         for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
             au = (a.get("authors") or [{}])[0]
             nm = au.get("name")
-            if nm:
-                c[nm + AUTHOR_KEY_SEP + (au.get("affiliation") or "")] += 1
+            if nm:  # 키 소속 = lite와 동일하게 정규화 (프론트 authorKey와 매칭)
+                c[nm + AUTHOR_KEY_SEP + normalize_affiliation(au.get("affiliation") or "")] += 1
     out = {k: v for k, v in c.items() if v >= 2}
     os.makedirs(OUT, exist_ok=True)
     path = f"{OUT}/author_counts.json"
