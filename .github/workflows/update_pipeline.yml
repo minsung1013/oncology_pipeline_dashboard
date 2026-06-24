@@ -57,10 +57,14 @@ jobs:
       - name: Refresh clinical pipeline (ClinicalTrials.gov)
         run: python scripts/run_pipeline.py --mode full
 
-      - name: Refresh current-year publications (PubMed + OpenAlex)
+      # 현재 + 직전 연도 재수집 — 논문은 출판 후에도 PubMed 색인/NCT 링크가 지연되어
+      # 붙는 경우가 많아 직전 연도까지 갱신해야 누락이 안 생긴다 (연말 경계도 자동 처리).
+      - name: Refresh recent publications (PubMed + OpenAlex)
         run: |
           YEAR=$(date -u +%Y)
-          python scripts/fetch_publications.py --years "$YEAR"
+          PREV=$((YEAR - 1))
+          python scripts/fetch_publications.py --years "$PREV" "$YEAR"
+          python scripts/enrich_pub_authors.py --glob "data/parsed/publications_${PREV}.json"
           python scripts/enrich_pub_authors.py --glob "data/parsed/publications_${YEAR}.json"
 
       # 커밋된 LLM 약물 캐시 재적용(modality/target 유지) + 정규화
