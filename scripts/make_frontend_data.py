@@ -219,6 +219,89 @@ def build_facets():
           f"targets {len(facets['targets'])}, biomarkers {len(facets['biomarkers'])}, companies {len(facets['companies'])})")
 
 
+def build_whatsnew(window_days=8):
+    """이번 주(window) 신규/갱신 trial + 신규 논문 + 새 타겟 → whatsnew.json.
+    trial은 first_post/last_update 날짜로, 논문은 직전 스냅샷(snapshot.json) 대비 PMID 차이로 산정.
+    새 타겟 = 신규 항목에 등장하면서 전체 코퍼스에서 희소한(=막 진입한) 타겟."""
+    from datetime import timedelta
+    from collections import Counter
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days)).strftime("%Y-%m-%d")
+
+    # 전체 코퍼스 타겟 빈도 (희소성 판단용)
+    tfreq = Counter()
+    pl_path = "data/parsed/pipeline.json"
+    drugs = json.load(open(pl_path, encoding="utf-8"))["drugs"] if os.path.exists(pl_path) else []
+    for d in drugs:
+        t = d.get("target")
+        if t and t != "Unknown":
+            tfreq[t] += 1
+    for pat in ("data/parsed/abstracts_*.json", "data/parsed/publications_*.json"):
+        for fp in glob.glob(pat):
+            for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
+                for t in a.get("target_list") or []:
+                    if t and t != "Unknown":
+                        tfreq[t] += 1
+
+    def trial_row(d):
+        return {"nct": (d.get("nct_ids") or [None])[0], "drug": d.get("drug_name"),
+                "company": d.get("company_normalized"), "target": d.get("target"),
+                "modality": d.get("modality"), "phase": d.get("phase"),
+                "cancer": d.get("cancer_category"), "status": d.get("overall_status"),
+                "date": d.get("first_post_date") or d.get("last_update_date")}
+
+    new_trials = [trial_row(d) for d in drugs if (d.get("first_post_date") or "") >= cutoff]
+    updated_trials = [trial_row(d) for d in drugs
+                      if (d.get("last_update_date") or "") >= cutoff
+                      and (d.get("first_post_date") or "") < cutoff]
+
+    # 논문: 직전 스냅샷 대비 신규 PMID
+    snap_path = f"{OUT}/snapshot.json"
+    prev = json.load(open(snap_path, encoding="utf-8")) if os.path.exists(snap_path) else {}
+    prev_pmids = set(prev.get("pmids", []))
+    cur_pmids, new_pubs = [], []
+    for fp in sorted(glob.glob("data/parsed/publications_*.json")):
+        for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
+            pmid = (a.get("source") or {}).get("pmid")
+            if not pmid:
+                continue
+            cur_pmids.append(pmid)
+            if prev_pmids and pmid not in prev_pmids:
+                au = (a.get("authors") or [{}])[0]
+                new_pubs.append({"pmid": pmid, "title": a.get("title"), "journal": a.get("conference"),
+                                 "target": a.get("target_list") or [], "company": a.get("companies_normalized") or [],
+                                 "cancer": a.get("cancer_category") or [], "year": a.get("year")})
+
+    # 새 타겟: 이번 주 신규/갱신 trial + 신규 논문에 등장 + 코퍼스 희소
+    week_targets = Counter()
+    for r in new_trials + updated_trials:
+        if r["target"] and r["target"] != "Unknown":
+            week_targets[r["target"]] += 1
+    for p in new_pubs:
+        for t in p["target"]:
+            if t and t != "Unknown":
+                week_targets[t] += 1
+    emerging = sorted(
+        ({"target": t, "this_week": n, "corpus_total": tfreq.get(t, 0)} for t, n in week_targets.items()),
+        key=lambda x: (x["corpus_total"], -x["this_week"]),
+    )[:40]  # 코퍼스에서 희소한 순(=신규 진입)
+
+    out = {
+        "generated_at": datetime.now(timezone.utc).isoformat(), "since": cutoff,
+        "counts": {"new_trials": len(new_trials), "updated_trials": len(updated_trials),
+                   "new_publications": len(new_pubs), "emerging_targets": len(emerging)},
+        "new_trials": sorted(new_trials, key=lambda x: x["date"] or "", reverse=True)[:150],
+        "updated_trials": sorted(updated_trials, key=lambda x: x["date"] or "", reverse=True)[:150],
+        "new_publications": new_pubs[:150],
+        "emerging_targets": emerging,
+    }
+    os.makedirs(OUT, exist_ok=True)
+    json.dump(out, open(f"{OUT}/whatsnew.json", "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    json.dump({"pmids": cur_pmids, "ncts": [r["nct"] for r in (new_trials + updated_trials) if r["nct"]]},
+              open(snap_path, "w", encoding="utf-8"), separators=(",", ":"))
+    print(f"whatsnew -> {OUT}/whatsnew.json  (신규시험 {len(new_trials)}, 갱신 {len(updated_trials)}, "
+          f"신규논문 {len(new_pubs)}, 새타겟 {len(emerging)})")
+
+
 def build_pipeline():
     src = "data/parsed/pipeline.json"
     if not os.path.exists(src):
@@ -240,7 +323,7 @@ def build_pipeline():
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", choices=["abstracts", "pipeline", "facets", "publications"], default=None,
+    ap.add_argument("--only", choices=["abstracts", "pipeline", "facets", "publications", "whatsnew"], default=None,
                     help="일부만 빌드 (CI에서 pipeline만 갱신 등)")
     only = ap.parse_args().only
     if only in (None, "abstracts"):
@@ -253,3 +336,5 @@ if __name__ == "__main__":
         build_pipeline()
     if only in (None, "facets"):
         build_facets()
+    if only in (None, "whatsnew"):
+        build_whatsnew()

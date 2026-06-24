@@ -46,6 +46,16 @@ export async function getFacets() {
   return _facets
 }
 
+// 이번 주 신규/갱신 (whatsnew) — 신규 타겟 탐지용
+let _whatsnew = null
+export async function getWhatsNew() {
+  if (!_whatsnew) {
+    const r = await fetch(`${DATA_BASE}/whatsnew.json`, REVALIDATE)
+    _whatsnew = r.ok ? await r.json() : null
+  }
+  return _whatsnew
+}
+
 export async function getAbstractIndex() {
   if (!_index) {
     const r = await fetch(INDEX_URL, REVALIDATE)

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import FilterMultiSelect from '../components/common/FilterMultiSelect'
 import { phaseLabel } from '../utils/visualizeAggregations'
 import { getShared, setShared } from '../utils/filterStore'
-import { getFacets, prefetchPipeline, prefetchAbstracts, prefetchPublications } from '../utils/dataSource'
+import { getFacets, getWhatsNew, prefetchPipeline, prefetchAbstracts, prefetchPublications } from '../utils/dataSource'
 
 function Logo({ size = 40 }) {
   return (
@@ -31,6 +31,8 @@ const EMPTY = { cancers: [], modalities: [], targets: [], biomarkers: [], compan
 export default function LandingPage() {
   const navigate = useNavigate()
   const [facets, setFacets] = useState(null)
+  const [whatsnew, setWhatsnew] = useState(null)
+  const [wnOpen, setWnOpen] = useState(false)
   // 기존 공유 필터를 반영해 시작 (다른 탭에서 설정한 값 유지)
   const [f, setF] = useState(() => {
     const s = getShared()
@@ -42,6 +44,7 @@ export default function LandingPage() {
   })
 
   useEffect(() => { getFacets().then(setFacets).catch(() => setFacets({})) }, [])
+  useEffect(() => { getWhatsNew().then(setWhatsnew).catch(() => setWhatsnew(null)) }, [])
 
   const set = (key, value) => setF((prev) => ({ ...prev, [key]: value }))
   const activeCount = useMemo(
@@ -58,6 +61,16 @@ export default function LandingPage() {
     })
     navigate(path)
   }
+
+  // 신규 타겟 칩 클릭 → 해당 타겟으로 공유필터 세팅 후 파이프라인 시각화로
+  function goTarget(t, path = '/visualize') {
+    setShared({ ...getShared(), ...EMPTY, targets: [t] })
+    navigate(path)
+  }
+
+  const wn = whatsnew
+  const wc = wn?.counts ?? {}
+  const wnTotal = (wc.new_trials || 0) + (wc.updated_trials || 0) + (wc.new_publications || 0)
 
   const counts = facets?.counts ?? {}
   const updated = facets?.generated_at ? new Date(facets.generated_at).toLocaleDateString('en-CA') : '—'
@@ -89,21 +102,101 @@ export default function LandingPage() {
         </p>
       </div>
 
-      {/* Update panel — 항상 표시 (최신 갱신일 + 구성 + 주간 갱신) */}
+      {/* What's new this week — 주간 델타 + 신규 타겟 탐지 */}
       <div className="max-w-4xl mx-auto px-6 mb-4">
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-xl border border-slate-200 bg-white/70 px-4 py-2 text-xs text-slate-500">
-          <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Live
-          </span>
-          <span>Updated <b className="text-slate-700">{updated}</b></span>
-          <span className="text-slate-300">·</span>
-          <span><b className="text-slate-700">{(counts.drugs || 0).toLocaleString()}</b> trials</span>
-          <span className="text-slate-300">·</span>
-          <span><b className="text-slate-700">{(counts.abstracts || 0).toLocaleString()}</b> abstracts</span>
-          <span className="text-slate-300">·</span>
-          <span><b className="text-slate-700">{(counts.publications || 0).toLocaleString()}</b> publications</span>
-          <span className="text-slate-300">·</span>
-          <span>refreshed weekly (Mon)</span>
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          {/* header line */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 border-b border-slate-100 text-xs text-slate-500">
+            <span className="inline-flex items-center gap-1 font-bold text-slate-700">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" /> What&apos;s new
+            </span>
+            {wn?.since && <span>since <b className="text-slate-700">{wn.since}</b></span>}
+            <span className="text-slate-300">·</span>
+            <span className="inline-flex items-center gap-1 text-blue-600"><b>+{wc.new_trials || 0}</b> new trials</span>
+            <span className="inline-flex items-center gap-1 text-amber-600"><b>↻{wc.updated_trials || 0}</b> updated</span>
+            <span className="inline-flex items-center gap-1 text-emerald-600"><b>+{wc.new_publications || 0}</b> publications</span>
+            <span className="ml-auto text-slate-400">refreshed weekly (Mon) · {updated}</span>
+          </div>
+
+          {/* emerging targets — 핵심: 새로 진입한/희소한 타겟 */}
+          {wn?.emerging_targets?.length ? (
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold text-slate-600">
+                <span>🎯 Emerging targets</span>
+                <span className="font-normal text-slate-400">— newly appearing this week, rarest in the corpus first</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {wn.emerging_targets.slice(0, 18).map((t) => (
+                  <button
+                    key={t.target}
+                    onClick={() => goTarget(t.target)}
+                    title={`Seen ${t.corpus_total}× across the whole corpus · ${t.this_week} new this week — open in pipeline`}
+                    className="group inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors"
+                  >
+                    {t.target}
+                    <span className="text-[10px] text-blue-400 group-hover:text-blue-500">·{t.corpus_total}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 py-3 text-xs text-slate-400">
+              {wnTotal > 0
+                ? 'No newly emerging targets in this window.'
+                : 'No changes captured yet — this build sets the weekly baseline. Check back after Monday’s refresh.'}
+            </div>
+          )}
+
+          {/* expandable: new trials / publications */}
+          {wnTotal > 0 && (
+            <div className="border-t border-slate-100">
+              <button
+                onClick={() => setWnOpen((o) => !o)}
+                className="w-full flex items-center justify-center gap-1 px-4 py-1.5 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+              >
+                {wnOpen ? '▾ Hide' : '▸ Show'} this week’s new trials &amp; publications
+              </button>
+              {wnOpen && (
+                <div className="grid md:grid-cols-2 gap-px bg-slate-100">
+                  {/* new trials */}
+                  <div className="bg-white p-3">
+                    <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-1.5">
+                      New trials ({wc.new_trials || 0})
+                    </div>
+                    <ul className="space-y-1 max-h-56 overflow-auto">
+                      {(wn.new_trials || []).slice(0, 25).map((r) => (
+                        <li key={r.nct} className="text-xs text-slate-600 leading-snug">
+                          <a href={`https://clinicaltrials.gov/study/${r.nct}`} target="_blank" rel="noreferrer"
+                             className="font-mono text-blue-600 hover:underline">{r.nct}</a>{' '}
+                          <span className="font-medium text-slate-800">{r.drug || '—'}</span>
+                          {r.target && r.target !== 'Unknown' && <span className="text-slate-400"> · {r.target}</span>}
+                          {r.phase && <span className="text-slate-400"> · {phaseLabel(r.phase)}</span>}
+                          {r.company && <span className="text-slate-400"> · {r.company}</span>}
+                        </li>
+                      ))}
+                      {!(wn.new_trials || []).length && <li className="text-xs text-slate-400">—</li>}
+                    </ul>
+                  </div>
+                  {/* new publications */}
+                  <div className="bg-white p-3">
+                    <div className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide mb-1.5">
+                      New publications ({wc.new_publications || 0})
+                    </div>
+                    <ul className="space-y-1 max-h-56 overflow-auto">
+                      {(wn.new_publications || []).slice(0, 25).map((p) => (
+                        <li key={p.pmid} className="text-xs text-slate-600 leading-snug">
+                          <a href={`https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/`} target="_blank" rel="noreferrer"
+                             className="text-emerald-600 hover:underline">{p.title || `PMID ${p.pmid}`}</a>
+                          {p.journal && <span className="text-slate-400"> · {p.journal}</span>}
+                        </li>
+                      ))}
+                      {!(wn.new_publications || []).length && <li className="text-xs text-slate-400">—</li>}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

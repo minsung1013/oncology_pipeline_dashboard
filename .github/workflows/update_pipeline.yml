@@ -73,6 +73,13 @@ jobs:
           python scripts/llm_merge.py --write || true
           python scripts/normalize_fields.py --write || true
 
+      # whatsnew 델타용 직전 스냅샷 (신규 논문 PMID 차이 산정)
+      - name: Pull previous snapshot from R2
+        run: |
+          mkdir -p data/frontend
+          curl -fsSL --compressed "${R2_BASE_URL}/snapshot.json" -o data/frontend/snapshot.json || \
+            echo "(no prior snapshot — first whatsnew baseline)"
+
       - name: Build lite frontend payload (full)
         run: python scripts/make_frontend_data.py
 
