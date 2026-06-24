@@ -27,6 +27,25 @@ from normalize_entities import normalize_companies  # noqa: E402
 MAILTO = "oncology-dashboard@example.com"
 BATCH = 50
 
+
+def _load_openalex_key():
+    """OpenAlex API 키 — 2026-02부터 필수(키당 무료 $1/일=10k콜). env 또는 .env.r2."""
+    key = os.environ.get("OPENALEX_KEY", "").strip()
+    if not key:
+        for path in (".env.r2", os.path.join(os.path.dirname(__file__), "..", ".env.r2")):
+            if os.path.exists(path):
+                for line in open(path):
+                    line = line.strip()
+                    if line.startswith("OPENALEX_KEY="):
+                        key = line.split("=", 1)[1].strip().strip("\"'")
+                        break
+            if key:
+                break
+    return key
+
+
+API_KEY = _load_openalex_key()
+
 ISO = {
     "US": "USA", "GB": "United Kingdom", "CN": "China", "JP": "Japan", "DE": "Germany",
     "FR": "France", "IT": "Italy", "ES": "Spain", "CA": "Canada", "AU": "Australia",
@@ -43,6 +62,8 @@ def openalex_batch(dois):
     flt = "doi:" + "|".join(dois)
     params = {"filter": flt, "per-page": str(len(dois)),
               "select": "doi,authorships", "mailto": MAILTO}
+    if API_KEY:
+        params["api_key"] = API_KEY  # 키당 무료 $1/일 — 없으면 $0(429)
     url = "https://api.openalex.org/works?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": f"OncologyDashboard (mailto:{MAILTO})"})
     for attempt in range(5):  # 429 백오프 재시도
