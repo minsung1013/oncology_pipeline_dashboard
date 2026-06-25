@@ -306,7 +306,8 @@ def run_abstracts(limit: int | None) -> None:
     """전 학회·연도 초록(data/parsed/abstracts_*.json)을 uid 캐시 기반으로 보강.
     중단(Ctrl-C/종료/슬립) 후 재실행하면 캐시된 uid는 건너뛰고 이어서 진행."""
     import glob
-    files = sorted(glob.glob("data/parsed/abstracts_*.json"))
+    # 학회 초록 + 저널 논문 둘 다 (동일 uid 캐시; 논문 uid = pub-YYYY-PMID)
+    files = sorted(glob.glob("data/parsed/abstracts_*.json") + glob.glob("data/parsed/publications_*.json"))
     cache = {}
     if os.path.exists(ABSTRACT_CACHE):
         cache = json.load(open(ABSTRACT_CACHE, encoding="utf-8"))

@@ -126,7 +126,8 @@ def merge(write: bool) -> None:
 
 def merge_abstracts(write: bool) -> None:
     import glob
-    files = sorted(glob.glob("data/parsed/abstracts_*.json"))
+    # 학회 초록 + 저널 논문 둘 다 (동일 uid 캐시 적용)
+    files = sorted(glob.glob("data/parsed/abstracts_*.json") + glob.glob("data/parsed/publications_*.json"))
     cache = json.load(open(ABSTRACT_CACHE, encoding="utf-8"))
     total_stats = {"total": 0, "have_llm": 0, "applied": 0, "summary_ko": 0}
 
