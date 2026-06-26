@@ -28,6 +28,9 @@ export const DRUG_FILTER_DEFAULT = {
   partnershipStatus: 'all',
   regimen: 'all',
   needsReview: false,
+  // 비종양/보조요법(근무력증·통증·빈혈 등 493건) 제외 토글. 기본 OFF(전체 표시) —
+  // DRUG_FILTER_DEFAULT의 "기본값=통과" 불변식 유지(Visualize 영향 없음). 파이프라인 토글로 ON.
+  oncologyOnly: false,
 }
 
 function byFrequency(drugs, extract) {
@@ -86,6 +89,7 @@ export function applyDrugFilters(drugs, f = {}) {
   const partnership = f.partnershipStatus ?? 'all'
   const regimen = f.regimen ?? 'all'
   const needsReview = !!f.needsReview
+  const oncologyOnly = f.oncologyOnly ?? false
 
   return drugs.filter((d) => {
     if (companies.size > 0 && !companies.has(d.company_normalized)) return false
@@ -106,6 +110,7 @@ export function applyDrugFilters(drugs, f = {}) {
     if (regimen === 'mono' && d.is_combination) return false
     if (regimen === 'combo' && !d.is_combination) return false
     if (needsReview && d.target !== 'Unknown') return false
+    if (oncologyOnly && d.is_oncology === false) return false
 
     if (sFrom !== null || sTo !== null) {
       const y = parseInt(d.start_date?.slice(0, 4))

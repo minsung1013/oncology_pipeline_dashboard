@@ -13,6 +13,7 @@ const LOCAL_DEFAULT = {
   partnershipStatus: 'all',
   regimen: 'all',
   needsReview: false,
+  oncologyOnly: false,
   completionYear: { from: 'all', to: 'all' },
 }
 
@@ -35,6 +36,7 @@ function buildFilters() {
     partnershipStatus: l.partnershipStatus ?? 'all',
     regimen: l.regimen ?? 'all',
     needsReview: l.needsReview ?? false,
+    oncologyOnly: l.oncologyOnly ?? false,
   }
 }
 
@@ -75,6 +77,7 @@ export default function PipelinePage() {
       partnershipStatus: next.partnershipStatus,
       regimen: next.regimen,
       needsReview: next.needsReview,
+      oncologyOnly: next.oncologyOnly,
       completionYear: next.completionYear,
     })
   }
@@ -247,6 +250,16 @@ function PipelineExtras({ filters, onChange }) {
           className="w-4 h-4 accent-orange-500"
         />
         <span className="text-slate-600">Unknown target only</span>
+      </label>
+      <label className="flex items-center gap-2 cursor-pointer select-none"
+             title="근무력증·통증·빈혈 등 비종양/보조요법 시험 제외">
+        <input
+          type="checkbox"
+          checked={filters.oncologyOnly}
+          onChange={(e) => set('oncologyOnly', e.target.checked)}
+          className="w-4 h-4 accent-blue-500"
+        />
+        <span className="text-slate-600">Oncology only</span>
       </label>
     </>
   )

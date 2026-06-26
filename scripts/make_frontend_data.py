@@ -116,7 +116,7 @@ AUTHOR_KEEP = ["name", "affiliation", "affiliations", "country", "role"]
 # pipeline lite 보존 필드 (프론트 테이블·필터·검색·배지에서 실제 사용)
 DRUG_KEEP = [
     "drug_name", "combo_drugs", "company", "company_normalized", "collaborators",
-    "partnership_status", "condition", "conditions", "cancer_category", "cancer_categories", "phase", "phases",
+    "partnership_status", "condition", "conditions", "cancer_category", "cancer_categories", "is_oncology", "phase", "phases",
     "overall_status", "primary_completion_date", "start_date",
     "modality", "modality_src", "modality_rule", "target", "target_src", "target_rule",
     "moa", "biomarker_mentioned", "biomarker_list", "biomarker_src", "nct_ids", "clinicaltrials_url",

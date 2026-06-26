@@ -205,7 +205,7 @@ CANCER_CATEGORY_MAP: dict[str, list[str]] = {
     "Breast":         ["breast"],
     "Hematologic":    [
         "lymphoma", "leukemia", "myeloma", "AML", "CLL", "CML", "NHL", "ALL",
-        "myelodysplastic", "myeloproliferative", "myelofibrosis",
+        "myelodysplastic", "myeloproliferative", "myelofibrosis", "lymphoproliferative",
         "hematologic", "haematologic", "hematological", "haematological",
         "polycythemia", "polycythaemia", "waldenstrom",
         "aplastic anemia", "aplastic anaemia", "mastocytosis",
@@ -227,6 +227,12 @@ CANCER_CATEGORY_MAP: dict[str, list[str]] = {
     "Glioma":         ["glioma", "glioblastoma", "GBM", "brain", "neuroblastoma", "medulloblastoma"],
     "Neuroendocrine": ["neuroendocrine", "carcinoid", "pheochromocytoma", "paraganglioma"],
     "Mesothelioma":   ["mesothelioma"],
+    # --- 우산 카테고리: 위 특정 암종에 안 걸린 것만 (반드시 특정 카테고리 뒤) ---
+    # "Advanced Solid Tumors" 류 — 부위 불문 고형암 basket 시험을 하나로 묶는다.
+    "Solid Tumor":    ["solid tumor", "solid tumour", "solid neoplasm", "solid malignan", "solid cancer"],
+    # 최후 폴백: 암이긴 하나 부위 미상. 광범위 키워드라 반드시 맵의 맨 끝에 둔다
+    # (그래야 "Lung Cancer" 등이 여기로 새지 않는다). 비종양(Pain·Myasthenia 등)은 매칭 안 됨 → Other.
+    "Cancer (NOS)":   ["cancer", "carcinoma", "neoplasm", "tumor", "tumour", "malignan", "oncolog"],
 }
 
 
@@ -307,6 +313,24 @@ def normalize_cancer_category(condition: str) -> tuple[str, str]:
             if kw.lower() in text:
                 return category, condition
     return "Other", condition
+
+
+# 명시적 비종양/보조요법 신호 — 암 카테고리에 안 걸린(Other) 엔트리 중 이 용어가 있으면
+# 비종양 시험으로 본다(보수적: 암 용어 없는 희귀암은 그냥 Other로 두고 종양으로 유지).
+NON_ONCOLOGY_RE = re.compile(
+    r"\b(pain|nausea|vomit|emesis|mucositis|neutropenia|anemia|anaemia|cachexia|"
+    r"thrombocytopenia|myasthenia|arthritis|infection|hepatitis|fibrosis|diabet|"
+    r"obesity|healthy volunteer|fatigue|neuropathy|dermatitis|psoriasis|colitis)\b",
+    re.IGNORECASE,
+)
+
+
+def is_oncology_indication(conditions: list, cancer_categories: list) -> bool:
+    """종양 적응증 여부. 암 카테고리가 하나라도 있으면 종양. 전부 Other인데 명시적
+    비종양/보조요법 용어가 있으면 비종양(False). 그 외(암 용어 없는 희귀암)는 종양 유지."""
+    if cancer_categories != ["Other"]:
+        return True
+    return not NON_ONCOLOGY_RE.search(" ".join(conditions or []))
 
 
 def categorize_conditions(conditions: list) -> list:
@@ -415,6 +439,8 @@ def extract_study_fields(study: dict) -> dict | None:
     biomarker_found, biomarker_list = infer_biomarkers(eligibility_text, brief_summary)
     cancer_category, condition_normalized = normalize_cancer_category(condition)
     cancer_categories = categorize_conditions(conditions)  # 복수 암종(basket) 필터용
+    # 비종양/보조요법(CINV·호중구감소·근무력증 등) 식별 — 프론트에서 걸러내는 데 사용.
+    is_oncology = is_oncology_indication(conditions, cancer_categories)
 
     partnership_status = "partnered" if collaborators else "solo"
     moa = f"{modality} targeting {target}" if target != "Unknown" else modality
@@ -438,6 +464,7 @@ def extract_study_fields(study: dict) -> dict | None:
         "condition_normalized": condition_normalized,
         "cancer_category": cancer_category,
         "cancer_categories": cancer_categories,
+        "is_oncology": is_oncology,
         "phase": phase,
         "phases": phase_list,
         "overall_status": overall_status,
