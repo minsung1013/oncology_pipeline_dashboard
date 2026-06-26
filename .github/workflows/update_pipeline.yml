@@ -68,10 +68,14 @@ jobs:
           python scripts/enrich_pub_authors.py --glob "data/parsed/publications_${PREV}.json"
           python scripts/enrich_pub_authors.py --glob "data/parsed/publications_${YEAR}.json"
 
-      # 커밋된 LLM 약물 캐시 재적용(modality/target 유지) + 정규화
+      # 커밋된 LLM 캐시 재적용 — CI엔 Ollama가 없어 신규 생성은 못 하지만, 이미 만들어둔
+      # 분류·요약을 키(약물명/uid/drug_id) 기준으로 되살린다. 이 재적용이 없으면 매주 재수집 시
+      # 한국어 요약(논문·임상시험)과 LLM modality/target/biomarker가 통째로 사라진다(회귀 방지).
       - name: Re-apply enrichment + normalize
         run: |
-          python scripts/llm_merge.py --write || true
+          python scripts/llm_merge.py --write || true                 # drugs: modality/target/biomarker
+          python scripts/llm_merge.py --mode abstracts --write || true # 학회초록 + 논문 한국어 요약
+          python scripts/llm_merge.py --mode pipeline --write || true  # 임상시험 한국어 요약
           python scripts/normalize_fields.py --write || true
 
       # whatsnew 델타용 직전 스냅샷 (신규 논문 PMID 차이 산정)
