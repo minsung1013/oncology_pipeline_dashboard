@@ -137,7 +137,7 @@ export default function PublicationsPage() {
 
       <AbstractTable
         abstracts={filtered}
-        onAuthorClick={(name) => setFilter('authorName', name)}
+        onAuthorClick={(name, affil) => { setFilter('authorName', name); setFilter('authorAffil', affil) }}
         onNctClick={focusInPipeline}
         authorLabel="Corresponding Author"
       />
