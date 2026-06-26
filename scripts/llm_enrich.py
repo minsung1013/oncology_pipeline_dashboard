@@ -43,6 +43,7 @@ PIPELINE = "data/parsed/pipeline.json"
 DRUG_CACHE = "data/cache/llm_drug_cache.json"
 ABSTRACTS = "data/parsed/abstracts_asco2026.json"
 ABSTRACT_CACHE = "data/cache/llm_abstract_cache.json"
+PIPELINE_CACHE = "data/cache/llm_pipeline_cache.json"  # 임상시험 엔트리 한국어 요약
 
 MODALITIES = [
     "ADC", "Bispecific Antibody", "CAR-T", "Monoclonal Antibody", "Small Molecule",
@@ -343,6 +344,93 @@ def run_abstracts(limit: int | None) -> None:
     print(f"완료. 캐시 총 {len(cache)} -> {ABSTRACT_CACHE}")
 
 
+SYSTEM_PIPE = (
+    "You are an oncology clinical-trial summarizer. You are given one trial's drug(s), "
+    "mechanism (modality/target), indication(s), phase, status, enrollment, official "
+    "summary, and primary outcomes. Write a concise Korean summary.\n"
+    "Output STRICT JSON only:\n"
+    '{"summary_ko": <2-3 sentences in Korean conveying: the drug(s) and their '
+    "modality/target, the indication(s) (list ALL cancer types if multiple), the trial's "
+    "design/purpose (phase, what it primarily evaluates), and current status. Keep "
+    "drug/gene/protein names and standard medical abbreviations in their original English "
+    "form (e.g. HER2, EGFR, pembrolizumab, ADC, PFS, ORR, MTD) — NEVER transliterate them "
+    "phonetically into Korean. Translate general medical terms accurately. Be factual and "
+    "specific, no filler>, "
+    '"confidence": <0.0-1.0>}\n'
+    "Only use information present in the input; do not invent results or details."
+)
+
+
+def classify_pipeline(entry: dict) -> dict:
+    conds = entry.get("conditions") or ([entry["condition"]] if entry.get("condition") else [])
+    ctx = [f"Drug: {entry.get('drug_name')}"]
+    if entry.get("combo_drugs"):
+        ctx.append(f"Combination: {', '.join(entry['combo_drugs'])}")
+    ctx.append(f"Modality: {entry.get('modality') or 'Unknown'} | Target: {entry.get('target') or 'Unknown'}")
+    ctx.append(f"Indication(s): {', '.join(conds) if conds else 'n/a'}")
+    ctx.append(f"Phase: {entry.get('phase') or 'n/a'} | Status: {entry.get('overall_status') or 'n/a'}"
+               f" | Enrollment: {entry.get('enrollment_count') or 'n/a'}")
+    if entry.get("primary_outcomes"):
+        ctx.append("Primary outcomes: " + "; ".join(map(str, entry["primary_outcomes"][:5])))
+    title = entry.get("official_title") or entry.get("brief_title") or ""
+    if title:
+        ctx.append(f"Trial title: {title}")
+    summary = (entry.get("brief_summary") or "")[:2000]
+    if summary:
+        ctx.append(f"Official summary: {summary}")
+    prompt = f"{SYSTEM_PIPE}\n\n" + "\n".join(ctx) + "\n\nJSON:"
+    raw = ollama(prompt, timeout=180)
+    data, _ = _loads_lenient(raw)
+    if data is None:
+        return {"summary_ko": "", "confidence": 0.0, "_unparsed": True}
+    return {
+        "summary_ko": (data.get("summary_ko") or "").strip() if isinstance(data.get("summary_ko"), str) else "",
+        "confidence": float(data.get("confidence", 0.0)) if isinstance(data.get("confidence", 0.0), (int, float)) else 0.0,
+    }
+
+
+def _save_pipeline_cache(cache: dict) -> None:
+    os.makedirs(os.path.dirname(PIPELINE_CACHE), exist_ok=True)
+    tmp = PIPELINE_CACHE + ".tmp"
+    json.dump(cache, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp, PIPELINE_CACHE)  # 원자적 교체 → 중단돼도 손상 없음
+
+
+def run_pipeline_summaries(limit: int | None) -> None:
+    """pipeline.json 엔트리(임상시험)에 한국어 요약(summary_ko) 보강.
+    drug_id 캐시 기반 — 중단 후 재실행하면 캐시된 엔트리는 건너뛰고 이어서 진행."""
+    drugs = json.load(open(PIPELINE, encoding="utf-8"))["drugs"]
+    cache = {}
+    if os.path.exists(PIPELINE_CACHE):
+        cache = json.load(open(PIPELINE_CACHE, encoding="utf-8"))
+
+    todo = [d for d in drugs
+            if d.get("drug_id") and d["drug_id"] not in cache
+            and (d.get("brief_summary") or d.get("official_title") or d.get("brief_title"))]
+    if limit:
+        todo = todo[:limit]
+    print(f"엔트리 {len(drugs)}개 · 미처리 {len(todo)}개 (캐시됨 {len(cache)}) — 재실행하면 이어서 진행")
+
+    t0 = time.time()
+    for i, d in enumerate(todo, 1):
+        try:
+            res = classify_pipeline(d)
+        except Exception as e:
+            res = {"_error": str(e)[:80]}
+        if "_error" in res:
+            print(f"  [skip] {d['drug_id']}: {res['_error']}")
+            continue
+        cache[d["drug_id"]] = res
+        if i % 10 == 0 or i == len(todo):
+            _save_pipeline_cache(cache)
+            rate = i / (time.time() - t0)
+            eta = (len(todo) - i) / rate if rate else 0
+            print(f"  {i}/{len(todo)}  {rate:.2f}/s  ETA {eta/3600:.1f}h | {d['drug_name'][:30]}", flush=True)
+            print(f"      요약: {res.get('summary_ko', '')}", flush=True)
+    _save_pipeline_cache(cache)
+    print(f"완료. 캐시 총 {len(cache)} -> {PIPELINE_CACHE}")
+
+
 def run_eval(limit: int) -> None:
     """규칙기반 vs LLM 비교 (현재 Unknown이 아닌 것 포함, 무작위)."""
     import random
@@ -372,7 +460,7 @@ def run_eval(limit: int) -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=["drugs", "abstracts", "eval"], default="eval")
+    ap.add_argument("--mode", choices=["drugs", "abstracts", "pipeline", "eval"], default="eval")
     ap.add_argument("--only-unknown", action="store_true")
     ap.add_argument("--limit", type=int, default=None)
     args = ap.parse_args()
@@ -380,5 +468,7 @@ if __name__ == "__main__":
         run_eval(args.limit or 60)
     elif args.mode == "abstracts":
         run_abstracts(args.limit)
+    elif args.mode == "pipeline":
+        run_pipeline_summaries(args.limit)
     else:
         run_drugs(args.only_unknown, args.limit)

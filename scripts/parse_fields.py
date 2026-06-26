@@ -418,6 +418,9 @@ def extract_study_fields(study: dict) -> dict | None:
         "collaborators": collaborators,
         "partnership_status": partnership_status,
         "condition": condition,
+        # 원본 conditionsModule.conditions 는 복수 암종 배열 — 대표(condition)만 쓰던 것을
+        # 전체 보존해 복수 인디케이션 손실을 막는다. condition/cancer_category 는 대표값 유지(하위호환).
+        "conditions": conditions,
         "condition_normalized": condition_normalized,
         "cancer_category": cancer_category,
         "phase": phase,
@@ -439,6 +442,8 @@ def extract_study_fields(study: dict) -> dict | None:
         ),
         "brief_title": brief_title,
         "official_title": official_title,
+        # 임상시험 원문 요약 — 리치 LLM 한국어 요약(summary_ko)의 입력으로 사용
+        "brief_summary": brief_summary,
         "primary_outcomes": primary_outcomes,
         "secondary_outcomes": secondary_outcomes,
         "pubmed_links": pubmed_links,

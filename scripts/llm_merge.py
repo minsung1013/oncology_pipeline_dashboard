@@ -23,6 +23,7 @@ PIPELINE = "data/parsed/pipeline.json"
 DRUG_CACHE = "data/cache/llm_drug_cache.json"
 ABSTRACTS = "data/parsed/abstracts_asco2026.json"
 ABSTRACT_CACHE = "data/cache/llm_abstract_cache.json"
+PIPELINE_CACHE = "data/cache/llm_pipeline_cache.json"  # 임상시험 엔트리 한국어 요약
 ABS_CONF = 0.6  # 초록: LLM 리스트 채택 최소 신뢰도
 
 FILL_CONF = 0.6       # Unknown 채우기 최소 신뢰도
@@ -53,6 +54,7 @@ def merge(write: bool) -> None:
         "rows": len(drugs), "have_llm": 0,
         "mod_filled": 0, "mod_resolved": 0, "mod_conflict": 0,
         "tgt_filled": 0, "tgt_resolved": 0, "tgt_conflict": 0,
+        "bio_filled": 0,
     }
 
     for d in drugs:
@@ -60,9 +62,11 @@ def merge(write: bool) -> None:
         # 원본 규칙값 보존
         rule_mod = d.setdefault("modality_rule", d.get("modality", "Unknown"))
         rule_tgt = d.setdefault("target_rule", d.get("target", "Unknown"))
+        rule_bio = d.setdefault("biomarker_list_rule", d.get("biomarker_list") or [])
         flags = []
-        mod_src = tgt_src = "rule"
+        mod_src = tgt_src = bio_src = "rule"
         final_mod, final_tgt = rule_mod, rule_tgt
+        final_bio = rule_bio
 
         if llm:
             stats["have_llm"] += 1
@@ -95,10 +99,24 @@ def merge(write: bool) -> None:
                     flags.append("target_conflict")
                     stats["tgt_conflict"] += 1
 
+            # biomarkers — LLM 환자선택 바이오마커를 규칙 추출분과 합집합(둘 다 보존).
+            # 규칙(eligibility 정규식)과 LLM이 상호보완적이라 union이 회수율이 가장 높다.
+            lbio = llm.get("biomarkers") if isinstance(llm.get("biomarkers"), list) else []
+            lbio = [b.strip() for b in lbio if isinstance(b, str) and b.strip()]
+            if lbio and conf >= FILL_CONF:
+                merged = list(dict.fromkeys([*rule_bio, *lbio]))
+                if merged != rule_bio:
+                    stats["bio_filled"] += 1
+                final_bio, bio_src = merged, "llm" if not rule_bio else "llm+rule"
+
         d["modality"] = final_mod
         d["target"] = final_tgt
         d["modality_src"] = mod_src
         d["target_src"] = tgt_src
+        d["biomarker_list"] = final_bio
+        d["biomarker_mentioned"] = len(final_bio) > 0
+        d["biomarker_src"] = bio_src
+        d["biomarkers_llm"] = llm.get("biomarkers") if llm else None
         d["llm_confidence"] = llm.get("confidence") if llm else None
         d["modality_llm"] = llm.get("modality") if llm else None
         d["target_llm"] = llm.get("target") if llm else None
@@ -172,12 +190,37 @@ def merge_abstracts(write: bool) -> None:
         print("\n(미리보기 — 저장하려면 --write)")
 
 
+def merge_pipeline(write: bool) -> None:
+    """pipeline 요약 캐시(llm_pipeline_cache.json) → pipeline.json 의 summary_ko 병합 (drug_id 키)."""
+    data = json.load(open(PIPELINE, encoding="utf-8"))
+    drugs = data["drugs"]
+    cache = json.load(open(PIPELINE_CACHE, encoding="utf-8"))
+
+    applied = 0
+    for d in drugs:
+        res = cache.get(d.get("drug_id"))
+        if res and res.get("summary_ko"):
+            d["summary_ko"] = res["summary_ko"]
+            d["summary_confidence"] = res.get("confidence")
+            applied += 1
+    print(f"=== pipeline 요약 병합 ===\n  엔트리 {len(drugs)} · summary_ko 적용 {applied} (캐시 {len(cache)})")
+
+    if write:
+        with open(PIPELINE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        print(f"저장 완료 -> {PIPELINE}")
+    else:
+        print("\n(미리보기 — 저장하려면 --write)")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=["drugs", "abstracts"], default="drugs")
+    ap.add_argument("--mode", choices=["drugs", "abstracts", "pipeline"], default="drugs")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
     if args.mode == "abstracts":
         merge_abstracts(args.write)
+    elif args.mode == "pipeline":
+        merge_pipeline(args.write)
     else:
         merge(args.write)

@@ -83,6 +83,16 @@ function DrugCell({ d, nctIndex }) {
         </div>
       )}
 
+      {/* AI 한국어 요약 (전문은 툴팁) */}
+      {d.summary_ko && (
+        <div
+          className="text-xs text-slate-500 mt-1 leading-snug line-clamp-3 cursor-help"
+          title={d.summary_ko}
+        >
+          {d.summary_ko}
+        </div>
+      )}
+
       {/* 확장 시 전체 NCT 링크 목록 */}
       {expanded && ncts.length > 1 && (
         <div className="mt-1 flex flex-col gap-0.5 border-l-2 border-slate-100 pl-2">
@@ -164,7 +174,27 @@ function makeColumns(nctIndex) {
 
   col.accessor('cancer_category', {
     header: 'Indication',
-    size: 110,
+    cell: ({ row }) => {
+      const d = row.original
+      // 복수 암종 보존: conditions 전체를 표시(중복 제거), 없으면 대표 condition
+      const conds = (d.conditions?.length ? d.conditions : (d.condition ? [d.condition] : []))
+        .filter(Boolean)
+      const uniq = [...new Set(conds)]
+      return (
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-slate-600">{d.cancer_category || '—'}</div>
+          {uniq.length > 0 && (
+            <div className="text-xs text-slate-400 line-clamp-2" title={uniq.join(' · ')}>
+              {uniq.join(', ')}
+              {uniq.length > 1 && (
+                <span className="ml-1 text-[9px] font-bold text-violet-500">×{uniq.length}</span>
+              )}
+            </div>
+          )}
+        </div>
+      )
+    },
+    size: 150,
   }),
 
   col.accessor('phase', {
