@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  주간 로컬 LLM 보강 LaunchAgent.
-  매주 월요일 18:00 KST 에 scripts/weekly_local_enrich.sh 실행 (CI 09:00 KST 이후).
-  맥이 그 시각에 자고 있으면 launchd가 다음 깨어남 시점에 한 번 따라잡아 실행한다.
+  주간 체크+알림 LaunchAgent (Option 2: 자동 알림 → 사용자 수동 보강).
+  매주 월요일 12:00 KST 에 scripts/weekly_check_notify.sh 실행 (CI 09:00 KST + 처리시간 이후).
+  신규 항목이 있으면 macOS 알림을 띄우고, 사용자가 앱을 닫고 직접 보강을 실행한다:
+      bash scripts/weekly_local_enrich.sh        # MoE@44 고품질 수동 보강
+  맥이 그 시각에 자고 있으면 launchd가 다음 깨어남 시점에 한 번 따라잡아 알림을 띄운다.
 
   활성화:
     cp scripts/launchd/com.oncology.weekly-enrich.plist ~/Library/LaunchAgents/
@@ -20,7 +22,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/minsung.choi/Library/CloudStorage/OneDrive-LGairesearch/VS_code/oncology_pipeline_dashboard/scripts/weekly_local_enrich.sh</string>
+    <string>/Users/minsung.choi/Library/CloudStorage/OneDrive-LGairesearch/VS_code/oncology_pipeline_dashboard/scripts/weekly_check_notify.sh</string>
   </array>
 
   <key>WorkingDirectory</key>
@@ -33,11 +35,11 @@
     <string>/Users/minsung.choi/.pyenv/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
 
-  <!-- 매주 월요일(Weekday=1) 18:00 -->
+  <!-- 매주 월요일(Weekday=1) 12:00 (CI 09:00 + 처리시간 이후) -->
   <key>StartCalendarInterval</key>
   <dict>
     <key>Weekday</key><integer>1</integer>
-    <key>Hour</key><integer>18</integer>
+    <key>Hour</key><integer>12</integer>
     <key>Minute</key><integer>0</integer>
   </dict>
 

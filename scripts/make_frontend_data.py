@@ -121,7 +121,7 @@ DRUG_KEEP = [
     "modality", "modality_src", "modality_rule", "target", "target_src", "target_rule",
     "moa", "biomarker_mentioned", "biomarker_list", "biomarker_src", "nct_ids", "clinicaltrials_url",
     "official_title", "brief_title", "primary_outcomes", "pubmed_links",
-    "is_combination", "data_flags", "summary_ko",
+    "is_combination", "data_flags", "summary_ko", "drug_id",
 ]
 
 
