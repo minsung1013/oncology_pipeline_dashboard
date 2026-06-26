@@ -309,6 +309,19 @@ def normalize_cancer_category(condition: str) -> tuple[str, str]:
     return "Other", condition
 
 
+def categorize_conditions(conditions: list) -> list:
+    """복수 condition 각각을 cancer_category로 환원한 리스트(중복제거).
+    basket 시험(서로 다른 암종)이 모든 암종 필터에 잡히도록 한다. 실제 암종이 하나라도
+    있으면 'Other'는 노이즈라 제외하고, 전부 미매칭일 때만 ['Other']."""
+    cats = []
+    for c in conditions or []:
+        cat, _ = normalize_cancer_category(c)
+        if cat not in cats:
+            cats.append(cat)
+    non_other = [c for c in cats if c != "Other"]
+    return non_other or cats or ["Other"]
+
+
 # ---------------------------------------------------------------------------
 # ClinicalTrials.gov 응답 → 구조화 필드 추출
 # ---------------------------------------------------------------------------
@@ -401,6 +414,7 @@ def extract_study_fields(study: dict) -> dict | None:
     target = infer_target(drug_name, brief_summary)
     biomarker_found, biomarker_list = infer_biomarkers(eligibility_text, brief_summary)
     cancer_category, condition_normalized = normalize_cancer_category(condition)
+    cancer_categories = categorize_conditions(conditions)  # 복수 암종(basket) 필터용
 
     partnership_status = "partnered" if collaborators else "solo"
     moa = f"{modality} targeting {target}" if target != "Unknown" else modality
@@ -423,6 +437,7 @@ def extract_study_fields(study: dict) -> dict | None:
         "conditions": conditions,
         "condition_normalized": condition_normalized,
         "cancer_category": cancer_category,
+        "cancer_categories": cancer_categories,
         "phase": phase,
         "phases": phase_list,
         "overall_status": overall_status,

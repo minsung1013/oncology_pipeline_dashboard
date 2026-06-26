@@ -9,6 +9,11 @@ const PHASE_ORDER = ['EARLY_PHASE1', 'PHASE1', 'PHASE2', 'PHASE3', 'PHASE4', 'NA
 export const drugCompanies = (d) =>
   [d.company, ...(d.collaborators ?? [])].filter(Boolean)
 
+// 약물의 모든 암종 카테고리 = cancer_categories(복수, basket 시험) 또는 단일 cancer_category 폴백.
+// 필터/옵션이 basket 시험을 모든 해당 암종에 노출시키도록 한다.
+export const drugCancers = (d) =>
+  (d.cancer_categories?.length ? d.cancer_categories : (d.cancer_category ? [d.cancer_category] : []))
+
 // 모든 약물 필터의 표준(canonical) 기본값 — 빈 필터.
 export const DRUG_FILTER_DEFAULT = {
   // 다중선택 축
@@ -41,7 +46,8 @@ const yr = (v) => (v && v !== 'all' ? parseInt(v) : null)
 export function getDrugFilterOptions(drugs) {
   const companies = [...new Set(drugs.map((d) => d.company_normalized).filter(Boolean))].sort()
   const drugNames = byFrequency(drugs, (d) => d.drug_name)
-  const cancers = [...new Set(drugs.map((d) => d.cancer_category).filter(Boolean))].sort()
+  // 복수 암종(basket 시험) 포함 — cancer_categories 전체를 옵션으로
+  const cancers = [...new Set(drugs.flatMap(drugCancers).filter(Boolean))].sort()
   const modalities = [...new Set(drugs.map((d) => d.modality).filter(Boolean))].sort()
   const targets = byFrequency(drugs, (d) => (d.target && d.target !== 'Unknown' ? d.target : null))
   const biomarkers = byFrequency(drugs, (d) => d.biomarker_list ?? [])
@@ -84,7 +90,7 @@ export function applyDrugFilters(drugs, f = {}) {
   return drugs.filter((d) => {
     if (companies.size > 0 && !companies.has(d.company_normalized)) return false
     if (drugSet.size > 0 && !drugSet.has(d.drug_name)) return false
-    if (cancers.size > 0 && !cancers.has(d.cancer_category)) return false
+    if (cancers.size > 0 && !drugCancers(d).some((c) => cancers.has(c))) return false
     if (mods.size > 0 && !mods.has(d.modality)) return false
     if (targets.size > 0 && !targets.has(d.target)) return false
     if (bios.size > 0 && !(d.biomarker_list ?? []).some((b) => bios.has(b))) return false
@@ -119,6 +125,7 @@ export function applyDrugFilters(drugs, f = {}) {
         d.drug_name, ...(d.combo_drugs ?? []), d.company, d.company_normalized,
         d.target, d.modality, d.condition, d.cancer_category, d.official_title,
         d.brief_title, d.moa, d.overall_status,
+        ...(d.conditions ?? []), ...(d.cancer_categories ?? []),
         ...(d.biomarker_list ?? []), ...(d.collaborators ?? []),
         ...(d.primary_outcomes ?? []), ...(d.nct_ids ?? []),
       ].filter(Boolean).join(' ').toLowerCase()
