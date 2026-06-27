@@ -24,6 +24,10 @@ DRUG_CACHE = "data/cache/llm_drug_cache.json"
 ABSTRACTS = "data/parsed/abstracts_asco2026.json"
 ABSTRACT_CACHE = "data/cache/llm_abstract_cache.json"
 PIPELINE_CACHE = "data/cache/llm_pipeline_cache.json"  # 임상시험 엔트리 한국어 요약
+XREF_CACHE = "data/cache/llm_xref_cache.json"          # 크로스소스 보완(modality/target/bio)
+XREF_REVIEW = "data/parsed/xref_review.json"           # 채움·교정 리뷰 리포트
+XREF_FILL_CONF = 0.7     # Unknown 채움 최소 신뢰도
+XREF_CORRECT_CONF = 0.85 # 기존값 교정(충돌) 최소 신뢰도 — 더 보수적
 ABS_CONF = 0.6  # 초록: LLM 리스트 채택 최소 신뢰도
 
 FILL_CONF = 0.6       # Unknown 채우기 최소 신뢰도
@@ -213,14 +217,79 @@ def merge_pipeline(write: bool) -> None:
         print("\n(미리보기 — 저장하려면 --write)")
 
 
+def merge_xref(write: bool) -> None:
+    """크로스소스 보완 캐시(llm_xref_cache.json) → pipeline.json.
+    Unknown은 채우고(conf>=0.7), 기존값과의 충돌은 보수적으로 교정(conflict & conf>=0.85).
+    원본은 *_pre_xref 에 보존하고 리뷰 리포트(xref_review.json)를 남긴다."""
+    data = json.load(open(PIPELINE, encoding="utf-8"))
+    drugs = data["drugs"]
+    cache = json.load(open(XREF_CACHE, encoding="utf-8"))
+
+    report, n_fill, n_corr = [], 0, 0
+    for d in drugs:
+        res = cache.get(d.get("drug_id"))
+        if not res:
+            continue
+        conf = res.get("confidence", 0.0)
+        new_mod = res.get("modality", "Unknown")
+        new_tgt = res.get("target", "Unknown")
+        cur_mod, cur_tgt = d.get("modality"), d.get("target")
+        before = (cur_mod, cur_tgt)
+        action, changed = None, False
+
+        if (cur_mod == "Unknown" or cur_tgt == "Unknown") and conf >= XREF_FILL_CONF:
+            if cur_mod == "Unknown" and new_mod != "Unknown":
+                d["modality"], d["modality_src"], changed = new_mod, "xref", True
+            if cur_tgt == "Unknown" and new_tgt != "Unknown":
+                d["target"], d["target_src"], changed = new_tgt, "xref", True
+            if changed:
+                action, n_fill = "filled", n_fill + 1
+        elif res.get("conflict") and conf >= XREF_CORRECT_CONF and (new_mod != "Unknown" or new_tgt != "Unknown"):
+            d.setdefault("modality_pre_xref", cur_mod)
+            d.setdefault("target_pre_xref", cur_tgt)
+            if new_mod != "Unknown" and new_mod != cur_mod:
+                d["modality"], d["modality_src"], changed = new_mod, "xref", True
+            if new_tgt != "Unknown" and not _tgt_match(cur_tgt, new_tgt):
+                d["target"], d["target_src"], changed = new_tgt, "xref", True
+            if changed:
+                action, n_corr = "corrected", n_corr + 1
+                d.setdefault("data_flags", []).append("xref_corrected")
+
+        if changed:
+            if res.get("biomarkers"):
+                d["biomarker_list"] = list(dict.fromkeys((d.get("biomarker_list") or []) +
+                                                         [b for b in res["biomarkers"] if b]))
+                d["biomarker_mentioned"] = len(d["biomarker_list"]) > 0
+            d["xref_evidence"] = res.get("evidence_uids")
+            d["xref_confidence"] = conf
+            d["xref_note"] = res.get("note")
+            d["moa"] = f"{d['modality']} targeting {d['target']}" if d["target"] != "Unknown" else d["modality"]
+            report.append({"drug": d["drug_name"], "action": action, "before": before,
+                           "after": (d["modality"], d["target"]), "conf": conf,
+                           "evidence": res.get("evidence_uids"), "note": res.get("note")})
+
+    print(f"=== 크로스소스 병합 ===\n  채움 {n_fill} · 교정 {n_corr} (캐시 {len(cache)})")
+    if write:
+        json.dump(data, open(PIPELINE, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+        json.dump(report, open(XREF_REVIEW, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        print(f"저장 -> {PIPELINE}\n리뷰 리포트 -> {XREF_REVIEW} ({len(report)}건)")
+    else:
+        print("\n(미리보기 — 저장하려면 --write)")
+        for r in report[:20]:
+            print(f"  [{r['action']}] {r['drug'][:26]:26} {r['before']} -> {r['after']} "
+                  f"conf={r['conf']} | {(r['note'] or '')[:50]}")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=["drugs", "abstracts", "pipeline"], default="drugs")
+    ap.add_argument("--mode", choices=["drugs", "abstracts", "pipeline", "xref"], default="drugs")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
     if args.mode == "abstracts":
         merge_abstracts(args.write)
     elif args.mode == "pipeline":
         merge_pipeline(args.write)
+    elif args.mode == "xref":
+        merge_xref(args.write)
     else:
         merge(args.write)

@@ -431,6 +431,173 @@ def run_pipeline_summaries(limit: int | None) -> None:
     print(f"완료. 캐시 총 {len(cache)} -> {PIPELINE_CACHE}")
 
 
+XREF_CACHE = "data/cache/llm_xref_cache.json"
+NCT_INDEX = "data/frontend/nct_index.json"
+
+SYSTEM_XREF = (
+    "You are an oncology drug mechanism expert. A clinical trial drug is shown together with "
+    "LINKED evidence — conference abstracts and journal papers that study the SAME drug "
+    "(linked by NCT number or by the drug name appearing in the source title). Reconcile them "
+    "and output the single best mechanism for THIS NAMED DRUG.\n"
+    "Output STRICT JSON only:\n"
+    '{"modality": <one of: ADC, Bispecific Antibody, CAR-T, Monoclonal Antibody, Small Molecule, '
+    "mRNA, Peptide, Cell Therapy, Oncolytic Virus, Radiopharmaceutical, Unknown>, "
+    '"target": <ONE primary gene/protein symbol (e.g. EGFR, HER2, PD-1) or "Unknown">, '
+    '"biomarkers": <list of patient-selection biomarkers or []>, '
+    '"confidence": <0.0-1.0>, '
+    '"evidence": <list of the [n] source tags that support this, e.g. ["1","3"]>, '
+    '"conflict": <true if the trial\'s CURRENT classification disagrees with the evidence>, '
+    '"note": <short reason in English>}\n'
+    "CRITICAL: Use ONLY evidence that is about the NAMED drug. Linked sources may co-mention OTHER "
+    "drugs (combination partners, comparators) — ignore mechanisms that belong to those. Judge from "
+    "the source title/finding whether it truly describes THIS drug. Prefer explicit statements "
+    "(e.g. 'EGFR-cMET bispecific ADC'). If the evidence clearly contradicts the current value, set "
+    "conflict=true and give the corrected value. If no evidence reliably describes this drug, return "
+    "modality/target Unknown with low confidence. Do not invent."
+)
+
+
+def _norm_token(s: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def _load_source_index():
+    """학회초록 + 논문을 uid->record 로 적재하고, 제목토큰 -> {uid} 역색인을 만든다.
+    (코드명 약물은 단일 토큰: AZD9592, SLC-3010 등). 역색인으로 약물명 매칭을 O(1)로."""
+    import glob
+    from collections import defaultdict
+    recs, name_uids = {}, defaultdict(set)
+    files = sorted(glob.glob("data/parsed/abstracts_*.json") + glob.glob("data/parsed/publications_*.json"))
+    for fp in files:
+        for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
+            recs[a["uid"]] = a
+            for w in re.split(r"\s+", (a.get("title") or "")):
+                t = _norm_token(w)
+                if len(t) >= 5:
+                    name_uids[t].add(a["uid"])
+    return recs, name_uids
+
+
+def _evidence_records(drug, nct_index, recs, name_uids):
+    """이 약물의 근거 초록/논문 목록 (NCT 링크 + 제목에 약물명 등장). modality/target 있는 것만."""
+    uids, why = {}, {}
+    for nct in drug.get("nct_ids") or []:
+        for link in nct_index.get(nct, []):
+            uids[link["uid"]] = link
+            why[link["uid"]] = f"NCT {nct}"
+    key = _norm_token(drug.get("drug_name", ""))
+    if len(key) >= 5:  # 짧은 일반명 오매칭 방지 (코드명은 보통 5자+)
+        for uid in name_uids.get(key, ()):
+            if uid not in uids:
+                uids[uid] = {"uid": uid}
+                why[uid] = "name in title"
+    out = []
+    for uid in uids:
+        a = recs.get(uid)
+        if not a:
+            continue
+        if not (a.get("modality_list") or a.get("target_list")):
+            continue  # 근거로서 쓸모없음
+        out.append((uid, why[uid], a))
+    # NCT 링크 + 고신뢰 우선, 최대 8개
+    out.sort(key=lambda x: (x[1].startswith("NCT"), x[2].get("llm_confidence", 0)), reverse=True)
+    return out[:8]
+
+
+def _xref_candidate(drug, ev):
+    """LLM 판정 대상인가: 근거가 있고, (Unknown 채움 여지 OR 기존값과 충돌 가능)."""
+    if not drug.get("is_oncology") or not ev:
+        return False
+    ev_mods, ev_tgts = set(), set()
+    for _, _, a in ev:
+        if a.get("llm_confidence", 0) >= 0.85:
+            ev_mods.update(a.get("modality_list") or [])
+            ev_tgts.update(t for t in (a.get("target_list") or []) if t and t != "Unknown")
+    mod, tgt = drug.get("modality"), drug.get("target")
+    need_fill = mod == "Unknown" or tgt == "Unknown"
+    conflict = (mod != "Unknown" and ev_mods and mod not in ev_mods) or \
+               (tgt != "Unknown" and ev_tgts and not any(_norm_token(tgt) == _norm_token(t) for t in ev_tgts))
+    return bool((need_fill and (ev_mods or ev_tgts)) or conflict)
+
+
+def classify_xref(drug, ev) -> dict:
+    lines = [f"Drug: {drug.get('drug_name')}",
+             f"Trial: {drug.get('condition') or 'n/a'} | {drug.get('official_title') or drug.get('brief_title') or ''}"[:200],
+             f"CURRENT pipeline: modality={drug.get('modality')}, target={drug.get('target')}, "
+             f"biomarkers={drug.get('biomarker_list') or []}",
+             "Linked source findings:"]
+    for i, (uid, why, a) in enumerate(ev, 1):
+        conf = a.get("llm_confidence", 0)
+        lines.append(f"[{i}] ({uid}, {why}, conf {conf}) \"{(a.get('title') or '')[:120]}\" "
+                     f"-> modality={a.get('modality_list')}, target={a.get('target_list')}, "
+                     f"biomarkers={a.get('biomarker_list')}")
+    raw = ollama(f"{SYSTEM_XREF}\n\n" + "\n".join(lines) + "\n\nJSON:", timeout=180)
+    data, _ = _loads_lenient(raw)
+    if data is None:
+        return {"_unparsed": True}
+    return {
+        "modality": normalize_modality(data.get("modality")),
+        "target": (data.get("target") or "Unknown").strip() or "Unknown",
+        "biomarkers": data.get("biomarkers") if isinstance(data.get("biomarkers"), list) else [],
+        "confidence": float(data.get("confidence", 0.0)) if isinstance(data.get("confidence", 0.0), (int, float)) else 0.0,
+        "conflict": bool(data.get("conflict")),
+        "evidence": [str(e) for e in data.get("evidence", [])] if isinstance(data.get("evidence"), list) else [],
+        "evidence_uids": [ev[int(e) - 1][0] for e in data.get("evidence", [])
+                          if str(e).isdigit() and 1 <= int(e) <= len(ev)] if isinstance(data.get("evidence"), list) else [],
+        "note": (data.get("note") or "")[:200],
+    }
+
+
+def run_xref(limit, dry_run=False):
+    """임상↔학회↔논문 크로스소스 보완. NCT + 제목 약물명으로 근거를 모아 LLM(품질용 27b 권장)이
+    modality/target/biomarker를 판정. drug_id 캐시(재개형). dry_run이면 근거 번들만 출력(LLM X)."""
+    drugs = json.load(open(PIPELINE, encoding="utf-8"))["drugs"]
+    nct_index = json.load(open(NCT_INDEX, encoding="utf-8")) if os.path.exists(NCT_INDEX) else {}
+    recs, name_uids = _load_source_index()
+    cache = json.load(open(XREF_CACHE, encoding="utf-8")) if os.path.exists(XREF_CACHE) else {}
+
+    todo = []
+    for d in drugs:
+        if not d.get("drug_id") or d["drug_id"] in cache:
+            continue
+        ev = _evidence_records(d, nct_index, recs, name_uids)
+        if _xref_candidate(d, ev):
+            todo.append((d, ev))
+    if limit:
+        todo = todo[:limit]
+    print(f"엔트리 {len(drugs)} · 크로스소스 후보 {len(todo)} (캐시됨 {len(cache)})")
+
+    if dry_run:
+        for d, ev in todo[: (limit or 10)]:
+            print(f"\n=== {d['drug_name']} (현재 mod={d.get('modality')} tgt={d.get('target')}) ===")
+            for i, (uid, why, a) in enumerate(ev, 1):
+                print(f"  [{i}] {uid} ({why}) mod={a.get('modality_list')} tgt={a.get('target_list')} "
+                      f"| {(a.get('title') or '')[:70]}")
+        print(f"\n(dry-run: {len(todo)} 후보, LLM 미호출)")
+        return
+
+    t0 = time.time()
+    for i, (d, ev) in enumerate(todo, 1):
+        try:
+            res = classify_xref(d, ev)
+        except Exception as e:
+            res = {"_error": str(e)[:80]}
+        if "_error" in res or res.get("_unparsed"):
+            print(f"  [skip] {d['drug_name'][:30]}: {res.get('_error','unparsed')}")
+            continue
+        cache[d["drug_id"]] = res
+        if i % 10 == 0 or i == len(todo):
+            os.makedirs(os.path.dirname(XREF_CACHE), exist_ok=True)
+            tmp = XREF_CACHE + ".tmp"
+            json.dump(cache, open(tmp, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+            os.replace(tmp, XREF_CACHE)
+            rate = i / (time.time() - t0)
+            print(f"  {i}/{len(todo)} {rate:.2f}/s ETA {(len(todo)-i)/rate/60:.0f}min | "
+                  f"{d['drug_name'][:24]} -> {res['modality']}/{res['target']} "
+                  f"{'CONFLICT' if res.get('conflict') else ''} conf={res['confidence']}", flush=True)
+    print(f"완료. 캐시 총 {len(cache)} -> {XREF_CACHE}")
+
+
 def run_eval(limit: int) -> None:
     """규칙기반 vs LLM 비교 (현재 Unknown이 아닌 것 포함, 무작위)."""
     import random
@@ -460,8 +627,9 @@ def run_eval(limit: int) -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=["drugs", "abstracts", "pipeline", "eval"], default="eval")
+    ap.add_argument("--mode", choices=["drugs", "abstracts", "pipeline", "xref", "eval"], default="eval")
     ap.add_argument("--only-unknown", action="store_true")
+    ap.add_argument("--dry-run", action="store_true", help="xref: 근거 번들만 출력(LLM 미호출)")
     ap.add_argument("--limit", type=int, default=None)
     args = ap.parse_args()
     if args.mode == "eval":
@@ -470,5 +638,7 @@ if __name__ == "__main__":
         run_abstracts(args.limit)
     elif args.mode == "pipeline":
         run_pipeline_summaries(args.limit)
+    elif args.mode == "xref":
+        run_xref(args.limit, dry_run=args.dry_run)
     else:
         run_drugs(args.only_unknown, args.limit)
