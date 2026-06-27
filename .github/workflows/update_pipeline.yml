@@ -1,8 +1,10 @@
 name: Update Oncology Data (pipeline + publications)
 
 on:
-  schedule:
-    - cron: '0 0 * * 1'   # 매주 월요일 00:00 UTC (09:00 KST)
+  # 주간 자동 실행 일시중지 — drug_id 안정화 전까지 재파싱하면 임상시험 한국어 요약이
+  # 소실되므로 cron 비활성화. drug_id 안정화 + 캐시 마이그레이션 완료 후 복구.
+  # schedule:
+  #   - cron: '0 0 * * 1'   # 매주 월요일 00:00 UTC (09:00 KST)
   workflow_dispatch:
 
 # 필요 시크릿 (Settings > Secrets and variables > Actions):
