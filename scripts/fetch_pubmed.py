@@ -28,7 +28,9 @@ def fetch_papers_by_nct(nct_id: str, drug_name: str, max_results: int = 5) -> li
     if not nct_id or not drug_name or drug_name == "Unknown":
         return []
 
-    query = f'"{nct_id}" AND "{drug_name}" NOT (PUB_TYPE:"review")'
+    # 약물명은 제목(TITLE)에서만 매칭 — 본문에 약물명만 스친 광범위 논문을 배제(정밀도↑).
+    # NCT 직접 언급 + 약물명이 제목에 있는 1차 연구만.
+    query = f'"{nct_id}" AND TITLE:"{drug_name}" NOT (PUB_TYPE:"review")'
     params = {
         "query": query,
         "resultType": "lite",

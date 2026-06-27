@@ -153,6 +153,23 @@ function makeColumns(nctIndex) {
     size: 170,
   }),
 
+  // 시험 수행 국가 (CT.gov locations) — Company 옆
+  col.accessor('countries', {
+    header: 'Country',
+    enableSorting: false,
+    cell: ({ getValue }) => {
+      const list = [...new Set(getValue() ?? [])]
+      if (list.length === 0) return <span className="text-slate-300">—</span>
+      return (
+        <div className="text-xs text-slate-600 break-words leading-tight line-clamp-3" title={list.join(', ')}>
+          {list.join(', ')}
+          {list.length > 1 && <span className="ml-1 text-[9px] font-bold text-slate-400">×{list.length}</span>}
+        </div>
+      )
+    },
+    size: 130,
+  }),
+
   col.accessor('target', {
     header: 'Target',
     cell: ({ getValue, row }) => {
@@ -167,6 +184,29 @@ function makeColumns(nctIndex) {
       )
     },
     size: 110,
+  }),
+
+  // Biomarker는 Target 옆으로 이동
+  col.accessor('biomarker_list', {
+    header: 'Biomarkers',
+    enableSorting: false,
+    cell: ({ getValue }) => {
+      const list = getValue() ?? []
+      if (list.length === 0) return <span className="text-slate-300">—</span>
+      return (
+        <div className="flex flex-wrap gap-1">
+          {list.slice(0, 3).map((b) => (
+            <span key={b} className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+              {b}
+            </span>
+          ))}
+          {list.length > 3 && (
+            <span className="text-xs text-slate-400">+{list.length - 3}</span>
+          )}
+        </div>
+      )
+    },
+    size: 170,
   }),
 
   col.accessor('modality', {
@@ -232,17 +272,17 @@ function makeColumns(nctIndex) {
   col.accessor('start_date', {
     header: 'Start',
     cell: ({ getValue }) => (
-      <span className="text-sm text-slate-600">{getValue() || '—'}</span>
+      <span className="text-sm text-slate-600 whitespace-nowrap">{getValue() || '—'}</span>
     ),
-    size: 100,
+    size: 112,
   }),
 
   col.accessor('primary_completion_date', {
     header: 'Completion',
     cell: ({ getValue }) => (
-      <span className="text-sm text-slate-600">{getValue() || '—'}</span>
+      <span className="text-sm text-slate-600 whitespace-nowrap">{getValue() || '—'}</span>
     ),
-    size: 100,
+    size: 112,
   }),
 
   col.accessor('partnership_status', {
@@ -258,67 +298,14 @@ function makeColumns(nctIndex) {
     size: 90,
   }),
 
-  col.accessor('biomarker_list', {
-    header: 'Biomarkers',
-    enableSorting: false,
-    cell: ({ getValue }) => {
-      const list = getValue() ?? []
-      if (list.length === 0) return <span className="text-slate-300">—</span>
-      return (
-        <div className="flex flex-wrap gap-1">
-          {list.slice(0, 3).map((b) => (
-            <span key={b} className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-              {b}
-            </span>
-          ))}
-          {list.length > 3 && (
-            <span className="text-xs text-slate-400">+{list.length - 3}</span>
-          )}
-        </div>
-      )
-    },
-    size: 180,
-  }),
-
+  // MoA는 truncate 대신 줄바꿈으로 전체 표시
   col.accessor('moa', {
     header: 'MoA',
     enableSorting: false,
-    cell: ({ getValue }) => {
-      const v = getValue() || '—'
-      return (
-        <span title={v} className="text-xs text-slate-500 truncate block max-w-36">
-          {v}
-        </span>
-      )
-    },
-    size: 150,
-  }),
-
-  col.display({
-    id: 'pubmed',
-    header: 'Papers',
-    enableSorting: false,
-    cell: ({ row }) => {
-      const links = row.original.pubmed_links ?? []
-      if (links.length === 0) return <span className="text-slate-300">—</span>
-      return (
-        <div className="flex gap-1">
-          {links.map((l) => (
-            <a
-              key={l.pmid}
-              href={l.url}
-              target="_blank"
-              rel="noreferrer"
-              title={l.title}
-              className="text-blue-500 hover:text-blue-700 text-sm"
-            >
-              📄
-            </a>
-          ))}
-        </div>
-      )
-    },
-    size: 60,
+    cell: ({ getValue }) => (
+      <span className="text-xs text-slate-500 break-words leading-tight block">{getValue() || '—'}</span>
+    ),
+    size: 170,
   }),
   ]
 }

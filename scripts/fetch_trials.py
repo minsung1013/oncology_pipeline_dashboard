@@ -26,6 +26,7 @@ FIELDS = [
     "OverallStatus",
     "LeadSponsorName",
     "CollaboratorName",
+    "LocationCountry",
     "PrimaryCompletionDate",
     "StartDate",
     "EligibilityCriteria",

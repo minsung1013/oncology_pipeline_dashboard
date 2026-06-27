@@ -3,9 +3,10 @@
 raw JSON → 구조화된 필드 추출 (모달리티, 타겟, 바이오마커, CDx 전략, dedup)
 """
 
+import hashlib
 import json
 import re
-import uuid
+import uuid  # noqa: F401  (하위호환; drug_id는 stable_drug_id 사용)
 from datetime import datetime, timezone
 
 from normalize_entities import normalize_companies
@@ -285,10 +286,14 @@ def infer_biomarkers(eligibility_text: str, brief_summary: str) -> tuple[bool, l
 
 
 def _extract_references(refs_mod: dict) -> list[dict]:
-    """referencesModule에서 PMID가 있는 논문 링크 추출."""
+    """referencesModule에서 PMID 논문 링크 추출 — 정밀도 우선.
+    type: RESULT(시험 결과 논문)·DERIVED(PubMed가 NCT 자동연결)만 채택하고,
+    BACKGROUND(배경 인용, 시험/약물과 무관한 경우 많음)는 제외해 노이즈를 줄인다."""
     links = []
     seen = set()
     for ref in refs_mod.get("references", []):
+        if ref.get("type") == "BACKGROUND":
+            continue
         pmid = ref.get("pmid", "").strip()
         if not pmid or pmid in seen:
             continue
@@ -301,6 +306,7 @@ def _extract_references(refs_mod: dict) -> list[dict]:
             "title": title,
             "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}",
             "source": "clinicaltrials",
+            "ref_type": ref.get("type", ""),
         })
     return links
 
@@ -372,6 +378,9 @@ def extract_study_fields(study: dict) -> dict | None:
     outcomes_mod = proto.get("outcomesModule", {})
     conditions_mod = proto.get("conditionsModule", {})
     refs_mod = proto.get("referencesModule", {})
+    # 시험 수행 국가 (contactsLocationsModule.locations[].country) — Company 옆 Country 컬럼용.
+    locs = proto.get("contactsLocationsModule", {}).get("locations", [])
+    countries = list(dict.fromkeys(l.get("country", "").strip() for l in locs if l.get("country")))
 
     # 약물명 추출 (InterventionName)
     interventions = arms_mod.get("interventions", [])
@@ -456,6 +465,7 @@ def extract_study_fields(study: dict) -> dict | None:
         "company": lead_sponsor,
         "company_normalized": (normalize_companies(lead_sponsor) or [None])[0],
         "collaborators": collaborators,
+        "countries": countries,
         "partnership_status": partnership_status,
         "condition": condition,
         # 원본 conditionsModule.conditions 는 복수 암종 배열 — 대표(condition)만 쓰던 것을
@@ -502,6 +512,17 @@ def _normalize_drug_name(name: str) -> str:
     return re.sub(r"\s+", " ", name.strip().lower())
 
 
+def stable_drug_id(rep: dict) -> str:
+    """결정적 drug_id — 재파싱해도 같은 엔트리는 같은 id (요약/xref 캐시가 살아남도록).
+    키: 정규화 약물명 + 병용세트 + 정렬 NCT + condition (현재 데이터 33,891건 충돌 0).
+    마이그레이션 스크립트도 이 함수를 import해 동일 해시 보장."""
+    name = _normalize_drug_name(rep.get("drug_name", ""))
+    regimen = "+".join(sorted(_normalize_drug_name(x) for x in (rep.get("all_drugs") or [rep.get("drug_name", "")])))
+    ncts = "|".join(sorted(rep.get("nct_ids") or []))
+    cond = _normalize_drug_name(rep.get("condition", ""))
+    return hashlib.sha1(f"{name}::{regimen}::{ncts}::{cond}".encode()).hexdigest()[:16]
+
+
 def _regimen_key(rec: dict) -> frozenset:
     """병용 약물 세트 (대표+병용 전체, 정규화)."""
     drugs = rec.get("all_drugs") or [rec.get("drug_name", "")]
@@ -540,6 +561,8 @@ def dedup_by_drug(records: list[dict]) -> list[dict]:
         for r in group:
             all_ncts.extend(r.get("nct_ids", []))
         rep["nct_ids"] = list(dict.fromkeys(all_ncts))
+        # 그룹 내 모든 trial의 수행 국가 합치기
+        rep["countries"] = list(dict.fromkeys(c for r in group for c in (r.get("countries") or [])))
 
         # Stage 1: 그룹 내 모든 trial의 references 합치기
         seen_pmids = set()
@@ -552,7 +575,7 @@ def dedup_by_drug(records: list[dict]) -> list[dict]:
                     merged_links.append(link)
         rep["pubmed_links"] = merged_links
 
-        rep["drug_id"] = str(uuid.uuid4())
+        rep["drug_id"] = stable_drug_id(rep)
 
         result.append(rep)
 
