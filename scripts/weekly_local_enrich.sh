@@ -54,13 +54,19 @@ python3 scripts/llm_merge.py --mode abstracts --write || true
 python3 scripts/llm_merge.py --mode pipeline --write || true
 python3 scripts/normalize_fields.py --write || true
 
+# 4.5) 크로스소스 보완 (신규 약물): nct_index 갱신 후 27b(품질)로 채움/교정 ------
+python3 scripts/make_frontend_data.py --only abstracts || true   # nct_index 생성(xref 입력)
+LLM_MODEL="qwen3.5:27b" LLM_NUM_GPU=32 python3 scripts/llm_enrich.py --mode xref
+python3 scripts/llm_merge.py --mode xref --write || true
+python3 scripts/normalize_fields.py --write || true
+
 # 5) 프론트 재생성 + R2 배포 ------------------------------------------------
 python3 scripts/make_frontend_data.py
 python3 scripts/upload_r2.py
 python3 scripts/sync_parsed.py upload || true
 
 # 6) 캐시를 git에 보존 (CI 재적용 + 다음 주 증분 베이스) ----------------------
-git add data/cache/llm_drug_cache.json data/cache/llm_abstract_cache.json data/cache/llm_pipeline_cache.json 2>/dev/null || true
+git add data/cache/llm_drug_cache.json data/cache/llm_abstract_cache.json data/cache/llm_pipeline_cache.json data/cache/llm_xref_cache.json 2>/dev/null || true
 git diff --staged --quiet || git commit -m "chore: weekly local LLM enrich $(date +%Y-%m-%d)"
 git push || true
 

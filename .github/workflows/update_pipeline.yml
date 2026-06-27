@@ -76,6 +76,7 @@ jobs:
           python scripts/llm_merge.py --write || true                 # drugs: modality/target/biomarker
           python scripts/llm_merge.py --mode abstracts --write || true # 학회초록 + 논문 한국어 요약
           python scripts/llm_merge.py --mode pipeline --write || true  # 임상시험 한국어 요약
+          python scripts/llm_merge.py --mode xref --write || true      # 크로스소스 채움/교정
           python scripts/normalize_fields.py --write || true
 
       # whatsnew 델타용 직전 스냅샷 (신규 논문 PMID 차이 산정)
