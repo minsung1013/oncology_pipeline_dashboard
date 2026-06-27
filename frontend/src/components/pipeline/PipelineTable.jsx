@@ -26,6 +26,7 @@ function AiTag({ ruleValue }) {
 
 function DrugCell({ d, nctIndex }) {
   const [expanded, setExpanded] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
   const ncts = d.nct_ids ?? []
   const combo = d.combo_drugs ?? []
   const primaryUrl = d.clinicaltrials_url || (ncts[0] ? `https://clinicaltrials.gov/study/${ncts[0]}` : null)
@@ -83,13 +84,20 @@ function DrugCell({ d, nctIndex }) {
         </div>
       )}
 
-      {/* AI 한국어 요약 (전문은 툴팁) */}
+      {/* AI 한국어 요약 — 토글 (기본 숨김, 클릭 시 펼침) */}
       {d.summary_ko && (
-        <div
-          className="text-xs text-slate-500 mt-1 leading-snug line-clamp-3 cursor-help"
-          title={d.summary_ko}
-        >
-          {d.summary_ko}
+        <div className="mt-1">
+          <button
+            onClick={() => setShowSummary((v) => !v)}
+            className="text-[10px] font-semibold text-violet-600 hover:text-violet-800 inline-flex items-center gap-0.5"
+          >
+            {showSummary ? '▲ AI 요약 숨기기' : '▼ AI 요약'}
+          </button>
+          {showSummary && (
+            <div className="text-xs text-slate-600 mt-0.5 leading-snug border-l-2 border-violet-100 pl-2">
+              {d.summary_ko}
+            </div>
+          )}
         </div>
       )}
 
@@ -127,15 +135,15 @@ function makeColumns(nctIndex) {
       const d = row.original
       return (
         <div className="min-w-0">
-          {/* 긴 원본 회사명은 1줄 truncate + 정규명/전체명 툴팁 */}
+          {/* 긴 회사명은 truncate 대신 줄바꿈(최대 3줄)으로 보기 좋게 + 정규명/전체명 툴팁 */}
           <div
-            className="font-medium text-slate-700 truncate"
+            className="font-medium text-slate-700 break-words leading-tight line-clamp-3"
             title={d.company_normalized ? `${d.company_normalized} · ${d.company}` : d.company || ''}
           >
             {d.company || '—'}
           </div>
           {d.collaborators?.length > 0 && (
-            <div className="text-xs text-slate-400 truncate" title={d.collaborators.join(', ')}>
+            <div className="text-xs text-slate-400 break-words leading-tight line-clamp-2 mt-0.5" title={d.collaborators.join(', ')}>
               + {d.collaborators.join(', ')}
             </div>
           )}
