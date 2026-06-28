@@ -6,7 +6,7 @@ import PipelineTable from '../components/pipeline/PipelineTable'
 import { applyDrugFilters, getDrugFilterOptions, groupByCompany, drugCompanies } from '../utils/drugFilters'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 
-import { getPipeline, getNctIndex, getDrugLinks } from '../utils/dataSource'
+import { getPipeline, getNctIndex } from '../utils/dataSource'
 
 // Pipeline 고유(비공유) 필터 기본값
 const LOCAL_DEFAULT = {
@@ -43,7 +43,6 @@ function buildFilters() {
 export default function PipelinePage() {
   const [data, setData] = useState(null)
   const [nctIndex, setNctIndex] = useState({})
-  const [drugLinks, setDrugLinks] = useState({})
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(buildFilters)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -86,7 +85,6 @@ export default function PipelinePage() {
   useEffect(() => {
     getPipeline().then(setData).catch((e) => setError(e.message))
     getNctIndex().then(setNctIndex).catch(() => {})
-    getDrugLinks().then(setDrugLinks).catch(() => {})
   }, [])
 
   const allDrugs = data?.drugs ?? []
@@ -215,7 +213,7 @@ export default function PipelinePage() {
               </span>
             )}
           </div>
-          <PipelineTable drugs={tableDrugs} nctIndex={nctIndex} drugLinks={drugLinks} />
+          <PipelineTable drugs={tableDrugs} nctIndex={nctIndex} />
         </div>
       </div>
     </div>
