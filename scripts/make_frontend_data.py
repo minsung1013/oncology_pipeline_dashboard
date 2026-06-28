@@ -421,6 +421,95 @@ def build_author_counts():
           f"{os.path.getsize(path)/1024:.0f}KB)")
 
 
+# ── 약물 ↔ 학회초록/논문 연결 (rowspan 통합뷰용) ──────────────────────────────
+# 매칭 키: ① NCT 교집합(확정) + ② 약물 코드명이 제목에 등장(숫자 포함 토큰만 — 일반명
+# pembrolizumab 등의 광범위 오연결 방지). 약물당 상위 LINK_MAX개 embed, 나머지는 카운트만.
+LINK_MAX = 15
+
+
+def _norm_token(s):
+    return _re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def _is_code_token(t):
+    return len(t) >= 5 and bool(_re.search(r"\d", t))  # 코드명 휴리스틱: 5자+ & 숫자 포함
+
+
+def _link_lite(a, why):
+    """연결 논문/초록의 표시용 경량 레코드 (제목·한국어요약·대표저자·소속·출처)."""
+    au = (a.get("authors") or [{}])[0]
+    affil = au.get("affiliation")
+    is_pub = bool(a.get("pmid")) or str(a.get("uid", "")).startswith("pub-")
+    return {
+        "uid": a.get("uid"),
+        "axis": "publication" if is_pub else "conference",
+        "venue": a.get("journal") if is_pub else a.get("conference"),
+        "year": a.get("year"),
+        "title": a.get("title"),
+        "summary_ko": a.get("summary_ko"),
+        "author": au.get("name"),
+        "affil": normalize_affiliation(affil) if affil else None,
+        "pmid": a.get("pmid"),
+        "doi": (a.get("source") or {}).get("doi"),
+        "why": why,  # "nct"(NCT 교집합) | "title"(코드명 제목매칭)
+    }
+
+
+def build_drug_links():
+    """data/frontend/drug_links.json = {drug_id: {linked:[...], n_pub, n_conf, total}}.
+    pipeline 테이블 rowspan 통합뷰에서 프론트가 drug_id로 join. 본 파일이 없으면 통합뷰는
+    파이프라인 단독 행으로 폴백. parsed(초록/논문/pipeline) 없으면 기존 보존(스킵)."""
+    from collections import defaultdict
+    if not os.path.exists("data/parsed/pipeline.json") or (
+            not glob.glob("data/parsed/abstracts_*.json") and not glob.glob("data/parsed/publications_*.json")):
+        print("drug_links: parsed 부족 — 스킵(기존 보존)")
+        return
+    recs, nct_uids, title_uids = {}, defaultdict(list), defaultdict(set)
+    for fp in sorted(glob.glob("data/parsed/abstracts_*.json") + glob.glob("data/parsed/publications_*.json")):
+        for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
+            uid = a["uid"]
+            recs[uid] = a
+            for nct in a.get("nct_ids") or []:
+                nct_uids[nct].append(uid)
+            for w in _re.split(r"\s+", a.get("title") or ""):
+                t = _norm_token(w)
+                if _is_code_token(t):
+                    title_uids[t].add(uid)
+
+    drugs = json.load(open("data/parsed/pipeline.json", encoding="utf-8"))["drugs"]
+    out = {}
+    for d in drugs:
+        did = d.get("drug_id")
+        if not did:
+            continue
+        why = {}  # uid -> "nct" | "title" (nct 우선)
+        for nct in d.get("nct_ids") or []:
+            for u in nct_uids.get(nct, []):
+                why[u] = "nct"
+        key = _norm_token(d.get("drug_name", ""))
+        if _is_code_token(key):
+            for u in title_uids.get(key, ()):
+                why.setdefault(u, "title")
+        if not why:
+            continue
+        items = [_link_lite(recs[u], why[u]) for u in why if u in recs]
+        # NCT 연결 우선 → 최신 연도 우선 (year는 str/int 혼재 가능 → int 강제)
+        def _yr(x):
+            m = _re.search(r"\d{4}", str(x.get("year") or ""))
+            return int(m.group()) if m else 0
+        items.sort(key=lambda x: (x["why"] == "nct", _yr(x)), reverse=True)
+        n_pub = sum(1 for x in items if x["axis"] == "publication")
+        n_conf = len(items) - n_pub
+        out[did] = {"linked": items[:LINK_MAX], "n_pub": n_pub, "n_conf": n_conf, "total": len(items)}
+
+    os.makedirs(OUT, exist_ok=True)
+    path = f"{OUT}/drug_links.json"
+    json.dump(out, open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    npair = sum(v["total"] for v in out.values())
+    print(f"drug_links -> {path}  ({len(out)} drugs linked, {npair} pairs, "
+          f"{os.path.getsize(path)/1024/1024:.1f} MB)")
+
+
 def build_pipeline():
     src = "data/parsed/pipeline.json"
     if not os.path.exists(src):
@@ -442,7 +531,8 @@ def build_pipeline():
 if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", choices=["abstracts", "pipeline", "facets", "publications", "whatsnew", "authorcounts"],
+    ap.add_argument("--only", choices=["abstracts", "pipeline", "facets", "publications",
+                                       "whatsnew", "authorcounts", "druglinks"],
                     default=None, help="일부만 빌드 (CI에서 pipeline만 갱신 등)")
     only = ap.parse_args().only
     if only in (None, "abstracts"):
@@ -455,6 +545,8 @@ if __name__ == "__main__":
         build_author_counts()  # 전체 교신저자 기록 수(배지)
     if only in (None, "pipeline"):
         build_pipeline()
+    if only in (None, "pipeline", "abstracts", "publications", "druglinks"):
+        build_drug_links()  # 약물 ↔ 학회/논문 연결 (rowspan 통합뷰)
     if only in (None, "facets"):
         build_facets()
     if only in (None, "whatsnew"):

@@ -35,6 +35,21 @@ export async function getNctIndex() {
   return _nctIndex
 }
 
+// 약물 ↔ 학회초록/논문 연결 (drug_id → {linked[], n_pub, n_conf, total}).
+// Pipeline 통합뷰에서 drug_id로 join. 없거나 실패하면 {} (단독 행으로 폴백).
+let _drugLinks = null
+export async function getDrugLinks() {
+  if (!_drugLinks) {
+    try {
+      const r = await fetch(`${DATA_BASE}/drug_links.json`, REVALIDATE)
+      _drugLinks = r.ok ? await r.json() : {}
+    } catch {
+      _drugLinks = {}
+    }
+  }
+  return _drugLinks
+}
+
 // 랜딩 통합 필터용 경량 옵션(facets) — 데이터 전체 로드 없이 옵션만.
 let _facets = null
 export async function getFacets() {

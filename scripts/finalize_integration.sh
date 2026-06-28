@@ -9,6 +9,7 @@ echo "LOG=$LOG" | tee logs/.integration_current
 exec >> "$LOG" 2>&1
 echo "===== 통합 오케스트레이션 시작 $(date) ====="
 caffeinate -ims -w $$ &
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8  # C 로케일에서 멀티바이트가 변수명에 붙는 문제 방지
 set -a; [ -f .env.r2 ] && . ./.env.r2; set +a
 
 die(){ echo "[FAIL] $* $(date)"; osascript -e "display notification \"통합 중단: $*\" with title \"오케스트레이션 실패\" sound name \"Basso\"" 2>/dev/null; exit 1; }
@@ -24,7 +25,7 @@ echo "   xref 종료 감지 $(date)"
 echo ">> 1/8 drug_id 마이그레이션"
 python3 scripts/migrate_drug_id.py || die "migrate_drug_id 실패"
 PIPE_CACHE=$(python3 -c "import json;print(len(json.load(open('data/cache/llm_pipeline_cache.json'))))")
-echo "   pipeline 요약 캐시 $PIPE_CACHE개"
+echo "   pipeline 요약 캐시 ${PIPE_CACHE}개"
 
 # 2) 재파싱 (안정 id + conditions + countries + brief_summary + BACKGROUND필터 referencesModule)
 echo ">> 2/8 재파싱 (industry 스코프, --skip-pubmed)"

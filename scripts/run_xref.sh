@@ -23,13 +23,15 @@ echo "[xref] 선행 완료 감지 $(date) — 크로스소스 보강 시작 (27b
 
 ensure_ollama() {
   curl -s http://localhost:11434/api/tags >/dev/null 2>&1 && return 0
-  open -a Ollama 2>/dev/null || nohup ollama serve >> logs/ollama_serve.log 2>&1 &
+  # 스크립트 환경(OLLAMA_FLASH_ATTENTION=0 등) 상속하도록 plain serve로 기동 (gemma4는 FA=0 필수)
+  nohup ollama serve >> logs/ollama_serve.log 2>&1 &
   for _ in $(seq 1 30); do curl -s http://localhost:11434/api/tags >/dev/null 2>&1 && return 0; sleep 2; done
 }
 retry() { local n=0; until "$@"; do n=$((n+1)); [ $n -ge 3 ] && return 1; echo "[xref] 재시도 $n/3: $*"; sleep 20; done; }
 
-# 품질용 dense 27b (부분 오프로드 기본 NUM_GPU=32). 워치독: 죽어도 캐시에서 재개.
-export LLM_MODEL="qwen3.5:27b"
+# 모델 env로 교체 가능(기본 gemma4@30, FA=0 필요). 워치독: 죽어도 캐시에서 재개.
+#   27b로 되돌리려면 XREF_MODEL=qwen3.5:27b XREF_NUM_GPU=32 (FA env 불필요)
+export LLM_MODEL="${XREF_MODEL:-gemma4:26b}" LLM_NUM_GPU="${XREF_NUM_GPU:-30}"
 while true; do
   ensure_ollama || echo "[xref] Ollama 미응답 — 그래도 시도"
   python3 scripts/llm_enrich.py --mode xref

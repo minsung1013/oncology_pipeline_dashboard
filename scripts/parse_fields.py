@@ -312,11 +312,12 @@ def _extract_references(refs_mod: dict) -> list[dict]:
 
 
 def normalize_cancer_category(condition: str) -> tuple[str, str]:
-    """(cancer_category, condition_normalized) 반환."""
-    text = condition.lower()
+    """(cancer_category, condition_normalized) 반환.
+    단어경계 매칭 — 약어 키워드("CRC","RCC" 등)가 다른 단어 부분문자열에 잘못 걸리는 것 방지
+    (예: Colorectal "CRC"가 "ccRCC"(신장암)에 매칭되던 버그)."""
     for category, keywords in CANCER_CATEGORY_MAP.items():
         for kw in keywords:
-            if kw.lower() in text:
+            if _word_boundary_match(condition, kw):
                 return category, condition
     return "Other", condition
 

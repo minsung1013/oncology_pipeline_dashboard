@@ -121,6 +121,114 @@ function DrugCell({ d, nctIndex }) {
   )
 }
 
+// 연결된 학회초록/논문 한 건 (하위 행 내부 레이아웃): 출처배지 · 제목+한국어요약 · 저자+소속
+function LinkedRow({ it }) {
+  const isPub = it.axis === 'publication'
+  const href = it.pmid
+    ? `https://pubmed.ncbi.nlm.nih.gov/${it.pmid}/`
+    : it.doi ? `https://doi.org/${it.doi}` : null
+  const yr = it.year ? `·${String(it.year).slice(2)}` : ''
+  const venue = `${it.venue ?? (isPub ? 'Journal' : 'Conf')}${yr}`
+  return (
+    <div className="flex gap-2 items-start">
+      {/* 출처 배지 (제목 앞 작게) */}
+      <span
+        className={`shrink-0 mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${
+          isPub ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+        }`}
+        title={isPub ? 'Journal publication' : 'Conference abstract'}
+      >
+        {isPub ? '📄' : '🎤'} {venue}
+      </span>
+      {/* 제목 + 한국어 요약 */}
+      <div className="min-w-0 flex-1">
+        <div className="text-xs text-slate-700 leading-snug">
+          {href ? (
+            <a href={href} target="_blank" rel="noreferrer" className="hover:underline">{it.title || '—'}</a>
+          ) : (it.title || '—')}
+          {it.why === 'nct' && (
+            <span className="ml-1 text-[9px] font-bold text-blue-400 align-middle" title="NCT 직접 연결">●NCT</span>
+          )}
+        </div>
+        {it.summary_ko && (
+          <div className="text-[11px] text-slate-500 leading-snug mt-0.5 border-l-2 border-slate-200 pl-1.5">
+            {it.summary_ko}
+          </div>
+        )}
+      </div>
+      {/* 대표 저자 + 소속 (학회=발표자, 논문=교신/책임) */}
+      <div className="shrink-0 w-40 text-[11px] leading-tight">
+        <div className="font-medium text-slate-600 truncate" title={it.author || ''}>{it.author || '—'}</div>
+        {it.affil && <div className="text-slate-400 line-clamp-2" title={it.affil}>{it.affil}</div>}
+      </div>
+    </div>
+  )
+}
+
+// 약물 1개 = 메인행(pipeline) + 연결된 논문·초록 하위행들. 우측 공통열은 rowSpan으로 병합.
+// 정렬/필터/페이지는 TanStack이 약물 단위로 관리하고, 하위행은 렌더링 레이어에서만 펼침.
+const LEFT_IDS = new Set(['drug_name', 'company', 'countries'])
+
+function DrugRowGroup({ row, links }) {
+  const [expanded, setExpanded] = useState(false)
+  const cells = row.getVisibleCells()
+  const leftCells = cells.filter((c) => LEFT_IDS.has(c.column.id))
+  const rightCells = cells.filter((c) => !LEFT_IDS.has(c.column.id))
+
+  const linked = links?.linked ?? []
+  const nLinks = linked.length
+  const shown = expanded ? linked : linked.slice(0, 3)
+  const hasToggle = nLinks > 3
+  const span = 1 + shown.length + (hasToggle ? 1 : 0)  // 우측 공통열 rowSpan = 그룹 총 <tr> 수
+
+  const tdCommon = 'px-3 py-2 align-top overflow-hidden'
+  return (
+    <>
+      {/* 메인 파이프라인 행 */}
+      <tr className="border-b border-slate-100 hover:bg-slate-50/60 bg-white">
+        {leftCells.map((cell) => (
+          <td key={cell.id} style={{ width: cell.column.getSize() }} className={tdCommon}>
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </td>
+        ))}
+        {rightCells.map((cell) => (
+          <td
+            key={cell.id}
+            rowSpan={span}
+            style={{ width: cell.column.getSize() }}
+            className={`${tdCommon} border-l border-slate-50`}
+          >
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </td>
+        ))}
+      </tr>
+
+      {/* 연결된 논문·초록 하위행 (좌측 3열 병합) */}
+      {shown.map((it) => (
+        <tr key={it.uid} className="border-b border-slate-100 bg-violet-50/30 hover:bg-violet-50/60">
+          <td colSpan={leftCells.length} className="px-3 py-1.5 align-top border-l-2 border-violet-200">
+            <LinkedRow it={it} />
+          </td>
+        </tr>
+      ))}
+
+      {/* 더보기 / 접기 토글 */}
+      {hasToggle && (
+        <tr className="border-b border-slate-100 bg-violet-50/30">
+          <td colSpan={leftCells.length} className="px-3 py-1 border-l-2 border-violet-200">
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="text-[11px] font-semibold text-violet-600 hover:text-violet-800"
+            >
+              {expanded ? '▲ 접기' : `+${nLinks - 3} more (논문·학회 ▼)`}
+            </button>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
 function makeColumns(nctIndex) {
   return [
   col.accessor('drug_name', {
@@ -311,7 +419,7 @@ function makeColumns(nctIndex) {
 }
 
 
-export default function PipelineTable({ drugs, nctIndex = {} }) {
+export default function PipelineTable({ drugs, nctIndex = {}, drugLinks = {} }) {
   const [sorting, setSorting] = useState([])
   const [columnSizing, setColumnSizing] = useState({})
   const columns = useMemo(() => makeColumns(nctIndex), [nctIndex])
@@ -384,20 +492,11 @@ export default function PipelineTable({ drugs, nctIndex = {} }) {
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr
+              <DrugRowGroup
                 key={row.id}
-                className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <td
-                    key={cell.id}
-                    style={{ width: cell.column.getSize() }}
-                    className="px-3 py-2 align-top overflow-hidden"
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
+                row={row}
+                links={drugLinks[row.original.drug_id]}
+              />
             ))}
           </tbody>
         </table>

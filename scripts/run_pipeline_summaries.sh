@@ -20,7 +20,9 @@ caffeinate -ims -w $$ &
 
 ensure_ollama() {
   curl -s http://localhost:11434/api/tags >/dev/null 2>&1 && return 0
-  open -a Ollama 2>/dev/null || nohup ollama serve >> logs/ollama_serve.log 2>&1 &
+  # 스크립트 환경(OLLAMA_FLASH_ATTENTION 등)을 상속하도록 plain serve로 기동.
+  # gemma4 사용 시 OLLAMA_FLASH_ATTENTION=0 를 스크립트에 주고 실행해야 함.
+  nohup ollama serve >> logs/ollama_serve.log 2>&1 &
   for _ in $(seq 1 30); do
     curl -s http://localhost:11434/api/tags >/dev/null 2>&1 && return 0
     sleep 2
@@ -34,7 +36,9 @@ while true; do
   echo "[watchdog] attempt #$attempt $(date)" >> "$LOG"
   ensure_ollama || echo "[watchdog] Ollama 미응답 — 그래도 시도(스크립트가 연결 재시도함)" >> "$LOG"
 
-  LLM_MODEL="qwen3:30b-a3b-q4_K_M" LLM_NUM_GPU=44 \
+  # 모델은 env로 교체 가능(기본 Qwen MoE@44). gemma4 전환 예:
+  #   OLLAMA_FLASH_ATTENTION=0 SUMMARY_MODEL=gemma4:26b SUMMARY_NUM_GPU=24 bash scripts/run_pipeline_summaries.sh
+  LLM_MODEL="${SUMMARY_MODEL:-qwen3:30b-a3b-q4_K_M}" LLM_NUM_GPU="${SUMMARY_NUM_GPU:-44}" \
     python3 scripts/llm_enrich.py --mode pipeline >> "$LOG" 2>&1
 
   # 정상 완료 판정 — run_pipeline_summaries() 가 마지막에 "완료. 캐시 총 N" 출력
