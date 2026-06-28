@@ -40,6 +40,8 @@ const MODALITY_COLORS = {
   'Bispecific Antibody':'bg-indigo-100 text-indigo-700',
   'CAR-T':              'bg-pink-100 text-pink-700',
   'Monoclonal Antibody':'bg-sky-100 text-sky-700',
+  'Fusion Protein':     'bg-cyan-100 text-cyan-700',
+  'Recombinant Protein':'bg-emerald-100 text-emerald-700',
   'Small Molecule':     'bg-teal-100 text-teal-700',
   'mRNA':               'bg-orange-100 text-orange-700',
   'Peptide':            'bg-lime-100 text-lime-700',

@@ -41,6 +41,15 @@ MODALITY_KEYWORDS: dict[str, list[str]] = {
         # other common patterns
         "olomide", "mustard",
     ],
+    # 치료용 융합단백/리간드트랩만 (고정밀). 보조요법 성장인자(G-CSF/EPO)는 제외 — 콤보 오염 방지.
+    "Fusion Protein": [
+        "fusion protein", "fc fusion", "fc-fusion", "ligand trap", "vegf trap", "decoy receptor",
+        "immunocytokine", "aflibercept", "luspatercept", "sotatercept", "rilonacept", "eftilagimod",
+    ],
+    # 치료용 사이토카인만 (interferon/interleukin/aldesleukin). -stim/epoetin(보조요법) 제외.
+    "Recombinant Protein": [
+        "interferon", "interleukin", "aldesleukin", "denileukin",
+    ],
     "mRNA": ["mRNA", "messenger RNA", "mRNA vaccine", "mRNA therapy"],
     "Peptide": ["peptide", "cyclic peptide", "stapled peptide"],
     "Cell Therapy": [
@@ -56,6 +65,7 @@ MODALITY_KEYWORDS: dict[str, list[str]] = {
 # 중복 매칭 시 우선순위 순서
 MODALITY_PRIORITY = [
     "ADC", "Bispecific Antibody", "CAR-T", "Monoclonal Antibody",
+    "Fusion Protein", "Recombinant Protein",
     "Small Molecule", "mRNA", "Peptide", "Cell Therapy",
     "Oncolytic Virus", "Radiopharmaceutical",
 ]
