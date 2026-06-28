@@ -42,6 +42,9 @@ python3 scripts/llm_merge.py --mode abstracts --write || true
 python3 scripts/llm_merge.py --mode pipeline --write || true
 python3 scripts/llm_merge.py --mode xref --write || true
 python3 scripts/normalize_fields.py --write || true
+# 분류체계 갭 + 수기 타겟 보정 — xref 재적용 뒤 최종 오버라이드 (CI와 동일)
+python3 scripts/fix_protein_modality.py --write || true
+python3 scripts/fix_xref_target_manual.py --write || true
 # 검증: 요약 보존율
 SUM=$(python3 -c "import json;d=json.load(open('data/parsed/pipeline.json'))['drugs'];print(sum(1 for x in d if x.get('summary_ko')))")
 echo "   summary_ko 보존: $SUM (정지 전 ~33,891 기대)"
