@@ -4,7 +4,7 @@ on:
   # drug_id 안정화(sha1 결정적 해시) + 캐시 마이그레이션 완료 → cron 복구.
   # 재파싱해도 drug_id가 동일해 한국어 요약이 캐시에서 그대로 재적용됨(소실 위험 제거).
   schedule:
-    - cron: '0 0 * * 1'   # 매주 월요일 00:00 UTC (09:00 KST)
+    - cron: '0 20 * * 0'   # 일요일 20:00 UTC = 월요일 05:00 KST
   workflow_dispatch:
 
 # 필요 시크릿 (Settings > Secrets and variables > Actions):
