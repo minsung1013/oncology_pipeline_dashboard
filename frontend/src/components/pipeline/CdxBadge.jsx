@@ -44,6 +44,7 @@ const MODALITY_COLORS = {
   'Recombinant Protein':'bg-emerald-100 text-emerald-700',
   'Small Molecule':     'bg-teal-100 text-teal-700',
   'mRNA':               'bg-orange-100 text-orange-700',
+  'Vaccine':            'bg-rose-100 text-rose-700',
   'Peptide':            'bg-lime-100 text-lime-700',
   'Cell Therapy':       'bg-fuchsia-100 text-fuchsia-700',
   'Oncolytic Virus':    'bg-amber-100 text-amber-700',

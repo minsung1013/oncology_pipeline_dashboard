@@ -50,6 +50,9 @@ MODALITY_KEYWORDS: dict[str, list[str]] = {
     "Recombinant Protein": [
         "interferon", "interleukin", "aldesleukin", "denileukin",
     ],
+    # 능동면역 암백신(펩타이드/DNA/네오항원). 수지상세포·종양세포 백신은 Cell Therapy,
+    # 종양용해바이러스는 Oncolytic Virus가 우선(아래 PRIORITY에서 Vaccine보다 앞).
+    "Vaccine": ["vaccine", "neoantigen", "neo-antigen", "neopeptide", "neo-epitope"],
     "mRNA": ["mRNA", "messenger RNA", "mRNA vaccine", "mRNA therapy"],
     "Peptide": ["peptide", "cyclic peptide", "stapled peptide"],
     "Cell Therapy": [
@@ -66,8 +69,10 @@ MODALITY_KEYWORDS: dict[str, list[str]] = {
 MODALITY_PRIORITY = [
     "ADC", "Bispecific Antibody", "CAR-T", "Monoclonal Antibody",
     "Fusion Protein", "Recombinant Protein",
-    "Small Molecule", "mRNA", "Peptide", "Cell Therapy",
-    "Oncolytic Virus", "Radiopharmaceutical",
+    # Cell Therapy·Oncolytic Virus를 Vaccine보다 앞에 두어 수지상세포/종양용해바이러스
+    # 백신이 더 구체적 분류를 유지하게 함. Vaccine은 Peptide/mRNA/Small Molecule보다 앞.
+    "Cell Therapy", "Oncolytic Virus", "Vaccine",
+    "Small Molecule", "mRNA", "Peptide", "Radiopharmaceutical",
 ]
 
 # 단순 substring 매칭 (긴 문자열 / 약물명)

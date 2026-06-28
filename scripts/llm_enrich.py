@@ -48,7 +48,7 @@ PIPELINE_CACHE = "data/cache/llm_pipeline_cache.json"  # 임상시험 엔트리 
 MODALITIES = [
     "ADC", "Bispecific Antibody", "CAR-T", "Monoclonal Antibody",
     "Fusion Protein", "Recombinant Protein", "Small Molecule",
-    "mRNA", "Peptide", "Cell Therapy", "Oncolytic Virus", "Radiopharmaceutical", "Unknown",
+    "mRNA", "Peptide", "Vaccine", "Cell Therapy", "Oncolytic Virus", "Radiopharmaceutical", "Unknown",
 ]
 _MOD_LOOKUP = {m.lower(): m for m in MODALITIES}
 
@@ -56,7 +56,7 @@ SYSTEM = (
     "You are an oncology drug classifier. Use your pharmacology knowledge of the named drug "
     "plus the trial context. Output STRICT JSON only:\n"
     '{"modality": <one of: ADC, Bispecific Antibody, CAR-T, Monoclonal Antibody, '
-    "Fusion Protein, Recombinant Protein, Small Molecule, mRNA, Peptide, Cell Therapy, "
+    "Fusion Protein, Recombinant Protein, Small Molecule, mRNA, Peptide, Vaccine, Cell Therapy, "
     "Oncolytic Virus, Radiopharmaceutical, Unknown>, "
     '"target": <EXACTLY ONE primary molecular target as a gene/protein symbol (e.g. HER2, EGFR, PD-1); '
     'for multi-kinase inhibitors give the single most clinically relevant target; or "Unknown">, '
@@ -65,6 +65,8 @@ SYSTEM = (
     "Modality notes: therapeutic Fc-fusion proteins and ligand traps (e.g. aflibercept, luspatercept, "
     "sotatercept, IL-15/IL-2 immunocytokines, LAG-3-Ig) -> Fusion Protein, NOT Small Molecule. "
     "Recombinant cytokines/interferons/interleukins given as therapy -> Recombinant Protein. "
+    "Active-immunization cancer vaccines (peptide, DNA, mRNA, neoantigen, viral-vector vaccines) -> Vaccine; "
+    "BUT dendritic-cell / autologous tumor-cell vaccines -> Cell Therapy, and oncolytic viruses -> Oncolytic Virus. "
     "Rules: supportive-care/non-antineoplastic agents (antiemetics, antidiarrheals, G-CSF/GM-CSF growth factors, "
     "placebo) -> modality Unknown, target Unknown. Only assert a target you are confident the drug acts on. "
     "For obscure internal code names you do not recognize, prefer Unknown with low confidence."
@@ -143,7 +145,7 @@ SYSTEM_ABS = (
     "Output STRICT JSON only:\n"
     '{"modality_list": <modalities of therapeutic agents ACTUALLY STUDIED as treatments, chosen ONLY from: '
     "ADC, Bispecific Antibody, CAR-T, Monoclonal Antibody, Fusion Protein, Recombinant Protein, "
-    "Small Molecule, mRNA, Peptide, Cell Therapy, "
+    "Small Molecule, mRNA, Peptide, Vaccine, Cell Therapy, "
     "Oncolytic Virus, Radiopharmaceutical; [] if no specific therapeutic agent is studied>, "
     '"target_list": <gene/protein symbols that a STUDIED therapeutic agent acts ON (its drug target), '
     'e.g. ["HER2","EGFR"]; [] if none>, '
@@ -448,7 +450,7 @@ SYSTEM_XREF = (
     "Output STRICT JSON only:\n"
     '{"modality": <one of: ADC, Bispecific Antibody, CAR-T, Monoclonal Antibody, '
     "Fusion Protein, Recombinant Protein, Small Molecule, "
-    "mRNA, Peptide, Cell Therapy, Oncolytic Virus, Radiopharmaceutical, Unknown>, "
+    "mRNA, Peptide, Vaccine, Cell Therapy, Oncolytic Virus, Radiopharmaceutical, Unknown>, "
     '"target": <ONE primary gene/protein symbol (e.g. EGFR, HER2, PD-1) or "Unknown">, '
     '"biomarkers": <list of patient-selection biomarkers or []>, '
     '"confidence": <0.0-1.0>, '
