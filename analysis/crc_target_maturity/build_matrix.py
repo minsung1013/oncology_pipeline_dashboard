@@ -32,6 +32,7 @@ CANCER = os.environ.get("CANCER", "Colorectal")
 TARGET_SYNONYMS = {
     # HER family
     "ERBB2": "HER2", "HER-2": "HER2", "HER2/neu": "HER2", "neu": "HER2",
+    "ERBB2/HER2": "HER2", "HER2/ERBB2": "HER2", "HER2neu": "HER2",
     "ERBB1": "EGFR", "HER1": "EGFR",
     "ERBB3": "HER3",
     # immune checkpoints
@@ -84,6 +85,10 @@ _SYN_UPPER = {k.upper(): v for k, v in TARGET_SYNONYMS.items()}
 
 # KRAS 점돌연변이 표기(G12V, G13D, Q61H 등)는 타겟이 아니라 바이오마커 -> KRAS로 접음
 _KRAS_MUT = re.compile(r'^k-?ras[\s\-]?(g12[a-z]|g13[a-z]|q61[a-z]|a146[a-z])$', re.I)
+# ERBB/HER 패밀리 표기 흔들림: ErbB-2, ErbB2, ERBB-2, WTErbB-2, ErbB2c 등 → 단일유전자.
+# ERBB1=EGFR, ERBB2=HER2, ERBB3=HER3 (ERBB4는 별개 유지). 숫자 없는 generic 'ErbB'는 보존.
+_ERBB_RE = re.compile(r'^(?:wt)?erbb[\s\-]?([123])[a-z]?$', re.I)
+_ERBB_MAP = {'1': 'EGFR', '2': 'HER2', '3': 'HER3'}
 
 def norm_target(t):
     if not t:
@@ -97,6 +102,9 @@ def norm_target(t):
         return TARGET_SYNONYMS[t]
     if _KRAS_MUT.match(t):
         return "KRAS"
+    m = _ERBB_RE.match(t)               # ErbB-2 / WTErbB-2 / ErbB2c … → HER2 등
+    if m:
+        return _ERBB_MAP[m.group(1)]
     return _SYN_UPPER.get(t.upper(), t) # ASCII 대소문자 무시 매칭
 
 # ---- 2차: 포맷(구분자/대소문자)만 다른 표기 자동 통일 -------------------------

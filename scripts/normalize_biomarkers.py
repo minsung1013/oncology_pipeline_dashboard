@@ -20,6 +20,9 @@ _ALIAS = {
     # HER2 / ERBB2
     "erbb2": "HER2", "her-2": "HER2", "her2/neu": "HER2", "her-2/neu": "HER2",
     "c-erbb-2": "HER2", "c-erbb2": "HER2", "her2neu": "HER2", "neu": "HER2",
+    "her2-neu": "HER2", "her2 neu": "HER2",
+    # MET
+    "c-met": "MET", "cmet": "MET", "c met": "MET",
     # PD axis (서로 다른 유전자 — 분리 유지)
     "pdl1": "PD-L1", "pd l1": "PD-L1", "pdl-1": "PD-L1", "cd274": "PD-L1",
     "pd1": "PD-1", "pdcd1": "PD-1", "pdl2": "PD-L2",
@@ -61,7 +64,8 @@ _MODIFIER = (
     r"mutations?|mutant|mutated|mut|amplifications?|amplified|amp|deletions?|del|"
     r"insertions?|ins|expressions?|overexpression|expressing|positive|negative|"
     r"pos|neg|high|low|loss|gain|fusions?|rearrangements?|rearranged|translocations?|"
-    r"status|alterations?|variants?|wild[- ]?type|wt|aberrations?|"
+    r"status|alterations?|altered|variants?|wild[- ]?type|wt|aberrations?|aberrant|"
+    r"activating|inactivating|skipping|skip|genes?|genetic|genomic|promoter|"
     r"copy number|cnv|methylation|methylated|splice|splicing|hotspot"
 )
 _MODIFIER_RE = re.compile(rf"[\s,/_+-]*\b(?:{_MODIFIER})\b\.?$", re.I)
@@ -70,8 +74,10 @@ _SPECIAL_RE = re.compile(
     r"[\s,/_+-]*(?:viii|exon\s?\d+|ex\d+|del\s?\d+|ins\s?\d+|cps|tps|ihc\s?\d?\+?|fish|[0-3]\+)\.?$", re.I)
 # 아미노산 변이는 대문자 구분 (V600E, L858R, G12C, T790M). \d{2,4}로 유전자번호(VEGFR2)와 구분
 _AA_TAIL_RE = re.compile(r"[\s,/_-]+[A-Z]\d{2,4}[A-Z*](?:fs|del|dup|ins)?$")
+# residue-less / p.표기 hotspot: " V600", " p.G12C", " G12C" (공백 구분 필수 → CD20·CD3 보호)
+_POS_TAIL_RE = re.compile(r"[\s,/_-]+p?\.?[A-Z]\d{2,4}[A-Z*]?(?:fs|del|dup|ins)?$")
 _AA_CONCAT_RE = re.compile(r"^([A-Z][A-Z0-9]{1,7}?)([A-Z]\d{2,4}[A-Z*])$")
-_LC_TAIL_RE = re.compile(r"(?<=[A-Z])(?:mut|mt|amp|del|m)$")
+_LC_TAIL_RE = re.compile(r"(?<=[A-Z])(?:mut|mt|amp|del|wt|m)$")
 
 _GENE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,8}(?:-[A-Za-z0-9]+)?$")
 
@@ -89,6 +95,7 @@ def _strip_modifiers(s: str) -> str:
         cur = _MODIFIER_RE.sub("", cur).strip(" ,/_-+")
         cur = _SPECIAL_RE.sub("", cur).strip(" ,/_-+")
         cur = _AA_TAIL_RE.sub("", cur).strip(" ,/_-+")          # KRAS G12C → KRAS
+        cur = _POS_TAIL_RE.sub("", cur).strip(" ,/_-+")         # BRAF V600 / KRAS p.G12C → gene
         m = _AA_CONCAT_RE.match(cur)                            # KRASG12C → KRAS
         if m:
             cur = m.group(1)
@@ -122,6 +129,39 @@ def normalize_biomarker(raw: str) -> str | None:
             return _ALIAS.get(up.lower(), up)
 
     return base  # 서술형/소문자어/비유전자는 보존(제거하지 않음)
+
+
+# ── 상태(status) 카테고리 추출 ────────────────────────────────────────────────
+# raw 문자열에서 환자선별 상태를 표준 카테고리로 뽑아낸다. target 집계는 유전자로
+# 합치되(HER2-low, HER2 amp 모두 target=HER2), 상태는 별도 필드로 보존해 필터 가능.
+_STATUS_PATTERNS = [
+    ("amplification", r"amplif|\bamp\b"),
+    ("skipping",      r"skipping"),
+    ("fusion",        r"fusion|rearrang|translocation"),
+    ("mutation",      r"mutation|mutant|mutated|\bmut\b|activating|[A-Z]\d{2,4}[A-Z*]|exon\s?\d+|p\.[A-Z]\d"),
+    ("overexpression", r"overexpress|expressing|\bihc\b|ihc\s?\d|\d\+|overexpression"),
+    ("deletion",      r"deletion|\bdel\b"),
+    ("loss",          r"\bloss\b|deficien"),
+    ("wildtype",      r"wild[- ]?type|\bwt\b"),
+    ("low",           r"\blow\b|-low"),
+    ("high",          r"\bhigh\b|-high"),
+    ("negative",      r"negative|\bneg\b|-negative"),
+    ("positive",      r"positive|\bpos\b|-positive"),
+]
+_STATUS_RES = [(name, re.compile(pat, re.I)) for name, pat in _STATUS_PATTERNS]
+
+
+def split_biomarker(raw):
+    """raw 바이오마커를 (target, status)로 분리.
+    target = 유전자로 정규화된 값(normalize_biomarker), status = 표준 상태 카테고리 or None.
+    예: 'HER2 Amplification' -> ('HER2','amplification'), 'HER2' -> ('HER2', None),
+        'KRAS G12C' -> ('KRAS','mutation'), 'HER2-low' -> ('HER2','low')."""
+    target = normalize_biomarker(raw)
+    s = _clean(raw)
+    for name, rx in _STATUS_RES:
+        if rx.search(s):
+            return target, name
+    return target, None
 
 
 def normalize_biomarker_list(items):

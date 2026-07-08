@@ -18,6 +18,23 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from normalize_biomarkers import normalize_biomarker_list  # noqa: E402
+# 타겟 정규화 단일 소스: maturity 매트릭스와 동일한 norm_target 재사용(ERBB2→HER2 등).
+# 필터가 raw target/target_list에 직접 매칭하므로 facet 라벨이 아니라 데이터 레벨에서 정규화한다.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "analysis", "crc_target_maturity"))
+from build_matrix import norm_target  # noqa: E402
+
+
+def normalize_target_list(items):
+    """target_list를 norm_target으로 정규화 + 순서보존 중복제거(Unknown 보존)."""
+    out, seen = [], set()
+    for t in items or []:
+        v = norm_target(t)
+        if v and v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
 
 OUT = "data/frontend"
 
@@ -130,6 +147,9 @@ def _lite_record(a, keep=ABS_KEEP):
     # 바이오마커 유전자 기준 정규화 (변이형/표기변형 합치기, 항목 제거는 안 함)
     if "biomarker_list" in rec:
         rec["biomarker_list"] = normalize_biomarker_list(rec.get("biomarker_list"))
+    # 타겟 정규화 (ERBB2/ErbB-2→HER2 등) — 필터 옵션·매칭 일관성
+    if "target_list" in rec:
+        rec["target_list"] = normalize_target_list(rec.get("target_list"))
     if rec.get("authors"):
         out_au = []
         for au in rec["authors"][:1]:
@@ -250,8 +270,9 @@ def build_facets():
                 cancers.add(c)
             if d.get("modality"):
                 modalities.add(d["modality"])
-            if d.get("target") and d["target"] != "Unknown":
-                targets[d["target"]] += 1
+            _t = norm_target(d.get("target"))
+            if _t and _t != "Unknown":
+                targets[_t] += 1
             for b in normalize_biomarker_list(d.get("biomarker_list")):
                 biomarkers[b] += 1
             if d.get("company_normalized"):
@@ -266,8 +287,9 @@ def build_facets():
             for m in a.get("modality_list") or []:
                 modalities.add(m)
             for t in a.get("target_list") or []:
-                if t and t != "Unknown":
-                    targets[t] += 1
+                _nt = norm_target(t)
+                if _nt and _nt != "Unknown":
+                    targets[_nt] += 1
             for b in normalize_biomarker_list(a.get("biomarker_list")):
                 biomarkers[b] += 1
             for co in a.get("companies_normalized") or []:
@@ -282,8 +304,9 @@ def build_facets():
             for m in a.get("modality_list") or []:
                 modalities.add(m)
             for t in a.get("target_list") or []:
-                if t and t != "Unknown":
-                    targets[t] += 1
+                _nt = norm_target(t)
+                if _nt and _nt != "Unknown":
+                    targets[_nt] += 1
             for b in normalize_biomarker_list(a.get("biomarker_list")):
                 biomarkers[b] += 1
             for co in a.get("companies_normalized") or []:
@@ -331,8 +354,9 @@ def build_whatsnew(window_days=8):
         for fp in glob.glob(pat):
             for a in json.load(open(fp, encoding="utf-8"))["abstracts"]:
                 for t in a.get("target_list") or []:
-                    if t and t != "Unknown":
-                        tfreq[t] += 1
+                    _nt = norm_target(t)
+                    if _nt and _nt != "Unknown":
+                        tfreq[_nt] += 1
 
     def trial_row(d):
         return {"nct": (d.get("nct_ids") or [None])[0], "drug": d.get("drug_name"),
@@ -435,6 +459,29 @@ def _is_code_token(t):
     return len(t) >= 5 and bool(_re.search(r"\d", t))  # 코드명 휴리스틱: 5자+ & 숫자 포함
 
 
+# 약물 코드명 패턴: 문자2+ [하이픈/공백] 숫자2+ (예: ONO-4578, AZD4547, BI 907828, Debio 0123).
+# 제목/약물명 양쪽에서 동일 추출 → 공백 구분 코드명도 매칭(per-word 토크나이저 비대칭 해소).
+_CODE_RE = _re.compile(r"([A-Za-z]{2,}[- ]?\d{2,}[A-Za-z0-9]*)")
+# 타겟/수용체/클래스명(코드명 아님 — 오탐 차단). 접두+숫자 형태: PD-1, CD19, Hsp90, CDH17 등.
+_BIO_PREFIX = _re.compile(
+    r"^(pd|pdl|cd|cdk|il|her|tim|lag|ctla|nkg|hla|tgf|braf|kras|nras|egfr|fgfr|vegf|trop|muc"
+    r"|cldn|claudin|hpv|covid|hiv|hbv|hcv|b7|axl|met|alk|ros|ret|kit|pik|akt|mtor|parp|wee|atr"
+    r"|atm|chk|aurora|plk|tyk|jak|stat|bcl|mcl|idh|flt|ezh|menin|hdac|dnmt|psma|fap|dota|gd2"
+    r"|cdh|hsp|cea|ror|dll|tnf|ccr|cxcr|gpc|epcam|nectin|sstr)\d", _re.I)
+# 동위원소/원소명(특정 약물 아님 — 광범위 오연결 차단).
+_ISOTOPE = {"radium223", "lu177", "yttrium90", "ga68", "y90", "i131", "ho166", "ac225",
+            "pb212", "cu64", "zr89", "f18", "tc99m", "in111", "re188", "sm153"}
+
+
+def _code_tokens(text):
+    out = set()
+    for m in _CODE_RE.finditer(text or ""):
+        t = _norm_token(m.group(1))
+        if len(t) >= 5 and not _BIO_PREFIX.match(t) and t not in _ISOTOPE:
+            out.add(t)
+    return out
+
+
 def _link_lite(a, why):
     """연결 논문/초록의 표시용 경량 레코드 (제목·한국어요약·대표저자·소속·출처)."""
     au = (a.get("authors") or [{}])[0]
@@ -471,10 +518,11 @@ def build_drug_links():
             recs[uid] = a
             for nct in a.get("nct_ids") or []:
                 nct_uids[nct].append(uid)
-            for w in _re.split(r"\s+", a.get("title") or ""):
-                t = _norm_token(w)
-                if _is_code_token(t):
-                    title_uids[t].add(uid)
+            title = a.get("title") or ""
+            # 기존 per-word 코드토큰(회귀 방지) ∪ 신규 코드 서브토큰(공백 구분 코드명)
+            toks = {_norm_token(w) for w in _re.split(r"\s+", title)}
+            for t in {x for x in toks if _is_code_token(x)} | _code_tokens(title):
+                title_uids[t].add(uid)
 
     drugs = json.load(open("data/parsed/pipeline.json", encoding="utf-8"))["drugs"]
     out = {}
@@ -486,9 +534,18 @@ def build_drug_links():
         for nct in d.get("nct_ids") or []:
             for u in nct_uids.get(nct, []):
                 why[u] = "nct"
-        key = _norm_token(d.get("drug_name", ""))
-        if _is_code_token(key):
-            for u in title_uids.get(key, ()):
+        dn = d.get("drug_name", "")
+        keys = set()
+        whole = _norm_token(dn)
+        if _is_code_token(whole):  # 기존: 전체 norm이 코드 (회귀 방지)
+            keys.add(whole)
+        # 보수적 신규: 약물명이 사실상 단일 코드명(≤2단어 & 코드 1개)이면 서브토큰도 키로
+        # → 'BI 907828', 'Debio 0123' 등 공백 구분 코드명을 제목과 매칭.
+        cts = _code_tokens(dn)
+        if len(cts) == 1 and len(_re.split(r"\s+", dn.strip())) <= 2:
+            keys |= cts
+        for k in keys:
+            for u in title_uids.get(k, ()):
                 why.setdefault(u, "title")
         if not why:
             continue
@@ -517,9 +574,11 @@ def build_pipeline():
         return
     d = json.load(open(src, encoding="utf-8"))
     drugs = [{k: x.get(k) for k in DRUG_KEEP if k in x} for x in d["drugs"]]
-    for x in drugs:  # 바이오마커 유전자 기준 정규화 (초록과 동일 체계)
+    for x in drugs:  # 바이오마커·타겟 유전자 기준 정규화 (초록/facet과 동일 체계)
         if "biomarker_list" in x:
             x["biomarker_list"] = normalize_biomarker_list(x.get("biomarker_list"))
+        if x.get("target"):  # ErbB-2/HER1 등 → 표준화 (필터·성숙도 canon 일관)
+            x["target"] = norm_target(x["target"])
     out = {"metadata": d.get("metadata", {}), "drugs": drugs}
     os.makedirs(OUT, exist_ok=True)
     path = f"{OUT}/pipeline.json"
