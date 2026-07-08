@@ -95,6 +95,10 @@ jobs:
       - name: Build lite frontend payload (full)
         run: python scripts/make_frontend_data.py
 
+      # Target Maturity 탭 에셋(약물→target, raw target→canonical). pipeline.json + 약물캐시 의존.
+      - name: Build target-maturity assets
+        run: python scripts/build_maturity_assets.py
+
       - name: Upload frontend + parsed corpus to R2
         run: |
           python scripts/upload_r2.py

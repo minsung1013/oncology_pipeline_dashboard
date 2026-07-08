@@ -70,6 +70,26 @@ export async function getAuthorCounts() {
   return _authorCounts
 }
 
+// Target Maturity 탭용 경량 매핑 에셋 (약물→target, raw target→canonical).
+// 한 번에 로드(캐시). 실패해도 빈 객체로 폴백(탭은 임상만으로 동작).
+let _maturity = null
+export async function getMaturityAssets() {
+  if (!_maturity) {
+    const load = async (name) => {
+      try {
+        const r = await fetch(`${DATA_BASE}/${name}`, REVALIDATE)
+        return r.ok ? await r.json() : {}
+      } catch { return {} }
+    }
+    const [drugTargets, targetCanon] = await Promise.all([
+      load('maturity_drug_targets.json'),
+      load('maturity_target_canon.json'),
+    ])
+    _maturity = { drugTargets, targetCanon }
+  }
+  return _maturity
+}
+
 export async function getAbstractIndex() {
   if (!_index) {
     const r = await fetch(INDEX_URL, REVALIDATE)

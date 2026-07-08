@@ -10,6 +10,7 @@ import { prefetchPipeline, prefetchAbstracts, prefetchPublications } from './uti
 const VisualizePage = lazy(() => import('./pages/VisualizePage'))
 const ConferenceVisualizePage = lazy(() => import('./pages/ConferenceVisualizePage'))
 const PublicationVisualizePage = lazy(() => import('./pages/PublicationVisualizePage'))
+const TargetMaturityPage = lazy(() => import('./pages/TargetMaturityPage'))
 
 const navClass = ({ isActive }) =>
   `shrink-0 whitespace-nowrap text-sm px-2.5 sm:px-3 py-1.5 rounded font-medium transition-colors ${
@@ -41,6 +42,9 @@ function DashboardLayout() {
         <NavLink to="/visualize" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>
           <span className="hidden sm:inline">Pipeline </span>Visualize
         </NavLink>
+        <NavLink to="/maturity" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>
+          <span className="hidden sm:inline">Target </span>Maturity
+        </NavLink>
       </nav>
       <div className="flex-1 overflow-hidden">
         <Suspense
@@ -69,6 +73,7 @@ export default function App() {
           <Route path="/publication-visualize" element={<PublicationVisualizePage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/visualize" element={<VisualizePage />} />
+          <Route path="/maturity" element={<TargetMaturityPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
