@@ -33,7 +33,7 @@ export default function BiomarkerOpportunityPage() {
   const [filters, setFiltersState] = useState(getShared)
   const [thr, setThrState] = useState(() => ({ ...EMERGE_DEFAULTS, ...(getTabState('bioOpportunity')?.thr ?? {}) }))
   const [halfLife, setHalfLifeState] = useState(() => getTabState('bioOpportunity')?.halfLife ?? HALFLIFE_DEFAULT)
-  const [activeYears, setActiveYearsState] = useState(() => getTabState('bioOpportunity')?.activeYears ?? 10)
+  const [activeYears, setActiveYearsState] = useState(() => getTabState('bioOpportunity')?.activeYears ?? 5)
 
   function setFilters(updater) {
     setFiltersState((prev) => {
@@ -178,7 +178,7 @@ export default function BiomarkerOpportunityPage() {
                   onChange={(e) => setActiveYears(Number(e.target.value))} className="w-20" />
                 <span className="font-semibold w-9 tabular-nums">{activeYears}년</span>
               </label>
-              <button onClick={() => { setThr(EMERGE_DEFAULTS); setHalfLife(HALFLIFE_DEFAULT); setActiveYears(10) }} className="text-slate-400 hover:text-slate-600 underline">기본값</button>
+              <button onClick={() => { setThr(EMERGE_DEFAULTS); setHalfLife(HALFLIFE_DEFAULT); setActiveYears(5) }} className="text-slate-400 hover:text-slate-600 underline">기본값</button>
             </div>
           }
         />
