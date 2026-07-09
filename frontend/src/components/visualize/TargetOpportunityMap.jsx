@@ -29,12 +29,14 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
   const pts = useMemo(() => rows.filter((r) => r.size_total > 0), [rows])
   const smax = useMemo(() => Math.max(1, ...pts.map((r) => r.size_total)), [pts])
   const xmax = useMemo(() => Math.max(4, ...pts.map((r) => r.clin_maturity)), [pts])
+  const ymax = useMemo(() => Math.max(3, ...pts.map((r) => r.recency)), [pts])
 
   const lx = (v) => Math.log10(Math.max(0, v) + 1)
   const X = (v, jitPx = 0) => padL + (lx(v) / lx(xmax + 1)) * plotW + jitPx // 로그 스케일 x
-  const Y = (rec) => padT + plotH - Math.max(0, Math.min(1, rec)) * plotH
+  const Y = (rec) => padT + plotH - (lx(rec) / lx(ymax + 1)) * plotH        // 로그 스케일 y
   const R = (n) => 3 + Math.sqrt(n / smax) * 24 // 크기 = 총 발표 수 (sqrt 정규화)
   const xTicks = useMemo(() => X_TICKS.filter((t) => t <= xmax * 1.05), [xmax])
+  const yTicks = useMemo(() => X_TICKS.filter((t) => t >= 1 && t <= ymax * 1.05), [ymax])
 
   const labeled = useMemo(() => {
     const top = [...pts].sort((a, b) => b.size_total - a.size_total).slice(0, 26)
@@ -45,8 +47,8 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto select-none" style={{ maxHeight: '72vh' }}>
-      {/* y 격자 (최신성 0~1) */}
-      {[0, 0.25, 0.5, 0.75, 1].map((n) => (
+      {/* y 격자 (최신 임팩트, 로그) */}
+      {yTicks.map((n) => (
         <g key={n}>
           <line x1={padL} y1={Y(n)} x2={padL + plotW} y2={Y(n)} stroke="#f0f0f0" />
           <text x={padL - 10} y={Y(n) + 4} fontSize="10" fill="#888" textAnchor="end">{n}</text>
@@ -62,7 +64,7 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
         </g>
       ))}
       <text x={padL + plotW / 2} y={H - 26} fontSize="12" fontWeight="600" textAnchor="middle" fill="#444">임상 성숙도 (Σ 단계×진행상태 가중, 로그) →</text>
-      <text x="22" y={padT + plotH / 2} fontSize="12" fontWeight="600" textAnchor="middle" fill="#444" transform={`rotate(-90 22 ${padT + plotH / 2})`}>최신성 (발표 평균, 1=최근) →</text>
+      <text x="22" y={padT + plotH / 2} fontSize="12" fontWeight="600" textAnchor="middle" fill="#444" transform={`rotate(-90 22 ${padT + plotH / 2})`}>최신 임팩트 (Σ 최근가중 발표량, 로그) →</text>
 
       {pts.map((r) => {
         const x = X(r.clin_maturity, hashJit(r.target))
