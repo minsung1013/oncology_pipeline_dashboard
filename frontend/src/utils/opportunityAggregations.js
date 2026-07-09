@@ -68,9 +68,14 @@ export function addClinical(acc, d) {
 
 // 누적기 → 행. W: year windows.
 export function finalizeRow(name, acc, W) {
-  let early = 0, recent = 0
-  for (const [y, n] of acc.yr) { if (W.early.has(y)) early += n; if (W.recent.has(y)) recent += n }
+  let early = 0, recent = 0, lastActive = 0
+  for (const [y, n] of acc.yr) {
+    if (W.early.has(y)) early += n
+    if (W.recent.has(y)) recent += n
+    if (y > lastActive) lastActive = y
+  }
   const growth = Math.round(((recent + 1) / (early + 1)) * 100) / 100
+  const yearsStale = lastActive ? W.maxYear - lastActive : 999 // 마지막 활동 이후 경과 연수
   const hasResearch = acc.abs + acc.pub > 0
   // 임상 성숙도: 임상 프로그램들의 (단계×상태) 가중치 '총합'. 임상 없으면 전임상 baseline 0.3.
   // (x축은 로그 스케일로 그림 — 소수 후기임상 vs 다수 초기임상의 넓은 범위 수용)
@@ -87,6 +92,7 @@ export function finalizeRow(name, acc, W) {
     size_total: acc.clin + acc.abs + acc.pub, // 버블 크기 = 총 발표 수
     modalities: acc.modals.size,
     year_counts: Object.fromEntries(acc.yr), // 최신성/추세 계산용
+    last_active: lastActive || null, years_stale: yearsStale, // 최근활동 필터용
     early, recent, growth_ratio: growth,
   }
 }

@@ -35,6 +35,7 @@ export default function OpportunityMapPage() {
   const [filters, setFiltersState] = useState(getShared)
   const [thr, setThrState] = useState(() => ({ ...EMERGE_DEFAULTS, ...(getTabState('opportunity')?.thr ?? {}) }))
   const [halfLife, setHalfLifeState] = useState(() => getTabState('opportunity')?.halfLife ?? HALFLIFE_DEFAULT)
+  const [activeYears, setActiveYearsState] = useState(() => getTabState('opportunity')?.activeYears ?? 10)
 
   function setFilters(updater) {
     setFiltersState((prev) => {
@@ -59,6 +60,10 @@ export default function OpportunityMapPage() {
   function setHalfLife(v) {
     setHalfLifeState(v)
     setTabState('opportunity', { ...getTabState('opportunity'), halfLife: v })
+  }
+  function setActiveYears(v) {
+    setActiveYearsState(v)
+    setTabState('opportunity', { ...getTabState('opportunity'), activeYears: v })
   }
 
   useEffect(() => {
@@ -95,7 +100,9 @@ export default function OpportunityMapPage() {
     [drugs, filteredAbstracts, filteredPubs, assets],
   )
   const recencyRows = useMemo(() => applyRecency(baseRows, { halfLife }), [baseRows, halfLife])
-  const rows = useMemo(() => flagEmerging(recencyRows, thr), [recencyRows, thr])
+  const allRows = useMemo(() => flagEmerging(recencyRows, thr), [recencyRows, thr])
+  // 최근 activeYears년간 신규 논문·초록·임상이 전혀 없는 타깃 제외
+  const rows = useMemo(() => allRows.filter((r) => r.years_stale <= activeYears), [allRows, activeYears])
   const emerging = useMemo(
     () => rows.filter((r) => r.emerging).sort((a, b) => b.recent * b.growth_ratio - a.recent * a.growth_ratio),
     [rows],
@@ -174,13 +181,19 @@ export default function OpportunityMapPage() {
                   onChange={(e) => setThr({ maxMaturity: Number(e.target.value) })} className="w-20" />
                 <span className="font-semibold w-8 tabular-nums">{thr.maxMaturity}</span>
               </label>
-              <label className="flex items-center gap-1.5" title="y축 최신 가중 반감기(작을수록 최신 초록만 강조)">
+              <label className="flex items-center gap-1.5" title="최신성 반감기(작을수록 최신 발표만 강조)">
                 <span className="text-slate-500">반감기</span>
                 <input type="range" min="0.5" max="4" step="0.5" value={halfLife}
                   onChange={(e) => setHalfLife(Number(e.target.value))} className="w-20" />
                 <span className="font-semibold w-8 tabular-nums">{halfLife}y</span>
               </label>
-              <button onClick={() => { setThr(EMERGE_DEFAULTS); setHalfLife(HALFLIFE_DEFAULT) }} className="text-slate-400 hover:text-slate-600 underline">기본값</button>
+              <label className="flex items-center gap-1.5" title="최근 N년간 신규 논문·초록·임상이 없는 타깃 제외">
+                <span className="text-slate-500">최근활동 ≤</span>
+                <input type="range" min="1" max="30" step="1" value={activeYears}
+                  onChange={(e) => setActiveYears(Number(e.target.value))} className="w-20" />
+                <span className="font-semibold w-9 tabular-nums">{activeYears}년</span>
+              </label>
+              <button onClick={() => { setThr(EMERGE_DEFAULTS); setHalfLife(HALFLIFE_DEFAULT); setActiveYears(10) }} className="text-slate-400 hover:text-slate-600 underline">기본값</button>
             </div>
           }
         />
