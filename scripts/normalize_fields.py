@@ -7,10 +7,24 @@ target / biomarker 값 정규화 (데이터 클리닝).
   - 긴 풀네임 ("Vascular Endothelial Growth Factor Receptor (VEGFR)")
   - biomarker 동의어 (MSI / MSI-H / microsatellite instability)
 
-방침: 괄호 약어 추출 → 표준 동의어 맵 → 서술문은 키워드 구제 또는 Unknown.
+방침: 괄호 약어 추출 → 서술문 정제 → **최종 target canonical은 단일 소스에 위임**.
+  - target canonical 권위 = analysis/crc_target_maturity/build_matrix.py::norm_target
+    이 모듈은 LLM 출력의 '정제'(문장/약물명/약어)만 담당하고, 유전자 심볼 통일은
+    norm_target에 넘긴다. 하위 TARGET_CANON은 정제용 보조 별칭표일 뿐, 최종 표준형은
+    항상 norm_target()가 결정한다(멱등). make_frontend_data가 하류에서 다시 norm_target을
+    적용하므로 parsed==frontend 일관성이 보장된다.
+  - biomarker canonical은 하류 make_frontend_data가 normalize_biomarkers.py로 최종
+    정규화하므로 여기 BIOMARKER_CANON은 parsed 중간표현 정리에만 관여한다.
 """
 
+import os
 import re
+import sys
+
+# 단일 소스 target canonical 정규화기 (make_frontend_data와 동일 import 경로)
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_HERE, "..", "analysis", "crc_target_maturity"))
+from build_matrix import norm_target as _canon_target  # noqa: E402
 
 # ── target 표준화 ─────────────────────────────────────────────────────────────
 # 키: 영숫자만 소문자화한 형태 → 표준 심볼
@@ -70,6 +84,11 @@ def _key(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
+def _canon(s: str) -> str:
+    """정제된 토큰의 최종 표준형을 단일 소스(norm_target)에 위임. 멱등."""
+    return _canon_target(s) or s
+
+
 def normalize_target(t: str) -> str:
     if not t:
         return "Unknown"
@@ -80,7 +99,7 @@ def normalize_target(t: str) -> str:
 
     # 약물명이 target으로 들어온 경우
     if _key(s) in DRUG_AS_TARGET:
-        return DRUG_AS_TARGET[_key(s)]
+        return _canon(DRUG_AS_TARGET[_key(s)])
 
     # 서술문/장황 (문장형) → 키워드 구제 또는 Unknown
     is_sentence = len(s) > 40 and (
@@ -90,10 +109,10 @@ def normalize_target(t: str) -> str:
     if is_sentence:
         for kw, canon in _RESCUE:
             if kw in low:
-                return canon
+                return _canon(canon)
         m = re.search(r"\(([A-Za-z0-9/\-]{2,14})\)", s)
         if m:
-            return TARGET_CANON.get(_key(m.group(1)), m.group(1))
+            return _canon(TARGET_CANON.get(_key(m.group(1)), m.group(1)))
         return "Unknown"
 
     # "Long Name (ABBR)" → ABBR
@@ -103,14 +122,14 @@ def normalize_target(t: str) -> str:
 
     k = _key(s)
     if k in TARGET_CANON:
-        return TARGET_CANON[k]
+        return _canon(TARGET_CANON[k])
     # 너무 길면(여전히 풀네임/구문) 약어 구제, 없으면 그대로
     if len(s) > 28 and " " in s:
         for kw, canon in _RESCUE:
             if kw in s.lower():
-                return canon
+                return _canon(canon)
         return "Unknown"
-    return s
+    return _canon(s)
 
 
 # ── biomarker 표준화 (동의어 병합) ────────────────────────────────────────────

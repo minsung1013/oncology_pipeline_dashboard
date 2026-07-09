@@ -21,6 +21,17 @@ frontend/public/pipeline.json
 # Dev
 .env
 *.local
+.DS_Store
+
+# 로컬 실행 로그/캐시 (재생성물 — git 미추적)
+logs/
+.wrangler/
+data/cache/*.bak_*
+data/cache/*.OLD_*
+
+# analysis 재생성 산출물 (build_matrix.py가 생성)
+analysis/crc_target_maturity/crc_target_maturity.*
+analysis/crc_target_maturity/*heatmap*
 
 # Claude Code internal
 .claude/
