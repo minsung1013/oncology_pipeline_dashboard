@@ -5,7 +5,11 @@ import {
 
 // 얇은 가로 누적 막대 (로그 스케일). 막대 길이=전체 고유약물 수, 색=개발 단계.
 // 막대(행) 클릭 → 해당 target 필터 토글. 세그먼트 hover → 진행/완료/중단.
-export default function TargetMaturityChart({ rows, topN = 100, selected = [], onSelect }) {
+export default function TargetMaturityChart({
+  rows, topN = 100, selected = [], onSelect,
+  title = '타겟 성숙도 — 단계별 프로그램 (로그 스케일)',
+  emptyLabel = '표시할 타겟이 없습니다 (필터 결과 비어있음).',
+}) {
   const shown = useMemo(
     () => rows.filter((r) => r.total_activity > 0).slice(0, topN),
     [rows, topN],
@@ -14,7 +18,7 @@ export default function TargetMaturityChart({ rows, topN = 100, selected = [], o
   if (!shown.length) {
     return (
       <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-sm text-slate-400">
-        표시할 타겟이 없습니다 (필터 결과 비어있음).
+        {emptyLabel}
       </div>
     )
   }
@@ -31,9 +35,7 @@ export default function TargetMaturityChart({ rows, topN = 100, selected = [], o
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-3 overflow-x-auto">
       <div className="flex items-center justify-between mb-1 px-1">
-        <h3 className="text-sm font-semibold text-slate-700">
-          타겟 성숙도 — 단계별 프로그램 (로그 스케일)
-        </h3>
+        <h3 className="text-sm font-semibold text-slate-700">{title}</h3>
         <div className="flex items-center gap-2.5 text-[10px] text-slate-500 flex-wrap">
           {PHASE_ORDER.map((p) => (
             <span key={p} className="inline-flex items-center gap-1">
