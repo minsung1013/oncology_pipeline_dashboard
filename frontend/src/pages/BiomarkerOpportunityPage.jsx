@@ -192,7 +192,7 @@ export default function BiomarkerOpportunityPage() {
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
         <p className="text-xs text-slate-500 leading-relaxed">
-          <b>x</b>=<b>최신 임팩트</b>(임상·초록·논문 발표의 최근가중 합, 선형; 최근·다수일수록 오른쪽) · <b>y</b>=임상 성숙도(단계 가중 0.3~4 × 진행상태[완료↑·중단↓]의 <b>총합, 로그</b>) ·
+          <b>x</b>=<b>최신성</b>(발표들의 최근 가중 평균 0~1, 신뢰도 스무딩; 오른쪽일수록 최근) · <b>y</b>=임상 성숙도(단계 가중 0.3~4 × 진행상태[완료↑·중단↓]의 <b>총합, 로그</b>) ·
           점 크기=<b>총 발표 수</b>(임상+초록+논문) · 색=성장비(<span className="text-blue-600">파랑=식음</span>→<span className="text-red-600">빨강=뜸</span>) ·
           <b className="text-red-600"> 빨강 테두리=부상</b>(최신·상승·미성숙). 점/행 클릭 시 해당 바이오마커로 필터.
         </p>
@@ -207,7 +207,7 @@ export default function BiomarkerOpportunityPage() {
                 <tr className="text-right">
                   <th className="px-2 py-1 text-left">Biomarker</th>
                   <th className="px-2 py-1" title="임상 성숙도(단계×상태 평균, x축)">성숙도</th>
-                  <th className="px-2 py-1" title="최신 임팩트(최근가중 발표량 합, y축)">최신임팩트</th>
+                  <th className="px-2 py-1" title="최신성(최근 가중 평균 0~1, x축)">최신성</th>
                   <th className="px-2 py-1" title="총 발표 수(버블 크기)">총</th>
                   <th className="px-2 py-1" title="임상 진행/완료/중단">임상(진/완/중)</th>
                   <th className="px-2 py-1">초록</th>

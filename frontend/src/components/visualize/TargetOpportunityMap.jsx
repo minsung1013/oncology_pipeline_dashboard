@@ -28,17 +28,14 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
   const selSet = useMemo(() => new Set(selected), [selected])
   const pts = useMemo(() => rows.filter((r) => r.size_total > 0), [rows])
   const smax = useMemo(() => Math.max(1, ...pts.map((r) => r.size_total)), [pts])
-  const xmax = useMemo(() => Math.max(3, ...pts.map((r) => r.recency)), [pts])       // x=최신 임팩트
+  const xmax = useMemo(() => Math.max(0.3, ...pts.map((r) => r.recency)), [pts])     // x=최신성(0~1)
   const ymax = useMemo(() => Math.max(4, ...pts.map((r) => r.clin_maturity)), [pts]) // y=임상 성숙도
 
   const lg = (v) => Math.log10(Math.max(0, v) + 1)
   const X = (v, jitPx = 0) => padL + (Math.max(0, v) / xmax) * plotW + jitPx // 선형 x
   const Y = (v, jitPx = 0) => padT + plotH - (lg(v) / lg(ymax + 1)) * plotH + jitPx // 로그 y
   const R = (n) => 2.5 + Math.sqrt(n / smax) * 20 // 크기 = 총 발표 수 (sqrt 정규화)
-  const xTicks = useMemo(() => {
-    const nice = xmax >= 60 ? 10 : xmax >= 10 ? 5 : 1
-    return Array.from({ length: 7 }, (_, i) => Math.round((xmax * i) / 6 / nice) * nice)
-  }, [xmax])
+  const xTicks = useMemo(() => Array.from({ length: 6 }, (_, i) => Math.round((xmax * i) / 5 * 100) / 100), [xmax])
   const yTicks = useMemo(() => X_TICKS.filter((t) => t <= ymax * 1.05), [ymax])
 
   const labeled = useMemo(() => {
@@ -67,7 +64,7 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
           <text x={X(t)} y={padT + plotH + 18} fontSize="10" fill="#666" textAnchor="middle">{t}</text>
         </g>
       ))}
-      <text x={padL + plotW / 2} y={H - 24} fontSize="12" fontWeight="600" textAnchor="middle" fill="#444">최신 임팩트 (Σ 최근가중 발표량, 로그) →</text>
+      <text x={padL + plotW / 2} y={H - 24} fontSize="12" fontWeight="600" textAnchor="middle" fill="#444">최신성 (최근 가중 평균, 0~1 · 오른쪽일수록 최근) →</text>
       <text x="24" y={padT + plotH / 2} fontSize="12" fontWeight="600" textAnchor="middle" fill="#444" transform={`rotate(-90 24 ${padT + plotH / 2})`}>임상 성숙도 (Σ 단계×진행상태 가중, 로그) →</text>
 
       {pts.map((r) => {
@@ -78,7 +75,7 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
         const stroke = sel ? '#1d4ed8' : r.emerging ? '#c10000' : '#8894a4'
         const sw = sel ? 2.6 : r.emerging ? 2.2 : 0.6
         const tip =
-          `${r.target} — 최신 임팩트 ${r.recency} · 성숙도 ${r.clin_maturity}(최고 ${r.max_phase}) · ` +
+          `${r.target} — 최신성 ${r.recency} · 성숙도 ${r.clin_maturity}(최고 ${r.max_phase}) · ` +
           `임상 ${r.clinical_total}(진행${r.clin_ongoing}/완료${r.clin_completed}/중단${r.clin_stopped}) · ` +
           `초록 ${r.abstract_count} · 논문 ${r.pub_count} · 총 ${r.size_total} · ` +
           `성장 ${r.growth_ratio}` + (r.emerging ? ' · ★부상' : '')

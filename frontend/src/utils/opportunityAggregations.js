@@ -130,18 +130,20 @@ export function deriveYearWindowsFromAcc(M) {
 }
 
 export const HALFLIFE_DEFAULT = 2 // 년. 최신성 반감기
+export const RECENCY_K = 5 // 신뢰도 스무딩 pseudo-count (데이터 적은 타깃 과대평가 억제)
 
-// 최신 임팩트 y = 발표들의 연도 시간감쇠 '합' (평균 아님 → 최근 AND 많은 것만 위로).
-//   recency = Σ_year n_year · 0.5^((maxYear − year)/halfLife)   (로그 스케일로 그림)
+// 최신성 = 발표들의 연도 시간감쇠 '신뢰도 스무딩 평균' (0~1). 볼륨이 값을 지배하지 않음.
+//   recency = Σ_year n_year·0.5^((maxYear−year)/H) / (Σ_year n_year + K)
+//   → 최근일수록↑ · 데이터 많을수록 신뢰↑ · 1건짜리 최근은 1/(1+K)로 억제
 export function applyRecency(rows, { halfLife = HALFLIFE_DEFAULT, maxYear } = {}) {
   const my = maxYear ?? Math.max(0, ...rows.flatMap((r) => Object.keys(r.year_counts || {}).map(Number)))
   const hl = halfLife > 0 ? halfLife : HALFLIFE_DEFAULT
   return rows.map((r) => {
-    let wsum = 0
+    let wsum = 0, n = 0
     for (const [y, c] of Object.entries(r.year_counts || {})) {
-      wsum += c * Math.pow(0.5, (my - Number(y)) / hl)
+      wsum += c * Math.pow(0.5, (my - Number(y)) / hl); n += c
     }
-    return { ...r, recency: Math.round(wsum * 10) / 10 }
+    return { ...r, recency: n ? Math.round((wsum / (n + RECENCY_K)) * 1000) / 1000 : 0 }
   })
 }
 
