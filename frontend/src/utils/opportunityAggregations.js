@@ -13,11 +13,8 @@ export const PHASE_WEIGHT = { Preclinical: 0.3, P1: 1, 'P1/2': 1.5, P2: 2, 'P2/3
 // 진행상태 가중 — 완료=통과(보너스), 진행=현재단계, 중단=실패(페널티)
 export const STATUS_WEIGHT = { completed: 1.15, ongoing: 1.0, unknown: 0.9, stopped: 0.5 }
 
-// x축 눈금(성숙도 스코어): 전임상 0.3 ~ P4 4
-export const X_TICKS = [
-  { v: 0.3, label: '전임상' }, { v: 1, label: 'P1' }, { v: 2, label: 'P2' },
-  { v: 3, label: 'P3' }, { v: 4, label: 'P4' },
-]
+// x축 로그 눈금 후보 (임상 성숙도 총합) — 컴포넌트에서 max 이하만 사용
+export const X_TICKS = [0.3, 1, 3, 10, 30, 100, 300, 1000]
 
 const DROP = new Set(['Unknown', 'DNA', 'RNA', 'N/A', 'NONE', '-'])
 
@@ -75,9 +72,10 @@ export function finalizeRow(name, acc, W) {
   for (const [y, n] of acc.yr) { if (W.early.has(y)) early += n; if (W.recent.has(y)) recent += n }
   const growth = Math.round(((recent + 1) / (early + 1)) * 100) / 100
   const hasResearch = acc.abs + acc.pub > 0
-  // 임상 성숙도: 임상 데이터 포인트(단계 인식된 것)의 평균 (단계×상태). 임상 없으면 전임상 0.3.
+  // 임상 성숙도: 임상 프로그램들의 (단계×상태) 가중치 '총합'. 임상 없으면 전임상 baseline 0.3.
+  // (x축은 로그 스케일로 그림 — 소수 후기임상 vs 다수 초기임상의 넓은 범위 수용)
   const clinMaturity = acc.wN > 0
-    ? Math.round((acc.wSum / acc.wN) * 100) / 100
+    ? Math.round(acc.wSum * 10) / 10
     : (hasResearch ? PHASE_WEIGHT.Preclinical : 0)
   return {
     target: name,
@@ -146,7 +144,7 @@ export function applyRecency(rows, { halfLife = HALFLIFE_DEFAULT, maxYear } = {}
   })
 }
 
-export const EMERGE_DEFAULTS = { minRecent: 4, minGrowth: 1.3, maxMaturity: 2.0 } // 성숙도 ≤ 2(≈P2)
+export const EMERGE_DEFAULTS = { minRecent: 4, minGrowth: 1.3, maxMaturity: 5 } // 성숙도 총합 ≤ 5
 
 // 부상 판정(필터): 최근 발표 충분 · 상승 추세 · 아직 임상 성숙도 낮음.
 export function flagEmerging(rows, thr = EMERGE_DEFAULTS) {

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { X_TICKS } from '../../utils/opportunityAggregations'
 
 // 기회 지도 산점도.
-//   x = 임상 성숙도(단계×상태 가중 평균, 전임상0.3~P4 4+) · y = 최신성(0~1, 최근일수록 1)
+//   x = 임상 성숙도(단계×상태 가중 '총합', 로그 스케일) · y = 최신성(0~1, 최근일수록 1)
 //   크기 = 총 발표 수(임상+초록+논문) · 색 = 성장비(파랑=식음→빨강=뜸) · 빨강 테두리 = 부상
 // rows: applyRecency + flagEmerging 적용. selected: 선택된 식별자 배열. onSelect(name).
 
@@ -10,12 +10,11 @@ const W = 1080, H = 700
 const padL = 92, padR = 40, padT = 56, padB = 84
 const plotW = W - padL - padR
 const plotH = H - padT - padB
-const XDOM = 4.7 // 성숙도 도메인 (P4 완료 ≈ 4.6 수용)
 
 function hashJit(s) {
   let h = 0
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-  return ((Math.abs(h) % 100) / 100 - 0.5) * 0.16 // ±0.08 성숙도 지터
+  return ((Math.abs(h) % 100) / 100 - 0.5) * 12 // ±6px 지터(로그축)
 }
 function growthColor(g) {
   const t = Math.max(0, Math.min(1, (g - 0.5) / 2))
@@ -29,10 +28,13 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
   const selSet = useMemo(() => new Set(selected), [selected])
   const pts = useMemo(() => rows.filter((r) => r.size_total > 0), [rows])
   const smax = useMemo(() => Math.max(1, ...pts.map((r) => r.size_total)), [pts])
+  const xmax = useMemo(() => Math.max(4, ...pts.map((r) => r.clin_maturity)), [pts])
 
-  const X = (v, jit = 0) => padL + ((v + jit) / XDOM) * plotW
+  const lx = (v) => Math.log10(Math.max(0, v) + 1)
+  const X = (v, jitPx = 0) => padL + (lx(v) / lx(xmax + 1)) * plotW + jitPx // 로그 스케일 x
   const Y = (rec) => padT + plotH - Math.max(0, Math.min(1, rec)) * plotH
   const R = (n) => 3 + Math.sqrt(n / smax) * 24 // 크기 = 총 발표 수 (sqrt 정규화)
+  const xTicks = useMemo(() => X_TICKS.filter((t) => t <= xmax * 1.05), [xmax])
 
   const labeled = useMemo(() => {
     const top = [...pts].sort((a, b) => b.size_total - a.size_total).slice(0, 26)
@@ -41,7 +43,7 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
     return s
   }, [pts, selSet])
 
-  const xMid = X(2)          // 성숙도 2(≈P2) 경계
+  const xMid = X(5)          // 성숙도 총합 5 경계(부상 기본 임계)
   const yMid = Y(0.5)        // 최신성 0.5 경계
 
   return (
@@ -61,13 +63,13 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
       {/* 축 */}
       <line x1={padL} y1={padT + plotH} x2={padL + plotW} y2={padT + plotH} stroke="#333" />
       <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="#333" />
-      {X_TICKS.map((t) => (
-        <g key={t.v}>
-          <line x1={X(t.v)} y1={padT} x2={X(t.v)} y2={padT + plotH} stroke="#f6f6f6" />
-          <text x={X(t.v)} y={padT + plotH + 18} fontSize="10" fill="#666" textAnchor="middle">{t.label}</text>
+      {xTicks.map((t) => (
+        <g key={t}>
+          <line x1={X(t)} y1={padT} x2={X(t)} y2={padT + plotH} stroke="#f6f6f6" />
+          <text x={X(t)} y={padT + plotH + 18} fontSize="10" fill="#666" textAnchor="middle">{t === 0.3 ? '전임상' : t}</text>
         </g>
       ))}
-      <text x={padL + plotW / 2} y={H - 26} fontSize="12" fontWeight="600" textAnchor="middle" fill="#444">임상 성숙도 (단계×진행상태 가중 평균) →</text>
+      <text x={padL + plotW / 2} y={H - 26} fontSize="12" fontWeight="600" textAnchor="middle" fill="#444">임상 성숙도 (Σ 단계×진행상태 가중, 로그) →</text>
       <text x="22" y={padT + plotH / 2} fontSize="12" fontWeight="600" textAnchor="middle" fill="#444" transform={`rotate(-90 22 ${padT + plotH / 2})`}>최신성 (발표 평균, 1=최근) →</text>
 
       {pts.map((r) => {
