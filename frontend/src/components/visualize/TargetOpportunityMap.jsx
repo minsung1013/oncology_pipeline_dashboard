@@ -2,12 +2,12 @@ import { useMemo } from 'react'
 import { X_TICKS } from '../../utils/opportunityAggregations'
 
 // 기회 지도 산점도.
-//   x = 최신 임팩트(Σ 최근가중 발표량, 로그) · y = 임상 성숙도(Σ 단계×상태, 로그)
+//   x = 최신 임팩트(Σ 최근가중 발표량, 선형) · y = 임상 성숙도(Σ 단계×상태, 로그)
 //   크기 = 총 발표 수(임상+초록+논문) · 색 = 성장비(파랑=식음→빨강=뜸) · 빨강 테두리 = 부상
 // rows: applyRecency + flagEmerging 적용. selected: 선택된 식별자 배열. onSelect(name).
 
-const W = 1280, H = 900
-const padL = 96, padR = 44, padT = 44, padB = 76
+const W = 1280, H = 560
+const padL = 92, padR = 48, padT = 34, padB = 60
 const plotW = W - padL - padR
 const plotH = H - padT - padB
 
@@ -32,10 +32,13 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
   const ymax = useMemo(() => Math.max(4, ...pts.map((r) => r.clin_maturity)), [pts]) // y=임상 성숙도
 
   const lg = (v) => Math.log10(Math.max(0, v) + 1)
-  const X = (v, jitPx = 0) => padL + (lg(v) / lg(xmax + 1)) * plotW + jitPx // 로그 x
+  const X = (v, jitPx = 0) => padL + (Math.max(0, v) / xmax) * plotW + jitPx // 선형 x
   const Y = (v, jitPx = 0) => padT + plotH - (lg(v) / lg(ymax + 1)) * plotH + jitPx // 로그 y
-  const R = (n) => 2.5 + Math.sqrt(n / smax) * 22 // 크기 = 총 발표 수 (sqrt 정규화)
-  const xTicks = useMemo(() => X_TICKS.filter((t) => t >= 1 && t <= xmax * 1.05), [xmax])
+  const R = (n) => 2.5 + Math.sqrt(n / smax) * 20 // 크기 = 총 발표 수 (sqrt 정규화)
+  const xTicks = useMemo(() => {
+    const nice = xmax >= 60 ? 10 : xmax >= 10 ? 5 : 1
+    return Array.from({ length: 7 }, (_, i) => Math.round((xmax * i) / 6 / nice) * nice)
+  }, [xmax])
   const yTicks = useMemo(() => X_TICKS.filter((t) => t <= ymax * 1.05), [ymax])
 
   const labeled = useMemo(() => {
@@ -46,7 +49,7 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
   }, [pts, selSet])
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto select-none" style={{ maxHeight: '86vh' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto select-none" style={{ maxHeight: '62vh' }}>
       {/* y 격자 (임상 성숙도, 로그) */}
       {yTicks.map((n) => (
         <g key={n}>
@@ -85,7 +88,9 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
               <title>{tip}</title>
             </circle>
             {labeled.has(r.target) && (
-              <text x={x + rr + 2} y={y + 3} fontSize="10" fontWeight={r.emerging || sel ? 700 : 400} fill={sel ? '#1d4ed8' : r.emerging ? '#c10000' : '#333'} style={{ pointerEvents: 'none' }}>
+              <text x={x + rr + 1} y={y - 1} fontSize="10" textAnchor="start"
+                transform={`rotate(-45 ${x + rr + 1} ${y - 1})`}
+                fontWeight={r.emerging || sel ? 700 : 400} fill={sel ? '#1d4ed8' : r.emerging ? '#c10000' : '#333'} style={{ pointerEvents: 'none' }}>
                 {r.target}
               </text>
             )}
