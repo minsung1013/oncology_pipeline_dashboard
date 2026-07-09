@@ -16,7 +16,7 @@ Build frontend assets for the Target Maturity tab.
 
 정규화 로직은 analysis/crc_target_maturity/build_matrix.py 를 그대로 재사용(단일 소스).
 """
-import json, os, sys, collections
+import json, os, sys, glob, collections
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, ".."))
@@ -33,7 +33,15 @@ def main():
     pipeline = json.load(open(os.path.join(ROOT, "data/frontend/pipeline.json")))["drugs"]
     cache = json.load(open(os.path.join(ROOT, "data/cache/llm_drug_cache.json")))
 
-    # 1) 코퍼스 전체 정규화 이름 빈도 -> 포맷 대표형 맵 (pipeline target + cache target)
+    # 학회 초록 target_list 도 수집 (Opportunity Map 이 초록 타깃을 정규화해야 함)
+    abstract_targets = set()
+    for f in glob.glob(os.path.join(ROOT, "data/parsed/abstracts_*.json")):
+        for a in json.load(open(f)).get("abstracts", []):
+            for t in (a.get("target_list") or []):
+                if t:
+                    abstract_targets.add(t)
+
+    # 1) 코퍼스 전체 정규화 이름 빈도 -> 포맷 대표형 맵 (pipeline + cache + 초록 target)
     norm_counts = collections.Counter()
     for d in pipeline:
         n = norm_target(d.get("target"))
@@ -41,6 +49,10 @@ def main():
             norm_counts[n] += 1
     for ent in cache.values():
         n = norm_target(ent.get("target"))
+        if n:
+            norm_counts[n] += 1
+    for t in abstract_targets:
+        n = norm_target(t)
         if n:
             norm_counts[n] += 1
     fmt_canon, _ = build_format_canon(norm_counts)
@@ -51,11 +63,16 @@ def main():
             return None
         return fmt_canon.get(n, n)
 
-    # 2) raw pipeline target -> canonical
+    # 2) raw target(pipeline + 학회 초록) -> canonical
     target_canon = {}
     for d in pipeline:
         t = d.get("target")
         if t and t not in target_canon:
+            c = canon(t)
+            if c:
+                target_canon[t] = c
+    for t in abstract_targets:
+        if t not in target_canon:
             c = canon(t)
             if c:
                 target_canon[t] = c

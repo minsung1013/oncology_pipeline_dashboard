@@ -11,6 +11,7 @@ const VisualizePage = lazy(() => import('./pages/VisualizePage'))
 const ConferenceVisualizePage = lazy(() => import('./pages/ConferenceVisualizePage'))
 const PublicationVisualizePage = lazy(() => import('./pages/PublicationVisualizePage'))
 const TargetMaturityPage = lazy(() => import('./pages/TargetMaturityPage'))
+const OpportunityMapPage = lazy(() => import('./pages/OpportunityMapPage'))
 
 const navClass = ({ isActive }) =>
   `shrink-0 whitespace-nowrap text-sm px-2.5 sm:px-3 py-1.5 rounded font-medium transition-colors ${
@@ -45,6 +46,9 @@ function DashboardLayout() {
         <NavLink to="/maturity" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>
           <span className="hidden sm:inline">Target </span>Maturity
         </NavLink>
+        <NavLink to="/opportunity" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>
+          <span className="hidden sm:inline">Target </span>Opportunity
+        </NavLink>
       </nav>
       <div className="flex-1 overflow-hidden">
         <Suspense
@@ -74,6 +78,7 @@ export default function App() {
           <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/visualize" element={<VisualizePage />} />
           <Route path="/maturity" element={<TargetMaturityPage />} />
+          <Route path="/opportunity" element={<OpportunityMapPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
