@@ -192,7 +192,7 @@ export default function BiomarkerOpportunityPage() {
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
         <p className="text-xs text-slate-500 leading-relaxed">
-          <b>x</b>=임상 성숙도(단계 가중 0.3~4 × 진행상태[완료↑·중단↓]의 <b>총합, 로그 스케일</b>) · <b>y</b>=<b>최신 임팩트</b>(임상·초록·논문 발표의 최근가중 합, 로그; 최근·다수일수록 상단) ·
+          <b>x</b>=<b>최신 임팩트</b>(임상·초록·논문 발표의 최근가중 합, 로그; 최근·다수일수록 오른쪽) · <b>y</b>=임상 성숙도(단계 가중 0.3~4 × 진행상태[완료↑·중단↓]의 <b>총합, 로그</b>) ·
           점 크기=<b>총 발표 수</b>(임상+초록+논문) · 색=성장비(<span className="text-blue-600">파랑=식음</span>→<span className="text-red-600">빨강=뜸</span>) ·
           <b className="text-red-600"> 빨강 테두리=부상</b>(최신·상승·미성숙). 점/행 클릭 시 해당 바이오마커로 필터.
         </p>
