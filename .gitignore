@@ -41,3 +41,7 @@ analysis/crc_target_maturity/*heatmap*
 data/frontend/
 data/parsed/
 .env.r2
+
+.dev.vars*
+!.dev.vars.example
+!.env.example
