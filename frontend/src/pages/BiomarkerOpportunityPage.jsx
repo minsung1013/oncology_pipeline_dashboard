@@ -194,7 +194,7 @@ export default function BiomarkerOpportunityPage() {
         <p className="text-xs text-slate-500 leading-relaxed">
           <b>x</b>=임상 성숙도(단계 가중 0.3~4 × 진행상태[완료↑·중단↓]의 <b>총합, 로그 스케일</b>) · <b>y</b>=<b>최신성</b>(임상·초록·논문 발표의 연도 시간감쇠 평균, 1=최근) ·
           점 크기=<b>총 발표 수</b>(임상+초록+논문) · 색=성장비(<span className="text-blue-600">파랑=식음</span>→<span className="text-red-600">빨강=뜸</span>) ·
-          <b className="text-red-600"> 빨강 테두리=부상</b>. 왼쪽 위 핑크 = 최신·미성숙 화이트스페이스. 점/행 클릭 시 해당 바이오마커로 필터.
+          <b className="text-red-600"> 빨강 테두리=부상</b>(최신·상승·미성숙). 점/행 클릭 시 해당 바이오마커로 필터.
         </p>
 
         <TargetOpportunityMap rows={rows} selected={filters.biomarkers} onSelect={toggleBiomarker} />

@@ -43,16 +43,8 @@ export default function TargetOpportunityMap({ rows, selected = [], onSelect }) 
     return s
   }, [pts, selSet])
 
-  const xMid = X(5)          // 성숙도 총합 5 경계(부상 기본 임계)
-  const yMid = Y(0.5)        // 최신성 0.5 경계
-
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto select-none" style={{ maxHeight: '72vh' }}>
-      {/* 화이트스페이스 사분면 (왼쪽 위 = 최신·미성숙) */}
-      <rect x={padL} y={padT} width={xMid - padL} height={yMid - padT} fill="#fff5f5" />
-      <text x={padL + 12} y={padT + 20} fontSize="13" fontWeight="700" fill="#c10000">★ 부상 / 화이트스페이스</text>
-      <text x={padL + 12} y={padT + 37} fontSize="11" fill="#cc9999">최신 활발 · 임상 미성숙</text>
-
       {/* y 격자 (최신성 0~1) */}
       {[0, 0.25, 0.5, 0.75, 1].map((n) => (
         <g key={n}>
