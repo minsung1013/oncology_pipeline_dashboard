@@ -6,11 +6,13 @@ import { filterAbstractsForVisualize, phaseLabel } from '../utils/visualizeAggre
 import { getDrugFilterOptions, applyDrugFilters, DRUG_FILTER_DEFAULT } from '../utils/drugFilters'
 import { invertCanon } from '../utils/maturityAggregations'
 import {
-  buildOpportunityRows, applyRecencyWeight, flagEmerging,
-  EMERGE_DEFAULTS, HALFLIFE_DEFAULT, CLIN_AXIS, deriveYearWindows,
+  buildOpportunityRows, applyRecency, flagEmerging, EMERGE_DEFAULTS, HALFLIFE_DEFAULT,
 } from '../utils/opportunityAggregations'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
-import { getPipeline, getAbstractIndex, loadAbstractFiles, getMaturityAssets } from '../utils/dataSource'
+import {
+  getPipeline, getAbstractIndex, loadAbstractFiles, getMaturityAssets,
+  getPublicationIndex, loadPublicationFiles,
+} from '../utils/dataSource'
 
 const EMPTY_FILTERS = DRUG_FILTER_DEFAULT
 const CHIP_META = {
@@ -27,6 +29,7 @@ const CHIP_META = {
 export default function OpportunityMapPage() {
   const [data, setData] = useState(null)
   const [allAbstracts, setAllAbstracts] = useState(null)
+  const [allPubs, setAllPubs] = useState(null)
   const [assets, setAssets] = useState(null)
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(getShared)
@@ -65,6 +68,14 @@ export default function OpportunityMapPage() {
       .then((idx) => loadAbstractFiles(idx))
       .then(setAllAbstracts)
       .catch(() => setAllAbstracts([]))
+    // 논문: 최근 연도만 로드(오래된 논문은 최신성·추세에 무의미, 비용 절감)
+    getPublicationIndex()
+      .then((idx) => {
+        const maxY = Math.max(...idx.map((m) => m.year).filter(Boolean), 0)
+        return loadPublicationFiles(idx.filter((m) => m.year && m.year >= maxY - 6))
+      })
+      .then(setAllPubs)
+      .catch(() => setAllPubs([]))
   }, [])
 
   const allDrugs = useMemo(() => data?.drugs ?? [], [data])
@@ -74,17 +85,17 @@ export default function OpportunityMapPage() {
     () => (allAbstracts ? filterAbstractsForVisualize(allAbstracts, filters) : null),
     [allAbstracts, filters],
   )
+  const filteredPubs = useMemo(
+    () => (allPubs ? filterAbstractsForVisualize(allPubs, filters) : null),
+    [allPubs, filters],
+  )
   // 원본 지표는 데이터/필터가 바뀔 때만 재계산 → 슬라이더(반감기·임계값)는 저렴한 후처리로
   const baseRows = useMemo(
-    () => buildOpportunityRows(drugs, filteredAbstracts, assets ?? {}),
-    [drugs, filteredAbstracts, assets],
+    () => buildOpportunityRows(drugs, filteredAbstracts, filteredPubs, assets ?? {}),
+    [drugs, filteredAbstracts, filteredPubs, assets],
   )
-  const maxYear = useMemo(() => deriveYearWindows(filteredAbstracts).maxYear, [filteredAbstracts])
-  const weighted = useMemo(
-    () => applyRecencyWeight(baseRows, { halfLife, maxYear }),
-    [baseRows, halfLife, maxYear],
-  )
-  const rows = useMemo(() => flagEmerging(weighted, thr), [weighted, thr])
+  const recencyRows = useMemo(() => applyRecency(baseRows, { halfLife }), [baseRows, halfLife])
+  const rows = useMemo(() => flagEmerging(recencyRows, thr), [recencyRows, thr])
   const emerging = useMemo(
     () => rows.filter((r) => r.emerging).sort((a, b) => b.recent * b.growth_ratio - a.recent * a.growth_ratio),
     [rows],
@@ -125,8 +136,8 @@ export default function OpportunityMapPage() {
   if (error) return <div className="flex items-center justify-center h-full text-red-500">Failed to load data: {error}</div>
   if (!data) return <div className="flex items-center justify-center h-full text-slate-400 text-sm">Loading pipeline…</div>
 
-  const preLoading = allAbstracts === null
-  const summary = `${emerging.length} emerging · ${rows.filter((r) => r.pre_weighted > 0 || r.clinical_total > 0).length} targets`
+  const preLoading = allAbstracts === null || allPubs === null
+  const summary = `${emerging.length} emerging · ${rows.filter((r) => r.size_total > 0).length} targets`
 
   return (
     <div className="flex flex-col h-full">
@@ -135,7 +146,7 @@ export default function OpportunityMapPage() {
           <div>
             <h2 className="text-base font-bold text-slate-800 leading-none">Target Opportunity Map</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              {summary}{preLoading && <span className="text-slate-300"> · 전임상 초록 로딩…</span>}
+              {summary}{preLoading && <span className="text-slate-300"> · 초록·논문 로딩…</span>}
             </p>
           </div>
         </div>
@@ -157,11 +168,11 @@ export default function OpportunityMapPage() {
                   onChange={(e) => setThr({ minGrowth: Number(e.target.value) })} className="w-20" />
                 <span className="font-semibold w-7 tabular-nums">{thr.minGrowth.toFixed(1)}×</span>
               </label>
-              <label className="flex items-center gap-1.5" title="임상 최고단계 상한(이하만 '부상')">
-                <span className="text-slate-500">임상 ≤</span>
-                <input type="range" min="0" max="6" step="1" value={thr.maxPhaseIdx}
-                  onChange={(e) => setThr({ maxPhaseIdx: Number(e.target.value) })} className="w-20" />
-                <span className="font-semibold w-10 tabular-nums">{CLIN_AXIS[thr.maxPhaseIdx]}</span>
+              <label className="flex items-center gap-1.5" title="임상 성숙도 상한(이하만 '부상')">
+                <span className="text-slate-500">성숙도 ≤</span>
+                <input type="range" min="0.3" max="4" step="0.1" value={thr.maxMaturity}
+                  onChange={(e) => setThr({ maxMaturity: Number(e.target.value) })} className="w-20" />
+                <span className="font-semibold w-8 tabular-nums">{thr.maxMaturity.toFixed(1)}</span>
               </label>
               <label className="flex items-center gap-1.5" title="y축 최신 가중 반감기(작을수록 최신 초록만 강조)">
                 <span className="text-slate-500">반감기</span>
@@ -195,30 +206,29 @@ export default function OpportunityMapPage() {
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
         <p className="text-xs text-slate-500 leading-relaxed">
-          단계 가중 없음. <b>x</b>=임상 도달 최고단계 · <b>y</b>=전임상 <b>최신 가중 연구강도</b>(초록을 연도별 시간감쇠 합산, log) ·
-          점 크기=고유 기관 수 · 색=성장비(<span className="text-blue-600">파랑=식음</span>→<span className="text-red-600">빨강=뜸</span>) ·
-          <b className="text-red-600"> 빨강 테두리=부상</b> · 🆕=최근 첫 등장. 왼쪽 위 핑크 = 화이트스페이스. 점/행 클릭 시 해당 타깃으로 필터.
+          <b>x</b>=임상 성숙도(단계 가중 0.3~4 × 진행상태[완료↑·중단↓]의 <b>평균</b>) · <b>y</b>=<b>최신성</b>(임상·초록·논문 발표의 연도 시간감쇠 평균, 1=최근) ·
+          점 크기=<b>총 발표 수</b>(임상+초록+논문) · 색=성장비(<span className="text-blue-600">파랑=식음</span>→<span className="text-red-600">빨강=뜸</span>) ·
+          <b className="text-red-600"> 빨강 테두리=부상</b>. 왼쪽 위 핑크 = 최신·미성숙 화이트스페이스. 점/행 클릭 시 해당 타깃으로 필터.
         </p>
 
         <TargetOpportunityMap rows={rows} selected={selectedCanon} onSelect={toggleTarget} />
 
         <div>
-          <h3 className="text-sm font-bold text-slate-700 mb-1">부상 타깃 <span className="text-slate-400 font-normal">({emerging.length}) — 연구 활발 · 임상 초기 · 상승</span></h3>
+          <h3 className="text-sm font-bold text-slate-700 mb-1">부상 타깃 <span className="text-slate-400 font-normal">({emerging.length}) — 최신·상승 · 임상 미성숙</span></h3>
           <div className="overflow-auto border border-slate-200 rounded">
             <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500">
                 <tr className="text-right">
                   <th className="px-2 py-1 text-left">Target</th>
-                  <th className="px-2 py-1" title="최신 가중 연구강도 (y축)">가중강도</th>
-                  <th className="px-2 py-1">기관</th>
+                  <th className="px-2 py-1" title="임상 성숙도(단계×상태 평균, x축)">성숙도</th>
+                  <th className="px-2 py-1" title="최신성(y축)">최신성</th>
+                  <th className="px-2 py-1" title="총 발표 수(버블 크기)">총</th>
+                  <th className="px-2 py-1" title="임상 진행/완료/중단">임상(진/완/중)</th>
                   <th className="px-2 py-1">초록</th>
-                  <th className="px-2 py-1">모달</th>
+                  <th className="px-2 py-1">논문</th>
                   <th className="px-2 py-1">최근2년</th>
-                  <th className="px-2 py-1">과거2년</th>
                   <th className="px-2 py-1">성장</th>
-                  <th className="px-2 py-1">신규기관</th>
-                  <th className="px-2 py-1">최고임상</th>
-                  <th className="px-2 py-1">첫등장</th>
+                  <th className="px-2 py-1">최고단계</th>
                 </tr>
               </thead>
               <tbody>
@@ -227,24 +237,21 @@ export default function OpportunityMapPage() {
                   return (
                     <tr key={r.target} onClick={() => toggleTarget(r.target)}
                       className={`text-right cursor-pointer border-t border-slate-100 hover:bg-blue-50 ${sel ? 'bg-blue-50' : ''}`}>
-                      <td className="px-2 py-1 text-left font-medium text-slate-700">
-                        {r.target}{r.brand_new && <span title="최근 첫 등장">🆕</span>}
-                      </td>
-                      <td className="px-2 py-1 tabular-nums font-semibold text-slate-700">{r.pre_weighted}</td>
-                      <td className="px-2 py-1 tabular-nums">{r.pre_orgs}</td>
-                      <td className="px-2 py-1 tabular-nums">{r.pre_abstracts}</td>
-                      <td className="px-2 py-1 tabular-nums">{r.pre_modalities}</td>
+                      <td className="px-2 py-1 text-left font-medium text-slate-700">{r.target}</td>
+                      <td className="px-2 py-1 tabular-nums font-semibold text-slate-700">{r.clin_maturity}</td>
+                      <td className="px-2 py-1 tabular-nums">{r.recency}</td>
+                      <td className="px-2 py-1 tabular-nums font-semibold">{r.size_total}</td>
+                      <td className="px-2 py-1 tabular-nums text-slate-500">{r.clin_ongoing}/{r.clin_completed}/{r.clin_stopped}</td>
+                      <td className="px-2 py-1 tabular-nums">{r.abstract_count}</td>
+                      <td className="px-2 py-1 tabular-nums">{r.pub_count}</td>
                       <td className="px-2 py-1 tabular-nums">{r.recent}</td>
-                      <td className="px-2 py-1 tabular-nums text-slate-400">{r.early}</td>
                       <td className="px-2 py-1 tabular-nums font-semibold text-red-600">{r.growth_ratio}×</td>
-                      <td className="px-2 py-1 tabular-nums">{r.new_entrant_orgs || ''}</td>
                       <td className="px-2 py-1">{r.max_phase}</td>
-                      <td className="px-2 py-1 tabular-nums text-slate-400">{r.first_year || ''}</td>
                     </tr>
                   )
                 })}
                 {emerging.length === 0 && (
-                  <tr><td colSpan="11" className="px-2 py-4 text-center text-slate-400">조건에 맞는 부상 타깃 없음 — 임계값을 완화하세요.</td></tr>
+                  <tr><td colSpan="10" className="px-2 py-4 text-center text-slate-400">조건에 맞는 부상 타깃 없음 — 임계값을 완화하세요.</td></tr>
                 )}
               </tbody>
             </table>

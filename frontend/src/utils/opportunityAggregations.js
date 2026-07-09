@@ -1,155 +1,158 @@
-// Target Opportunity Map 집계 — '성숙한 타깃'이 아니라 '새로 주목받는 미성숙 타깃'을 발굴.
-// 가중치 없음: 두 원본 지표를 그대로 축에 배치한다.
-//   x = 임상 성숙도 (도달한 최고 임상 단계 인덱스)
-//   y = 전임상 연구 강도 (그 타깃을 다루는 '고유 기관 수')
-// 발굴 신호는 절대량이 아니라 속도(성장비)·신규성(첫 등장). 임계값은 프론트에서 조정.
-// build_matrix.py / opportunity_map.py 파이썬 프로토타입과 동일 로직.
+// Target Opportunity Map 집계 (재설계).
+//   x = 임상 성숙도  : 단계 가중(전임상0.3·P1 1·P1/2 1.5·P2 2·P2/3 2.5·P3 3·P4 4)에
+//                      진행상태 가중(완료 보너스·중단 페널티)을 곱한 값의 '데이터 포인트 평균'
+//   y = 최신성       : 임상·초록·논문 발표의 연도 시간감쇠 '평균'(최신일수록 1에 근접)
+//   버블 크기 = 총 발표 수 (임상 + 초록 + 논문)
+//   색 = 추세        : 최근2년/과거2년 성장비
+// 논문(publications)도 초록과 함께 연구 신호에 포함. (성숙도 탭은 초록만 유지 — 중복 방지)
 
-import { PHASE_ORDER, phaseBucket, canonTarget } from './maturityAggregations'
+import { PHASE_ORDER, phaseBucket, statusBucket, canonTarget } from './maturityAggregations'
 
-// x축 눈금 라벨 (clin_maturity_idx: 0=임상없음, 1=P1 … 6=P4)
-export const CLIN_AXIS = ['임상없음', 'P1', 'P1/2', 'P2', 'P2/3', 'P3', 'P4']
+// 단계 가중 — build_matrix.py 의 성숙도 모델과 동일
+export const PHASE_WEIGHT = { Preclinical: 0.3, P1: 1, 'P1/2': 1.5, P2: 2, 'P2/3': 2.5, P3: 3, P4: 4 }
+// 진행상태 가중 — 완료=통과(보너스), 진행=현재단계, 중단=실패(페널티)
+export const STATUS_WEIGHT = { completed: 1.15, ongoing: 1.0, unknown: 0.9, stopped: 0.5 }
+
+// x축 눈금(성숙도 스코어): 전임상 0.3 ~ P4 4
+export const X_TICKS = [
+  { v: 0.3, label: '전임상' }, { v: 1, label: 'P1' }, { v: 2, label: 'P2' },
+  { v: 3, label: 'P3' }, { v: 4, label: 'P4' },
+]
 
 const DROP = new Set(['Unknown', 'DNA', 'RNA', 'N/A', 'NONE', '-'])
 
-// 시간 창을 데이터의 최신 연도에서 파생 → 해가 바뀌어도 자동 갱신.
-// recent = {maxYear, maxYear-1}, early = {maxYear-4, maxYear-3}, newSince = maxYear-2
-export function deriveYearWindows(abstracts) {
+export function yearOf(v) {
+  if (v == null) return 0
+  const m = String(v).match(/\d{4}/)
+  return m ? Number(m[0]) : 0
+}
+
+export function deriveYearWindows(records) {
   let maxYear = 0
-  for (const a of abstracts ?? []) {
-    if (a.year && a.year > maxYear) maxYear = a.year
+  for (const r of records ?? []) {
+    const y = yearOf(r.year)
+    if (y > maxYear) maxYear = y
   }
   if (!maxYear) maxYear = new Date().getFullYear()
+  return { maxYear, recent: new Set([maxYear, maxYear - 1]), early: new Set([maxYear - 4, maxYear - 3]), newSince: maxYear - 2 }
+}
+
+// ── 엔티티 누적기 (target 또는 biomarker 공용) ──
+export function newAcc() {
   return {
-    maxYear,
-    recent: new Set([maxYear, maxYear - 1]),
-    early: new Set([maxYear - 4, maxYear - 3]),
-    newSince: maxYear - 2,
+    yr: new Map(), clin: 0, abs: 0, pub: 0,
+    wSum: 0, wN: 0, maxIdx: 0,
+    st: { ongoing: 0, completed: 0, stopped: 0, unknown: 0 },
+    modals: new Set(),
+  }
+}
+const bump = (map, y) => { if (y) map.set(y, (map.get(y) ?? 0) + 1) }
+
+// 문헌(초록/논문) 1건 반영: 발표 수 + 연도. isPub 로 초록/논문 구분.
+export function addLiterature(acc, rec, isPub) {
+  if (isPub) acc.pub += 1; else acc.abs += 1
+  bump(acc.yr, yearOf(rec.year))
+  for (const m of rec.modality_list ?? []) if (m) acc.modals.add(m)
+}
+// 임상 프로그램 1건 반영: 발표 수 + 성숙도(단계×상태) + 상태분해 + 시작연도.
+export function addClinical(acc, d) {
+  acc.clin += 1
+  const sb = statusBucket(d.overall_status)
+  acc.st[sb] += 1
+  const pb = phaseBucket(d.phase)
+  if (pb !== 'NA') {
+    acc.wSum += PHASE_WEIGHT[pb] * STATUS_WEIGHT[sb]
+    acc.wN += 1
+    const idx = PHASE_ORDER.indexOf(pb)
+    if (idx > acc.maxIdx) acc.maxIdx = idx
+  }
+  bump(acc.yr, yearOf(d.start_date))
+}
+
+// 누적기 → 행. W: year windows.
+export function finalizeRow(name, acc, W) {
+  let early = 0, recent = 0
+  for (const [y, n] of acc.yr) { if (W.early.has(y)) early += n; if (W.recent.has(y)) recent += n }
+  const growth = Math.round(((recent + 1) / (early + 1)) * 100) / 100
+  const hasResearch = acc.abs + acc.pub > 0
+  // 임상 성숙도: 임상 데이터 포인트(단계 인식된 것)의 평균 (단계×상태). 임상 없으면 전임상 0.3.
+  const clinMaturity = acc.wN > 0
+    ? Math.round((acc.wSum / acc.wN) * 100) / 100
+    : (hasResearch ? PHASE_WEIGHT.Preclinical : 0)
+  return {
+    target: name,
+    clin_maturity: clinMaturity,
+    max_phase: acc.maxIdx ? PHASE_ORDER[acc.maxIdx] : (hasResearch ? 'Preclinical' : 'NA'),
+    clinical_total: acc.clin,
+    clin_ongoing: acc.st.ongoing, clin_completed: acc.st.completed, clin_stopped: acc.st.stopped,
+    abstract_count: acc.abs, pub_count: acc.pub,
+    size_total: acc.clin + acc.abs + acc.pub, // 버블 크기 = 총 발표 수
+    modalities: acc.modals.size,
+    year_counts: Object.fromEntries(acc.yr), // 최신성/추세 계산용
+    early, recent, growth_ratio: growth,
   }
 }
 
-// 필터된 임상 약물 + 필터된 초록 → 타깃별 '원본 지표' 행 (임계값 미적용).
-// 임계값과 무관하므로 데이터가 바뀔 때만 재계산하면 됨(슬라이더 조정은 flagEmerging 로 저렴하게).
-export function buildOpportunityRows(drugs, abstracts, { targetCanon = {} } = {}, win) {
-  const W = win ?? deriveYearWindows(abstracts)
-
-  // ── 전임상: phase 없는 초록의 target_list → 기관/모달/연도 집계 ──
+// ── Target 빌더 ──
+export function buildOpportunityRows(drugs, abstracts, publications, { targetCanon = {} } = {}) {
   const M = new Map()
-  const rec = (t) => {
-    let m = M.get(t)
-    if (!m) {
-      m = {
-        orgs: new Set(), modals: new Set(),
-        orgsEarly: new Set(), orgsRecent: new Set(),
-        yr: new Map(), abstracts: 0, firstYear: null,
-      }
-      M.set(t, m)
-    }
-    return m
-  }
+  const acc = (t) => { let a = M.get(t); if (!a) { a = newAcc(); M.set(t, a) } return a }
 
-  if (abstracts) {
-    for (const a of abstracts) {
-      if (a.phase) continue // phase 있으면 임상단계 초록 → 전임상 아님
-      const tl = a.target_list ?? []
-      if (!tl.length) continue
-      const cos = (a.companies_normalized?.length ? a.companies_normalized : a.companies) ?? []
-      const md = a.modality_list ?? []
-      const yr = a.year
+  const addLit = (records, isPub) => {
+    for (const r of records ?? []) {
       const seen = new Set()
-      for (const raw of tl) {
+      for (const raw of r.target_list ?? []) {
         const t = canonTarget(raw, targetCanon)
         if (DROP.has(t) || seen.has(t)) continue
-        seen.add(t)
-        const m = rec(t)
-        m.abstracts += 1
-        if (yr) {
-          m.yr.set(yr, (m.yr.get(yr) ?? 0) + 1)
-          if (m.firstYear === null || yr < m.firstYear) m.firstYear = yr
-        }
-        for (const c of cos) { if (c) { m.orgs.add(c); if (W.recent.has(yr)) m.orgsRecent.add(c); if (W.early.has(yr)) m.orgsEarly.add(c) } }
-        for (const x of md) { if (x) m.modals.add(x) }
+        seen.add(t); addLiterature(acc(t), r, isPub)
       }
     }
   }
-
-  // ── 임상: 약물당 1 프로그램 → 타깃별 최고단계 인덱스 + 총 프로그램 수 ──
-  const clin = new Map()
+  addLit(abstracts, false)
+  addLit(publications, true)
   for (const d of drugs ?? []) {
     const t = canonTarget(d.target, targetCanon)
     if (DROP.has(t)) continue
-    const pb = phaseBucket(d.phase)
-    if (pb === 'NA') continue
-    const idx = PHASE_ORDER.indexOf(pb) // 1..6
-    let c = clin.get(t)
-    if (!c) { c = { maxIdx: 0, total: 0 }; clin.set(t, c) }
-    c.total += 1
-    if (idx > c.maxIdx) c.maxIdx = idx
+    addClinical(acc(t), d)
   }
 
-  // ── 병합 → 행 ──
-  const targets = new Set([...M.keys(), ...clin.keys()])
+  const W = deriveYearWindowsFromAcc(M)
   const rows = []
-  for (const t of targets) {
-    if (DROP.has(t)) continue
-    const m = M.get(t)
-    const c = clin.get(t) ?? { maxIdx: 0, total: 0 }
-    let early = 0, recent = 0
-    if (m) {
-      for (const [y, n] of m.yr) { if (W.early.has(y)) early += n; if (W.recent.has(y)) recent += n }
-    }
-    const growth = Math.round(((recent + 1) / (early + 1)) * 100) / 100
-    rows.push({
-      target: t,
-      // 임상 (있는 그대로)
-      clinical_total: c.total,
-      clin_maturity_idx: c.maxIdx,
-      max_phase: c.maxIdx ? PHASE_ORDER[c.maxIdx] : (m ? 'Preclinical' : 'NA'),
-      // 전임상 연구 강도 (있는 그대로)
-      pre_orgs: m ? m.orgs.size : 0,
-      pre_abstracts: m ? m.abstracts : 0,
-      pre_modalities: m ? m.modals.size : 0,
-      // 연도별 초록 카운트 (최신 가중 강도 계산용 — applyRecencyWeight)
-      year_counts: m ? Object.fromEntries(m.yr) : {},
-      // 속도 / 신규성
-      early, recent, growth_ratio: growth,
-      new_entrant_orgs: m ? [...m.orgsRecent].filter((o) => !m.orgsEarly.has(o)).length : 0,
-      first_year: m?.firstYear ?? null,
-      brand_new: m?.firstYear != null && m.firstYear >= W.newSince,
-    })
-  }
-  rows.sort((a, b) => b.recent - a.recent || b.pre_orgs - a.pre_orgs)
+  for (const [t, a] of M) { if (!DROP.has(t)) rows.push(finalizeRow(t, a, W)) }
+  rows.sort((a, b) => b.recent - a.recent || b.size_total - a.size_total)
   return rows
 }
 
-export const HALFLIFE_DEFAULT = 2 // 년. 최신 가중 반감기 (2년 전 초록 = 1/2 가중)
+// 누적기들의 연도에서 window 도출 (임상 시작연도까지 포함)
+export function deriveYearWindowsFromAcc(M) {
+  let maxYear = 0
+  for (const a of M.values()) for (const y of a.yr.keys()) if (y > maxYear) maxYear = y
+  if (!maxYear) maxYear = new Date().getFullYear()
+  return { maxYear, recent: new Set([maxYear, maxYear - 1]), early: new Set([maxYear - 4, maxYear - 3]), newSince: maxYear - 2 }
+}
 
-// 최신 가중 연구 강도 — 초록을 연도 시간감쇠로 합산 → 연속 실수값(y축).
-//   weighted = Σ_year  n(year) · 0.5^((maxYear − year) / halfLife)
-// 이질 신호 합성이 아니라 '단일 신호(초록)에 시간 가중'(지수가중 이동합계).
-export function applyRecencyWeight(rows, { halfLife = HALFLIFE_DEFAULT, maxYear } = {}) {
+export const HALFLIFE_DEFAULT = 2 // 년. 최신성 반감기
+
+// 최신성 y = 발표들의 연도 시간감쇠 '평균' (0~1, 최신일수록 1). 볼륨과 무관(크기가 볼륨 담당).
+export function applyRecency(rows, { halfLife = HALFLIFE_DEFAULT, maxYear } = {}) {
   const my = maxYear ?? Math.max(0, ...rows.flatMap((r) => Object.keys(r.year_counts || {}).map(Number)))
   const hl = halfLife > 0 ? halfLife : HALFLIFE_DEFAULT
   return rows.map((r) => {
-    let w = 0
-    for (const [y, n] of Object.entries(r.year_counts || {})) {
-      w += n * Math.pow(0.5, (my - Number(y)) / hl)
+    let wsum = 0, n = 0
+    for (const [y, c] of Object.entries(r.year_counts || {})) {
+      wsum += c * Math.pow(0.5, (my - Number(y)) / hl); n += c
     }
-    return { ...r, pre_weighted: Math.round(w * 10) / 10 }
+    return { ...r, recency: n ? Math.round((wsum / n) * 1000) / 1000 : 0 }
   })
 }
 
-export const EMERGE_DEFAULTS = { minRecent: 4, minGrowth: 1.3, maxPhaseIdx: 3 } // 완화된 기본값 (≤P2)
+export const EMERGE_DEFAULTS = { minRecent: 4, minGrowth: 1.3, maxMaturity: 2.0 } // 성숙도 ≤ 2(≈P2)
 
-// 임계값(슬라이더) 적용 — 가중치가 아니라 '필터'. 저렴하므로 슬라이더 변경마다 호출.
+// 부상 판정(필터): 최근 발표 충분 · 상승 추세 · 아직 임상 성숙도 낮음.
 export function flagEmerging(rows, thr = EMERGE_DEFAULTS) {
-  const { minRecent, minGrowth, maxPhaseIdx } = { ...EMERGE_DEFAULTS, ...thr }
+  const { minRecent, minGrowth, maxMaturity } = { ...EMERGE_DEFAULTS, ...thr }
   return rows.map((r) => ({
     ...r,
-    emerging:
-      r.recent >= minRecent &&
-      r.growth_ratio >= minGrowth &&
-      r.clin_maturity_idx <= maxPhaseIdx &&
-      r.pre_orgs > 0,
+    emerging: r.recent >= minRecent && r.growth_ratio >= minGrowth && r.clin_maturity <= maxMaturity && r.size_total > 0,
   }))
 }

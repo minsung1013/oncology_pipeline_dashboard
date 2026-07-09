@@ -3,7 +3,7 @@
 // 행의 식별 필드는 'target'(=biomarker 문자열)로 두어 TargetMaturityChart / TargetOpportunityMap 를 그대로 재사용.
 
 import { PHASE_ORDER, phaseBucket, statusBucket } from './maturityAggregations'
-import { deriveYearWindows } from './opportunityAggregations'
+import { newAcc, addLiterature, addClinical, finalizeRow, deriveYearWindowsFromAcc } from './opportunityAggregations'
 
 const CLINICAL_PHASES = ['P1', 'P1/2', 'P2', 'P2/3', 'P3', 'P4']
 const DROP = new Set(['', 'Unknown', 'N/A', 'NONE', '-'])
@@ -77,82 +77,33 @@ export function buildBiomarkerMaturityRows(drugs, abstracts, { drugTargets = {} 
   return rows
 }
 
-// ── 기회 지도: x=임상 최고단계, y=전임상 최신가중 강도(초록). biomarker 단위. ──
-export function buildBiomarkerOpportunityRows(drugs, abstracts, win) {
-  const W = win ?? deriveYearWindows(abstracts)
-
+// ── 기회 지도(biomarker): x=임상 성숙도(단계×상태 평균), y=최신성, 크기=총 발표 수, 색=추세. 논문 포함. ──
+export function buildBiomarkerOpportunityRows(drugs, abstracts, publications) {
   const M = new Map()
-  const rec = (b) => {
-    let m = M.get(b)
-    if (!m) {
-      m = { orgs: new Set(), modals: new Set(), orgsEarly: new Set(), orgsRecent: new Set(), yr: new Map(), abstracts: 0, firstYear: null }
-      M.set(b, m)
-    }
-    return m
-  }
+  const acc = (b) => { let a = M.get(b); if (!a) { a = newAcc(); M.set(b, a) } return a }
 
-  if (abstracts) {
-    for (const a of abstracts) {
-      if (a.phase) continue
-      const bl = (a.biomarker_list ?? []).filter((b) => !DROP.has(b))
-      if (!bl.length) continue
-      const cos = (a.companies_normalized?.length ? a.companies_normalized : a.companies) ?? []
-      const md = a.modality_list ?? []
-      const yr = a.year
+  const addLit = (records, isPub) => {
+    for (const r of records ?? []) {
       const seen = new Set()
-      for (const b of bl) {
-        if (seen.has(b)) continue
-        seen.add(b)
-        const m = rec(b)
-        m.abstracts += 1
-        if (yr) {
-          m.yr.set(yr, (m.yr.get(yr) ?? 0) + 1)
-          if (m.firstYear === null || yr < m.firstYear) m.firstYear = yr
-        }
-        for (const c of cos) { if (c) { m.orgs.add(c); if (W.recent.has(yr)) m.orgsRecent.add(c); if (W.early.has(yr)) m.orgsEarly.add(c) } }
-        for (const x of md) { if (x) m.modals.add(x) }
+      for (const b of r.biomarker_list ?? []) {
+        if (DROP.has(b) || seen.has(b)) continue
+        seen.add(b); addLiterature(acc(b), r, isPub)
       }
     }
   }
-
-  const clin = new Map()
+  addLit(abstracts, false)
+  addLit(publications, true)
   for (const d of drugs ?? []) {
-    const pb = phaseBucket(d.phase)
-    if (pb === 'NA') continue
-    const idx = PHASE_ORDER.indexOf(pb)
+    const seen = new Set()
     for (const b of d.biomarker_list ?? []) {
-      if (DROP.has(b)) continue
-      let c = clin.get(b)
-      if (!c) { c = { maxIdx: 0, total: 0 }; clin.set(b, c) }
-      c.total += 1
-      if (idx > c.maxIdx) c.maxIdx = idx
+      if (DROP.has(b) || seen.has(b)) continue
+      seen.add(b); addClinical(acc(b), d)
     }
   }
 
-  const biomarkers = new Set([...M.keys(), ...clin.keys()])
+  const W = deriveYearWindowsFromAcc(M)
   const rows = []
-  for (const b of biomarkers) {
-    if (DROP.has(b)) continue
-    const m = M.get(b)
-    const c = clin.get(b) ?? { maxIdx: 0, total: 0 }
-    let early = 0, recent = 0
-    if (m) for (const [y, n] of m.yr) { if (W.early.has(y)) early += n; if (W.recent.has(y)) recent += n }
-    const growth = Math.round(((recent + 1) / (early + 1)) * 100) / 100
-    rows.push({
-      target: b, // 식별 필드(=biomarker) — 차트/스캐터 재사용
-      clinical_total: c.total,
-      clin_maturity_idx: c.maxIdx,
-      max_phase: c.maxIdx ? PHASE_ORDER[c.maxIdx] : (m ? 'Preclinical' : 'NA'),
-      pre_orgs: m ? m.orgs.size : 0,
-      pre_abstracts: m ? m.abstracts : 0,
-      pre_modalities: m ? m.modals.size : 0,
-      year_counts: m ? Object.fromEntries(m.yr) : {},
-      early, recent, growth_ratio: growth,
-      new_entrant_orgs: m ? [...m.orgsRecent].filter((o) => !m.orgsEarly.has(o)).length : 0,
-      first_year: m?.firstYear ?? null,
-      brand_new: m?.firstYear != null && m.firstYear >= W.newSince,
-    })
-  }
-  rows.sort((a, b) => b.recent - a.recent || b.pre_orgs - a.pre_orgs)
+  for (const [b, a] of M) { if (!DROP.has(b)) rows.push(finalizeRow(b, a, W)) }
+  rows.sort((a, b) => b.recent - a.recent || b.size_total - a.size_total)
   return rows
 }
