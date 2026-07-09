@@ -6,7 +6,8 @@ import { filterAbstractsForVisualize, phaseLabel } from '../utils/visualizeAggre
 import { getDrugFilterOptions, applyDrugFilters, DRUG_FILTER_DEFAULT } from '../utils/drugFilters'
 import { invertCanon } from '../utils/maturityAggregations'
 import {
-  buildOpportunityRows, flagEmerging, EMERGE_DEFAULTS, CLIN_AXIS,
+  buildOpportunityRows, applyRecencyWeight, flagEmerging,
+  EMERGE_DEFAULTS, HALFLIFE_DEFAULT, CLIN_AXIS, deriveYearWindows,
 } from '../utils/opportunityAggregations'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 import { getPipeline, getAbstractIndex, loadAbstractFiles, getMaturityAssets } from '../utils/dataSource'
@@ -30,6 +31,7 @@ export default function OpportunityMapPage() {
   const [error, setError] = useState(null)
   const [filters, setFiltersState] = useState(getShared)
   const [thr, setThrState] = useState(() => ({ ...EMERGE_DEFAULTS, ...(getTabState('opportunity')?.thr ?? {}) }))
+  const [halfLife, setHalfLifeState] = useState(() => getTabState('opportunity')?.halfLife ?? HALFLIFE_DEFAULT)
 
   function setFilters(updater) {
     setFiltersState((prev) => {
@@ -47,9 +49,13 @@ export default function OpportunityMapPage() {
   function setThr(patch) {
     setThrState((prev) => {
       const next = { ...prev, ...patch }
-      setTabState('opportunity', { thr: next })
+      setTabState('opportunity', { ...getTabState('opportunity'), thr: next })
       return next
     })
+  }
+  function setHalfLife(v) {
+    setHalfLifeState(v)
+    setTabState('opportunity', { ...getTabState('opportunity'), halfLife: v })
   }
 
   useEffect(() => {
@@ -68,12 +74,17 @@ export default function OpportunityMapPage() {
     () => (allAbstracts ? filterAbstractsForVisualize(allAbstracts, filters) : null),
     [allAbstracts, filters],
   )
-  // 원본 지표는 데이터/필터가 바뀔 때만 재계산 → 슬라이더는 flagEmerging 로 저렴하게
+  // 원본 지표는 데이터/필터가 바뀔 때만 재계산 → 슬라이더(반감기·임계값)는 저렴한 후처리로
   const baseRows = useMemo(
     () => buildOpportunityRows(drugs, filteredAbstracts, assets ?? {}),
     [drugs, filteredAbstracts, assets],
   )
-  const rows = useMemo(() => flagEmerging(baseRows, thr), [baseRows, thr])
+  const maxYear = useMemo(() => deriveYearWindows(filteredAbstracts).maxYear, [filteredAbstracts])
+  const weighted = useMemo(
+    () => applyRecencyWeight(baseRows, { halfLife, maxYear }),
+    [baseRows, halfLife, maxYear],
+  )
+  const rows = useMemo(() => flagEmerging(weighted, thr), [weighted, thr])
   const emerging = useMemo(
     () => rows.filter((r) => r.emerging).sort((a, b) => b.recent * b.growth_ratio - a.recent * a.growth_ratio),
     [rows],
@@ -115,7 +126,7 @@ export default function OpportunityMapPage() {
   if (!data) return <div className="flex items-center justify-center h-full text-slate-400 text-sm">Loading pipeline…</div>
 
   const preLoading = allAbstracts === null
-  const summary = `${emerging.length} emerging · ${rows.filter((r) => r.pre_orgs > 0 || r.clinical_total > 0).length} targets`
+  const summary = `${emerging.length} emerging · ${rows.filter((r) => r.pre_weighted > 0 || r.clinical_total > 0).length} targets`
 
   return (
     <div className="flex flex-col h-full">
@@ -152,7 +163,13 @@ export default function OpportunityMapPage() {
                   onChange={(e) => setThr({ maxPhaseIdx: Number(e.target.value) })} className="w-20" />
                 <span className="font-semibold w-10 tabular-nums">{CLIN_AXIS[thr.maxPhaseIdx]}</span>
               </label>
-              <button onClick={() => setThr(EMERGE_DEFAULTS)} className="text-slate-400 hover:text-slate-600 underline">기본값</button>
+              <label className="flex items-center gap-1.5" title="y축 최신 가중 반감기(작을수록 최신 초록만 강조)">
+                <span className="text-slate-500">반감기</span>
+                <input type="range" min="0.5" max="4" step="0.5" value={halfLife}
+                  onChange={(e) => setHalfLife(Number(e.target.value))} className="w-20" />
+                <span className="font-semibold w-8 tabular-nums">{halfLife}y</span>
+              </label>
+              <button onClick={() => { setThr(EMERGE_DEFAULTS); setHalfLife(HALFLIFE_DEFAULT) }} className="text-slate-400 hover:text-slate-600 underline">기본값</button>
             </div>
           }
         />
@@ -178,8 +195,8 @@ export default function OpportunityMapPage() {
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
         <p className="text-xs text-slate-500 leading-relaxed">
-          가중치 없음 — 두 원본 지표를 축에 그대로 배치. <b>x</b>=임상 도달 최고단계 · <b>y</b>=전임상 고유 기관 수(log) ·
-          점 크기=초록 수 · 색=성장비(<span className="text-blue-600">파랑=식음</span>→<span className="text-red-600">빨강=뜸</span>) ·
+          단계 가중 없음. <b>x</b>=임상 도달 최고단계 · <b>y</b>=전임상 <b>최신 가중 연구강도</b>(초록을 연도별 시간감쇠 합산, log) ·
+          점 크기=고유 기관 수 · 색=성장비(<span className="text-blue-600">파랑=식음</span>→<span className="text-red-600">빨강=뜸</span>) ·
           <b className="text-red-600"> 빨강 테두리=부상</b> · 🆕=최근 첫 등장. 왼쪽 위 핑크 = 화이트스페이스. 점/행 클릭 시 해당 타깃으로 필터.
         </p>
 
@@ -192,6 +209,7 @@ export default function OpportunityMapPage() {
               <thead className="bg-slate-50 text-slate-500">
                 <tr className="text-right">
                   <th className="px-2 py-1 text-left">Target</th>
+                  <th className="px-2 py-1" title="최신 가중 연구강도 (y축)">가중강도</th>
                   <th className="px-2 py-1">기관</th>
                   <th className="px-2 py-1">초록</th>
                   <th className="px-2 py-1">모달</th>
@@ -212,6 +230,7 @@ export default function OpportunityMapPage() {
                       <td className="px-2 py-1 text-left font-medium text-slate-700">
                         {r.target}{r.brand_new && <span title="최근 첫 등장">🆕</span>}
                       </td>
+                      <td className="px-2 py-1 tabular-nums font-semibold text-slate-700">{r.pre_weighted}</td>
                       <td className="px-2 py-1 tabular-nums">{r.pre_orgs}</td>
                       <td className="px-2 py-1 tabular-nums">{r.pre_abstracts}</td>
                       <td className="px-2 py-1 tabular-nums">{r.pre_modalities}</td>
@@ -225,7 +244,7 @@ export default function OpportunityMapPage() {
                   )
                 })}
                 {emerging.length === 0 && (
-                  <tr><td colSpan="10" className="px-2 py-4 text-center text-slate-400">조건에 맞는 부상 타깃 없음 — 임계값을 완화하세요.</td></tr>
+                  <tr><td colSpan="11" className="px-2 py-4 text-center text-slate-400">조건에 맞는 부상 타깃 없음 — 임계값을 완화하세요.</td></tr>
                 )}
               </tbody>
             </table>

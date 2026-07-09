@@ -109,6 +109,8 @@ export function buildOpportunityRows(drugs, abstracts, { targetCanon = {} } = {}
       pre_orgs: m ? m.orgs.size : 0,
       pre_abstracts: m ? m.abstracts : 0,
       pre_modalities: m ? m.modals.size : 0,
+      // 연도별 초록 카운트 (최신 가중 강도 계산용 — applyRecencyWeight)
+      year_counts: m ? Object.fromEntries(m.yr) : {},
       // 속도 / 신규성
       early, recent, growth_ratio: growth,
       new_entrant_orgs: m ? [...m.orgsRecent].filter((o) => !m.orgsEarly.has(o)).length : 0,
@@ -118,6 +120,23 @@ export function buildOpportunityRows(drugs, abstracts, { targetCanon = {} } = {}
   }
   rows.sort((a, b) => b.recent - a.recent || b.pre_orgs - a.pre_orgs)
   return rows
+}
+
+export const HALFLIFE_DEFAULT = 2 // 년. 최신 가중 반감기 (2년 전 초록 = 1/2 가중)
+
+// 최신 가중 연구 강도 — 초록을 연도 시간감쇠로 합산 → 연속 실수값(y축).
+//   weighted = Σ_year  n(year) · 0.5^((maxYear − year) / halfLife)
+// 이질 신호 합성이 아니라 '단일 신호(초록)에 시간 가중'(지수가중 이동합계).
+export function applyRecencyWeight(rows, { halfLife = HALFLIFE_DEFAULT, maxYear } = {}) {
+  const my = maxYear ?? Math.max(0, ...rows.flatMap((r) => Object.keys(r.year_counts || {}).map(Number)))
+  const hl = halfLife > 0 ? halfLife : HALFLIFE_DEFAULT
+  return rows.map((r) => {
+    let w = 0
+    for (const [y, n] of Object.entries(r.year_counts || {})) {
+      w += n * Math.pow(0.5, (my - Number(y)) / hl)
+    }
+    return { ...r, pre_weighted: Math.round(w * 10) / 10 }
+  })
 }
 
 export const EMERGE_DEFAULTS = { minRecent: 4, minGrowth: 1.3, maxPhaseIdx: 3 } // 완화된 기본값 (≤P2)
