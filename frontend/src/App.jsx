@@ -39,27 +39,27 @@ function DashboardLayout() {
         <Link to="/" className="shrink-0 text-sm font-bold text-slate-700 mr-2 sm:mr-3 hover:opacity-80" title="Home">
           <span className="text-blue-600">Onco</span>lyzer
         </Link>
-        <NavSection label="학회">
+        <NavSection label="Conference">
           <NavLink to="/conferences" className={navClass} onMouseEnter={prefetchAbstracts}>List</NavLink>
           <NavLink to="/conference-visualize" className={navClass} onMouseEnter={prefetchAbstracts}>Visualize</NavLink>
         </NavSection>
         {navDivider}
-        <NavSection label="논문">
+        <NavSection label="Publication">
           <NavLink to="/publications" className={navClass} onMouseEnter={prefetchPublications}>List</NavLink>
           <NavLink to="/publication-visualize" className={navClass} onMouseEnter={prefetchPublications}>Visualize</NavLink>
         </NavSection>
         {navDivider}
-        <NavSection label="파이프라인">
+        <NavSection label="Clinical Trial">
           <NavLink to="/pipeline" className={navClass} onMouseEnter={prefetchPipeline}>List</NavLink>
           <NavLink to="/visualize" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>Visualize</NavLink>
         </NavSection>
         {navDivider}
-        <NavSection label="타겟">
+        <NavSection label="Target">
           <NavLink to="/maturity" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>Maturity</NavLink>
           <NavLink to="/opportunity" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>Opportunity</NavLink>
         </NavSection>
         {navDivider}
-        <NavSection label="바이오마커">
+        <NavSection label="Biomarker">
           <NavLink to="/biomarker-maturity" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>Maturity</NavLink>
           <NavLink to="/biomarker-opportunity" className={navClass} onMouseEnter={() => { prefetchPipeline(); prefetchAbstracts() }}>Opportunity</NavLink>
         </NavSection>

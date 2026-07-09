@@ -1,7 +1,17 @@
+import { cleanBiomarkers } from './biomarkers'
+
 // 데이터 소스 (Cloudflare R2). VITE_DATA_BASE_URL로 오버라이드 가능.
 export const DATA_BASE =
   import.meta.env.VITE_DATA_BASE_URL ??
   'https://pub-38ddc55a3aa34cf0988d355d9a0abe74.r2.dev'
+
+// 로드 시 1회: biomarker_list 정제(junk 제거 + 표기 병합). 모든 뷰가 정제 데이터를 공유.
+function cleanRecords(records) {
+  for (const x of records ?? []) {
+    if (x && x.biomarker_list) x.biomarker_list = cleanBiomarkers(x.biomarker_list)
+  }
+  return records
+}
 
 export const PIPELINE_URL = `${DATA_BASE}/pipeline.json`
 export const INDEX_URL = `${DATA_BASE}/index.json`
@@ -22,6 +32,7 @@ export async function getPipeline() {
     const r = await fetch(PIPELINE_URL, REVALIDATE)
     if (!r.ok) throw new Error(`pipeline HTTP ${r.status}`)
     _pipeline = await r.json()
+    cleanRecords(_pipeline.drugs)
   }
   return _pipeline
 }
@@ -119,7 +130,7 @@ export async function loadAbstractFiles(items) {
     if (!_files.has(m.file)) {
       const r = await fetch(abstractFileUrl(m.file), REVALIDATE)
       if (!r.ok) throw new Error(`${m.file} HTTP ${r.status}`)
-      _files.set(m.file, (await r.json()).abstracts)
+      _files.set(m.file, cleanRecords((await r.json()).abstracts))
     }
     return _files.get(m.file)
   }))
@@ -142,7 +153,7 @@ export async function loadPublicationFiles(items) {
     if (!_files.has(m.file)) {
       const r = await fetch(abstractFileUrl(m.file), REVALIDATE)
       if (!r.ok) throw new Error(`${m.file} HTTP ${r.status}`)
-      _files.set(m.file, (await r.json()).abstracts)
+      _files.set(m.file, cleanRecords((await r.json()).abstracts))
     }
     return _files.get(m.file)
   }))
