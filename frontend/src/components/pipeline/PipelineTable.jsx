@@ -294,6 +294,41 @@ function makeColumns(nctIndex) {
     size: 150,
   }),
 
+  col.accessor('cohort', {
+    header: 'Cohort',
+    enableSorting: false,
+    cell: ({ getValue, row }) => {
+      const v = getValue()
+      if (!v) return <span className="text-slate-300">—</span>
+      const ai = row.original.cohort_src === 'llm'
+      return (
+        <span className="text-xs text-slate-600 break-words leading-tight block" title={v}>
+          {v}{ai && <AiTag ruleValue="" />}
+        </span>
+      )
+    },
+    size: 200,
+  }),
+
+  col.accessor('line_of_therapy', {
+    header: 'Line',
+    cell: ({ getValue }) => {
+      const v = getValue()
+      if (!v) return <span className="text-slate-300">—</span>
+      const colorMap = {
+        '1L': 'bg-green-100 text-green-700',
+        '2L': 'bg-amber-100 text-amber-700',
+        '3L+': 'bg-red-100 text-red-700',
+        Adjuvant: 'bg-sky-100 text-sky-700',
+        Neoadjuvant: 'bg-indigo-100 text-indigo-700',
+        Maintenance: 'bg-violet-100 text-violet-700',
+      }
+      const cls = colorMap[v] ?? 'bg-slate-100 text-slate-500'
+      return <span className={`text-xs font-semibold px-2 py-0.5 rounded ${cls}`}>{v}</span>
+    },
+    size: 100,
+  }),
+
   col.accessor('phase', {
     header: 'Phase',
     cell: ({ getValue }) => {

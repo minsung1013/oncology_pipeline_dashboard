@@ -24,6 +24,9 @@ DRUG_CACHE = "data/cache/llm_drug_cache.json"
 ABSTRACTS = "data/parsed/abstracts_asco2026.json"
 ABSTRACT_CACHE = "data/cache/llm_abstract_cache.json"
 PIPELINE_CACHE = "data/cache/llm_pipeline_cache.json"  # 임상시험 엔트리 한국어 요약
+TRIAL_CACHE = "data/cache/llm_trial_cache.json"        # 전문검토: 시험약물 검증 + cohort + line
+TRIAL_COHORT_CONF = 0.5   # cohort/line 채택 최소 신뢰도
+TRIAL_DRUG_CONF = 0.8     # 대표약물 교정 최소 신뢰도 (병용·다arm만)
 XREF_CACHE = "data/cache/llm_xref_cache.json"          # 크로스소스 보완(modality/target/bio)
 XREF_REVIEW = "data/parsed/xref_review.json"           # 채움·교정 리뷰 리포트
 XREF_FILL_CONF = 0.7     # Unknown 채움 최소 신뢰도
@@ -280,9 +283,54 @@ def merge_xref(write: bool) -> None:
                   f"conf={r['conf']} | {(r['note'] or '')[:50]}")
 
 
+def merge_trial(write: bool) -> None:
+    """전문검토 캐시(llm_trial_cache.json, NCT 키) → pipeline.json.
+    cohort/line_of_therapy는 전체 적용(conf>=0.5). 대표약물 교정은 병용·다arm 시험만
+    (LLM 약물이 레지멘 내 다른 약물과 일치 & 기존과 다름 & conf>=0.8). 원본은 drug_name_rule 보존."""
+    data = json.load(open(PIPELINE, encoding="utf-8"))
+    drugs = data["drugs"]
+    cache = json.load(open(TRIAL_CACHE, encoding="utf-8"))
+
+    n_cohort = n_line = n_drug = 0
+    for d in drugs:
+        ncts = d.get("nct_ids") or []
+        res = cache.get(ncts[0]) if ncts else None
+        if not res or "_error" in res:
+            continue
+        conf = res.get("confidence", 0.0)
+        if conf < TRIAL_COHORT_CONF:
+            continue
+        if res.get("cohort"):
+            d["cohort"], d["cohort_src"] = res["cohort"], "llm"
+            n_cohort += 1
+        if res.get("line_of_therapy"):
+            d["line_of_therapy"], d["line_src"] = res["line_of_therapy"], "llm"
+            n_line += 1
+
+        # 대표약물 교정 — 병용/다arm 시험만
+        is_multi = d.get("is_combination") or len(d.get("arms") or []) > 1
+        llm_drug = (res.get("investigational_drug") or "").strip()
+        if is_multi and llm_drug and conf >= TRIAL_DRUG_CONF:
+            alld = d.get("all_drugs") or []
+            match = next((x for x in alld if _norm_name(x) == _norm_name(llm_drug)), None)
+            if match and _norm_name(match) != _norm_name(d.get("drug_name", "")):
+                d.setdefault("drug_name_rule", d.get("drug_name"))
+                d["drug_name"], d["drug_name_src"] = match, "llm"
+                d["combo_drugs"] = [x for x in alld if _norm_name(x) != _norm_name(match)]
+                d["all_drugs"] = [match] + d["combo_drugs"]
+                n_drug += 1
+
+    print(f"=== 전문검토 병합 ===\n  cohort {n_cohort} · line {n_line} · 약물교정 {n_drug} (캐시 {len(cache)})")
+    if write:
+        json.dump(data, open(PIPELINE, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+        print(f"저장 완료 -> {PIPELINE}")
+    else:
+        print("\n(미리보기 — 저장하려면 --write)")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=["drugs", "abstracts", "pipeline", "xref"], default="drugs")
+    ap.add_argument("--mode", choices=["drugs", "abstracts", "pipeline", "xref", "trial"], default="drugs")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
     if args.mode == "abstracts":
@@ -291,5 +339,7 @@ if __name__ == "__main__":
         merge_pipeline(args.write)
     elif args.mode == "xref":
         merge_xref(args.write)
+    elif args.mode == "trial":
+        merge_trial(args.write)
     else:
         merge(args.write)

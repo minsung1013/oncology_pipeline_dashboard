@@ -44,6 +44,7 @@ DRUG_CACHE = "data/cache/llm_drug_cache.json"
 ABSTRACTS = "data/parsed/abstracts_asco2026.json"
 ABSTRACT_CACHE = "data/cache/llm_abstract_cache.json"
 PIPELINE_CACHE = "data/cache/llm_pipeline_cache.json"  # 임상시험 엔트리 한국어 요약
+TRIAL_CACHE = "data/cache/llm_trial_cache.json"        # 전문검토: 시험약물 검증 + cohort + line
 
 MODALITIES = [
     "ADC", "Bispecific Antibody", "CAR-T", "Monoclonal Antibody",
@@ -77,7 +78,7 @@ _CONN_BACKOFF_MAX = 30.0   # 연결 재시도 최대 대기(초)
 _TIMEOUT_RETRIES = 3       # 응답 타임아웃 시 재시도 횟수
 
 
-def ollama(prompt: str, timeout: int = 120) -> str:
+def ollama(prompt: str, timeout: int = 120, num_ctx: int = 2048) -> str:
     body = json.dumps({
         "model": MODEL,
         "prompt": prompt,
@@ -85,7 +86,7 @@ def ollama(prompt: str, timeout: int = 120) -> str:
         "think": False,
         "format": "json",
         "keep_alive": "15m",
-        "options": {"temperature": 0, "num_ctx": 2048, "num_predict": NUM_PREDICT, "num_gpu": NUM_GPU},
+        "options": {"temperature": 0, "num_ctx": num_ctx, "num_predict": NUM_PREDICT, "num_gpu": NUM_GPU},
     }).encode()
     backoff = 2.0
     timeouts_left = _TIMEOUT_RETRIES
@@ -634,9 +635,109 @@ def run_eval(limit: int) -> None:
         print(f"  {r[0]:30} {str(r[1]):20}->{str(r[2]):20} | {str(r[3]):12}->{r[4]}")
 
 
+# ---------------------------------------------------------------------------
+# 전문 검토 (trial): 시험약물 검증 + cohort + line_of_therapy
+# ---------------------------------------------------------------------------
+
+_LINES = {"1L", "2L", "3L+", "Adjuvant", "Neoadjuvant", "Maintenance", "NR"}
+
+SYSTEM_TRIAL = (
+    "You are an oncology clinical trial analyst. Read the trial text and output STRICT JSON only:\n"
+    '{"investigational_drug": <the SINGLE primary novel/experimental agent under investigation by the '
+    "sponsor — NOT the active comparator, NOT a standard-of-care chemotherapy backbone, NOT placebo; "
+    "use the drug as named in the trial>, "
+    '"cohort": <ONE concise line describing the target patients: histology + key biomarker/mutation status '
+    '+ disease setting; e.g. "RAS/BRAF wild-type, left-sided metastatic colorectal cancer">, '
+    '"line_of_therapy": <EXACTLY one of: "1L","2L","3L+","Adjuvant","Neoadjuvant","Maintenance","NR">, '
+    '"confidence": <0.0-1.0>}\n'
+    "line_of_therapy: 1L = first-line / treatment-naive advanced disease; 2L = after ONE prior line or "
+    "progression on one regimen; 3L+ = two or more prior lines / heavily pretreated; Adjuvant = after "
+    "surgery; Neoadjuvant = before surgery; Maintenance = maintenance setting; NR = not reported/unclear.\n"
+    "Pick investigational_drug by DRUG-DEVELOPMENT role, not arm order: a marketed drug used as comparator "
+    "or SOC (e.g. cetuximab, pembrolizumab, bevacizumab) is NOT the investigational drug when a novel agent "
+    "is the experimental arm. Do not invent."
+)
+
+
+def _trial_context(d: dict) -> str:
+    arms = d.get("arms") or []
+    arm_txt = "\n".join(
+        f"  - [{a.get('type','')}] {a.get('label','')}: " + ", ".join(a.get("drugs") or [])
+        for a in arms if a.get("drugs")
+    )
+    return (
+        f"Brief title: {d.get('brief_title','')}\n"
+        f"Official title: {d.get('official_title','')}\n"
+        f"Conditions: {', '.join(d.get('conditions') or [])}\n"
+        f"Rule-based representative drug: {d.get('drug_name','')}\n"
+        f"Summary: {(d.get('brief_summary') or '')[:900]}\n"
+        f"Arms:\n{arm_txt or '  (none listed)'}"
+    )
+
+
+def classify_trial(d: dict) -> dict:
+    raw = ollama(f"{SYSTEM_TRIAL}\n\n{_trial_context(d)}\n\nJSON:", timeout=180, num_ctx=4096)
+    data, _ = _loads_lenient(raw)
+    if not isinstance(data, dict):
+        return {"_error": "parse"}
+    line = (data.get("line_of_therapy") or "NR").strip()
+    return {
+        "investigational_drug": (data.get("investigational_drug") or "").strip(),
+        "cohort": (data.get("cohort") or "").strip(),
+        "line_of_therapy": line if line in _LINES else "NR",
+        "confidence": float(data.get("confidence", 0.0)) if isinstance(data.get("confidence", 0.0), (int, float)) else 0.0,
+    }
+
+
+def _trial_key(d: dict) -> str:
+    ncts = d.get("nct_ids") or []
+    return ncts[0] if ncts else ""
+
+
+def run_trials(limit: int | None) -> None:
+    drugs = json.load(open(PIPELINE, encoding="utf-8"))["drugs"]
+    cache = json.load(open(TRIAL_CACHE, encoding="utf-8")) if os.path.exists(TRIAL_CACHE) else {}
+
+    def _save():
+        os.makedirs(os.path.dirname(TRIAL_CACHE), exist_ok=True)
+        tmp = TRIAL_CACHE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, TRIAL_CACHE)
+
+    todo = []
+    for d in drugs:
+        k = _trial_key(d)
+        if k and k not in cache:
+            todo.append((k, d))
+    if limit:
+        todo = todo[:limit]
+    print(f"trial 검토 대상 {len(todo)}건 (캐시됨 {len(cache)})")
+
+    t0 = time.time()
+    for i, (k, d) in enumerate(todo, 1):
+        try:
+            res = classify_trial(d)
+        except Exception as e:
+            res = {"_error": str(e)[:80]}
+        if "_error" in res:
+            print(f"  [skip] {k}: {res['_error']}")
+            continue
+        res["_drug_rule"] = d.get("drug_name")
+        cache[k] = res
+        if i % 5 == 0 or i == len(todo):
+            _save()
+            rate = i / (time.time() - t0)
+            eta = (len(todo) - i) / rate if rate else 0
+            print(f"  {i}/{len(todo)}  {rate:.3f}/s  ETA {eta/60:.0f}min | {k}: "
+                  f"{res['investigational_drug']} / {res['line_of_therapy']}")
+    _save()
+    print(f"완료. trial 캐시 총 {len(cache)}건 -> {TRIAL_CACHE}")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=["drugs", "abstracts", "pipeline", "xref", "eval"], default="eval")
+    ap.add_argument("--mode", choices=["drugs", "abstracts", "pipeline", "xref", "trial", "eval"], default="eval")
     ap.add_argument("--only-unknown", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="xref: 근거 번들만 출력(LLM 미호출)")
     ap.add_argument("--limit", type=int, default=None)
@@ -649,5 +750,7 @@ if __name__ == "__main__":
         run_pipeline_summaries(args.limit)
     elif args.mode == "xref":
         run_xref(args.limit, dry_run=args.dry_run)
+    elif args.mode == "trial":
+        run_trials(args.limit)
     else:
         run_drugs(args.only_unknown, args.limit)

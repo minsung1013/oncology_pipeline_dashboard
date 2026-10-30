@@ -142,6 +142,8 @@ DRUG_KEEP = [
     # 실험군/대조군 레지멘 + 시험약물/백본 + indication 검토 플래그 (프론트 약물셀·Indication)
     "investigational_drugs", "backbone_drugs", "exp_regimen", "control_regimen",
     "indication_needs_review",
+    # LLM 전문 검토: 환자군 + 치료라인 + 드럭 검증 출처
+    "cohort", "cohort_src", "line_of_therapy", "line_src", "drug_name_src", "drug_name_rule",
 ]
 
 
