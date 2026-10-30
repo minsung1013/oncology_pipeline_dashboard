@@ -52,12 +52,13 @@ function deriveRegimens(d) {
   return { exp, ctrl }
 }
 
-function DrugCell({ d, nctIndex }) {
+// 임상 제목 셀 — 제목(→ NCT 링크) + 학회/논문 배지 + NCT 확장 + AI 한국어 요약 토글
+function TitleCell({ d, nctIndex }) {
   const [expanded, setExpanded] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const ncts = d.nct_ids ?? []
   const primaryUrl = d.clinicaltrials_url || (ncts[0] ? `https://clinicaltrials.gov/study/${ncts[0]}` : null)
-  // nct_index: NCT → [{uid, axis, conference|journal, year}]. 학회 발표 + 논문 둘 다 배지로.
+  const title = d.brief_title || d.official_title || '—'
   const linkNct = ncts.find((nct) => nctIndex?.[nct]?.length)
   const entries = linkNct ? (nctIndex[linkNct] || []) : []
   const confLabel = [...new Set(entries.filter((e) => e.axis !== 'publication').map((e) => e.conference))]
@@ -65,93 +66,56 @@ function DrugCell({ d, nctIndex }) {
   const pubCount = entries.filter((e) => e.axis === 'publication').length
 
   return (
-    <div>
-      {/* 대표 약물명 → 첫 NCT 링크 */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {primaryUrl ? (
-          <a href={primaryUrl} target="_blank" rel="noreferrer"
-             className="text-blue-600 hover:underline font-medium">
-            {d.drug_name}
-          </a>
-        ) : (
-          <span className="font-medium">{d.drug_name}</span>
-        )}
+    <div className="min-w-0">
+      {primaryUrl ? (
+        <a href={primaryUrl} target="_blank" rel="noreferrer"
+           className="text-blue-600 hover:underline font-medium leading-snug break-words line-clamp-3"
+           title={d.official_title || title}>
+          {title}
+        </a>
+      ) : (
+        <span className="font-medium leading-snug break-words line-clamp-3" title={title}>{title}</span>
+      )}
+
+      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
         {confLabel && (
-          <Link
-            to={`/conferences?nct=${linkNct}`}
+          <Link to={`/conferences?nct=${linkNct}`}
             className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold hover:bg-amber-200 transition-colors"
-            title={`Conference abstract (${confLabel}) · ${linkNct}`}
-          >
+            title={`Conference abstract (${confLabel}) · ${linkNct}`}>
             {confLabel}
           </Link>
         )}
         {pubCount > 0 && (
-          <Link
-            to={`/publications?nct=${linkNct}`}
+          <Link to={`/publications?nct=${linkNct}`}
             className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-semibold hover:bg-emerald-200 transition-colors"
-            title={`${pubCount} journal publication(s) · ${linkNct}`}
-          >
+            title={`${pubCount} journal publication(s) · ${linkNct}`}>
             {pubCount} Pub
           </Link>
         )}
         {ncts.length > 1 && (
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="text-xs text-slate-400 hover:text-blue-500"
-          >
+          <button onClick={() => setExpanded((v) => !v)}
+            className="text-xs text-slate-400 hover:text-blue-500">
             {expanded ? '▲' : `+${ncts.length - 1} NCT ▼`}
+          </button>
+        )}
+        {d.summary_ko && (
+          <button onClick={() => setShowSummary((v) => !v)}
+            className="text-[10px] font-semibold text-violet-600 hover:text-violet-800">
+            {showSummary ? '▲ AI 요약' : '▼ AI 요약'}
           </button>
         )}
       </div>
 
-      {/* 레지멘: 실험군 / 대조군 (병용 또는 대조군이 있을 때만) */}
-      {(() => {
-        const { exp, ctrl } = deriveRegimens(d)
-        if (exp.length <= 1 && ctrl.length === 0) return null  // 단일약물·대조군 없음
-        return (
-          <div className="text-xs mt-0.5 space-y-0.5">
-            <div className="text-slate-500" title={exp.join(' + ')}>
-              <span className="text-[9px] font-semibold bg-blue-50 text-blue-600 px-1 rounded mr-1 align-middle">실험군</span>
-              {exp.join(' + ')}
-            </div>
-            <div className="text-slate-400" title={ctrl.length ? ctrl.join(' + ') : '대조군 없음(단일군)'}>
-              <span className="text-[9px] font-semibold bg-slate-100 text-slate-500 px-1 rounded mr-1 align-middle">대조군</span>
-              {ctrl.length ? ctrl.join(' + ') : '—'}
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* AI 한국어 요약 — 토글 (기본 숨김, 클릭 시 펼침) */}
-      {d.summary_ko && (
-        <div className="mt-1">
-          <button
-            onClick={() => setShowSummary((v) => !v)}
-            className="text-[10px] font-semibold text-violet-600 hover:text-violet-800 inline-flex items-center gap-0.5"
-          >
-            {showSummary ? '▲ AI 요약 숨기기' : '▼ AI 요약'}
-          </button>
-          {showSummary && (
-            <div className="text-xs text-slate-600 mt-0.5 leading-snug border-l-2 border-violet-100 pl-2">
-              {d.summary_ko}
-            </div>
-          )}
+      {showSummary && d.summary_ko && (
+        <div className="text-xs text-slate-600 mt-1 leading-snug border-l-2 border-violet-100 pl-2">
+          {d.summary_ko}
         </div>
       )}
-
-      {/* 확장 시 전체 NCT 링크 목록 */}
       {expanded && ncts.length > 1 && (
         <div className="mt-1 flex flex-col gap-0.5 border-l-2 border-slate-100 pl-2">
           {ncts.map((nct) => (
-            <a
-              key={nct}
-              href={`https://clinicaltrials.gov/study/${nct}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-blue-500 hover:underline font-mono"
-            >
-              {nct}
-            </a>
+            <a key={nct} href={`https://clinicaltrials.gov/study/${nct}`} target="_blank" rel="noreferrer"
+               className="text-xs text-blue-500 hover:underline font-mono">{nct}</a>
           ))}
         </div>
       )}
@@ -159,12 +123,52 @@ function DrugCell({ d, nctIndex }) {
   )
 }
 
+// 레지멘 셀 (실험군/대조군 공용)
+function RegimenCell({ drugs, muted }) {
+  const list = drugs ?? []
+  if (!list.length) return <span className="text-slate-300">—</span>
+  return (
+    <span className={`text-xs break-words leading-tight block ${muted ? 'text-slate-500' : 'text-slate-700'}`}
+          title={list.join(' + ')}>
+      {list.join(' + ')}
+    </span>
+  )
+}
+
 function makeColumns(nctIndex) {
   return [
+  col.accessor('brief_title', {
+    header: '임상 제목',
+    cell: ({ row }) => <TitleCell d={row.original} nctIndex={nctIndex} />,
+    size: 320,
+  }),
+
   col.accessor('drug_name', {
-    header: 'Drug',
-    cell: ({ row }) => <DrugCell d={row.original} nctIndex={nctIndex} />,
-    size: 220,
+    header: '대표약물',
+    cell: ({ getValue, row }) => {
+      const d = row.original
+      const ncts = d.nct_ids ?? []
+      const url = d.clinicaltrials_url || (ncts[0] ? `https://clinicaltrials.gov/study/${ncts[0]}` : null)
+      const v = getValue() || '—'
+      return url
+        ? <a href={url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-medium break-words leading-tight">{v}</a>
+        : <span className="font-medium break-words leading-tight">{v}</span>
+    },
+    size: 150,
+  }),
+
+  col.accessor('exp_regimen', {
+    header: '실험군',
+    enableSorting: false,
+    cell: ({ row }) => <RegimenCell drugs={deriveRegimens(row.original).exp} />,
+    size: 190,
+  }),
+
+  col.accessor('control_regimen', {
+    header: '대조군',
+    enableSorting: false,
+    cell: ({ row }) => <RegimenCell drugs={deriveRegimens(row.original).ctrl} muted />,
+    size: 160,
   }),
 
   col.accessor('company', {
@@ -208,25 +212,8 @@ function makeColumns(nctIndex) {
     size: 130,
   }),
 
-  col.accessor('target', {
-    header: 'Target',
-    cell: ({ getValue, row }) => {
-      const v = getValue()
-      const ai = row.original.target_src === 'llm'
-      return v === 'Unknown' ? (
-        <span className="text-orange-500 font-medium flex items-center gap-1">
-          <span>🔍</span> Unknown
-        </span>
-      ) : (
-        <span className="font-medium">{v}{ai && <AiTag ruleValue={row.original.target_rule} />}</span>
-      )
-    },
-    size: 110,
-  }),
-
-  // Biomarker는 Target 옆으로 이동
   col.accessor('biomarker_list', {
-    header: 'Biomarkers',
+    header: '바이오마커',
     enableSorting: false,
     cell: ({ getValue }) => {
       const list = getValue() ?? []
@@ -247,8 +234,24 @@ function makeColumns(nctIndex) {
     size: 170,
   }),
 
+  col.accessor('target', {
+    header: '타겟',
+    cell: ({ getValue, row }) => {
+      const v = getValue()
+      const ai = row.original.target_src === 'llm'
+      return v === 'Unknown' ? (
+        <span className="text-orange-500 font-medium flex items-center gap-1">
+          <span>🔍</span> Unknown
+        </span>
+      ) : (
+        <span className="font-medium">{v}{ai && <AiTag ruleValue={row.original.target_rule} />}</span>
+      )
+    },
+    size: 110,
+  }),
+
   col.accessor('modality', {
-    header: 'Modality',
+    header: '모달리티',
     cell: ({ getValue, row }) => (
       <span className="inline-flex items-center">
         <ModalityBadge modality={getValue()} />
@@ -259,7 +262,7 @@ function makeColumns(nctIndex) {
   }),
 
   col.accessor('cancer_category', {
-    header: 'Indication',
+    header: '인디케이션',
     cell: ({ row }) => {
       const d = row.original
       // 복수 암종 보존: conditions 전체를 표시(중복 제거), 없으면 대표 condition
@@ -342,16 +345,6 @@ function makeColumns(nctIndex) {
       )
     },
     size: 90,
-  }),
-
-  // MoA는 truncate 대신 줄바꿈으로 전체 표시
-  col.accessor('moa', {
-    header: 'MoA',
-    enableSorting: false,
-    cell: ({ getValue }) => (
-      <span className="text-xs text-slate-500 break-words leading-tight block">{getValue() || '—'}</span>
-    ),
-    size: 170,
   }),
   ]
 }
