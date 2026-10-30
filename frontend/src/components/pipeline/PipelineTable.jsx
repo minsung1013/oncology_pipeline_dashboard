@@ -24,11 +24,34 @@ function AiTag({ ruleValue }) {
   )
 }
 
+// arm 정보로 실험군/대조군 레지멘 유도.
+// 실험군 = 시험약물(investigational)을 포함한 arm들의 약물 합집합,
+// 대조군 = 시험약물이 없는 arm들의 약물 합집합(없으면 단일군).
+function deriveRegimens(d) {
+  const invest = new Set((d.investigational_drugs?.length ? d.investigational_drugs : [d.drug_name])
+    .filter(Boolean).map((s) => s.toLowerCase()))
+  const arms = (d.arms ?? []).filter((a) => (a.drugs ?? []).length)
+  const hasInvest = (a) => a.drugs.some((x) => invest.has(x.toLowerCase()))
+  const uniq = (lists) => {
+    const seen = new Set(); const out = []
+    for (const l of lists) for (const x of l) {
+      const k = x.toLowerCase()
+      if (!seen.has(k)) { seen.add(k); out.push(x) }
+    }
+    return out
+  }
+  let exp = uniq(arms.filter(hasInvest).map((a) => a.drugs))
+  if (!exp.length) exp = d.all_drugs ?? (d.drug_name ? [d.drug_name] : [])
+  // 시험약물을 앞으로 정렬
+  exp = [...exp].sort((a, b) => (invest.has(b.toLowerCase()) ? 1 : 0) - (invest.has(a.toLowerCase()) ? 1 : 0))
+  const ctrl = uniq(arms.filter((a) => !hasInvest(a)).map((a) => a.drugs))
+  return { exp, ctrl }
+}
+
 function DrugCell({ d, nctIndex }) {
   const [expanded, setExpanded] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const ncts = d.nct_ids ?? []
-  const combo = d.combo_drugs ?? []
   const primaryUrl = d.clinicaltrials_url || (ncts[0] ? `https://clinicaltrials.gov/study/${ncts[0]}` : null)
   // nct_index: NCT → [{uid, axis, conference|journal, year}]. 학회 발표 + 논문 둘 다 배지로.
   const linkNct = ncts.find((nct) => nctIndex?.[nct]?.length)
@@ -77,22 +100,20 @@ function DrugCell({ d, nctIndex }) {
         )}
       </div>
 
-      {/* 병용 약물 — arm 기반 식별 시 실험약물(대표) vs 표준치료(백본) 구분 */}
-      {combo.length > 0 && (() => {
-        const backbone = d.backbone_drugs ?? []
-        const backboneSet = new Set(backbone.map((x) => x.toLowerCase()))
-        const extraInvest = combo.filter((x) => !backboneSet.has(x.toLowerCase()))
-        const regimenTitle = `Regimen: ${(d.all_drugs ?? []).join(' + ')}`
+      {/* 레지멘: 실험군 / 대조군 (병용 또는 대조군이 있을 때만) */}
+      {(() => {
+        const { exp, ctrl } = deriveRegimens(d)
+        if (exp.length <= 1 && ctrl.length === 0) return null  // 단일약물·대조군 없음
         return (
-          <div className="text-xs text-slate-400 mt-0.5" title={regimenTitle}>
-            {extraInvest.length > 0 && <span>+ {extraInvest.join(', ')}</span>}
-            {backbone.length > 0 && (
-              <span className={extraInvest.length > 0 ? 'ml-1' : ''}>
-                <span className="text-slate-300">+ {backbone.join(', ')}</span>
-                <span className="ml-1 text-[9px] font-semibold bg-slate-100 text-slate-500 px-1 rounded align-middle"
-                      title="두 군 공통 — 표준치료(SOC) 백본">SOC</span>
-              </span>
-            )}
+          <div className="text-xs mt-0.5 space-y-0.5">
+            <div className="text-slate-500" title={exp.join(' + ')}>
+              <span className="text-[9px] font-semibold bg-blue-50 text-blue-600 px-1 rounded mr-1 align-middle">실험군</span>
+              {exp.join(' + ')}
+            </div>
+            <div className="text-slate-400" title={ctrl.length ? ctrl.join(' + ') : '대조군 없음(단일군)'}>
+              <span className="text-[9px] font-semibold bg-slate-100 text-slate-500 px-1 rounded mr-1 align-middle">대조군</span>
+              {ctrl.length ? ctrl.join(' + ') : '—'}
+            </div>
           </div>
         )
       })()}
