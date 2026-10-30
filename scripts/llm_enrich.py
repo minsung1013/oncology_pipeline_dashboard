@@ -640,22 +640,34 @@ def run_eval(limit: int) -> None:
 # ---------------------------------------------------------------------------
 
 _LINES = {"1L", "2L", "3L+", "Adjuvant", "Neoadjuvant", "Maintenance", "NR"}
+_STAGES = {"metastatic", "locally advanced", "resectable", "early", "recurrent", "unknown"}
 
 SYSTEM_TRIAL = (
-    "You are an oncology clinical trial analyst. Read the trial text and output STRICT JSON only:\n"
+    "You are an oncology clinical trial analyst. Extract a STRUCTURED, analysis-ready description of the "
+    "enrolled patient population (for later clustering) plus the investigational drug. Output STRICT JSON only:\n"
     '{"investigational_drug": <the SINGLE primary novel/experimental agent under investigation by the '
-    "sponsor — NOT the active comparator, NOT a standard-of-care chemotherapy backbone, NOT placebo; "
-    "use the drug as named in the trial>, "
-    '"cohort": <ONE concise line describing the target patients: histology + key biomarker/mutation status '
-    '+ disease setting; e.g. "RAS/BRAF wild-type, left-sided metastatic colorectal cancer">, '
+    "sponsor — NOT the active comparator, NOT a standard-of-care chemo backbone, NOT placebo>, "
+    '"tumor_type": <primary tumor type, lowercase, e.g. "colorectal","non-small cell lung","breast"; '
+    'or "various" for all-comers solid-tumor baskets>, '
+    '"histology": <e.g. "adenocarcinoma","squamous cell carcinoma"; or null if unspecified>, '
+    '"stage": <EXACTLY one of: "metastatic","locally advanced","resectable","early","recurrent","unknown">, '
     '"line_of_therapy": <EXACTLY one of: "1L","2L","3L+","Adjuvant","Neoadjuvant","Maintenance","NR">, '
+    '"selection_biomarkers": <list of molecular/IHC patient-SELECTION criteria, each a short canonical token '
+    'e.g. ["RAS wild-type","BRAF wild-type","MSS","HER2-positive","MSI-H","PD-L1 >=1%","EGFR exon19del"]; '
+    "[] if all-comers / none required>, "
+    '"prior_therapy": <list of REQUIRED prior treatments for eligibility e.g. ["oxaliplatin","anti-PD-1"]; '
+    "[] if none/treatment-naive>, "
+    '"cohort_label": <ONE concise human-readable line combining the above, '
+    'e.g. "RAS/BRAF wild-type, left-sided metastatic colorectal cancer, 1L">, '
     '"confidence": <0.0-1.0>}\n'
-    "line_of_therapy: 1L = first-line / treatment-naive advanced disease; 2L = after ONE prior line or "
-    "progression on one regimen; 3L+ = two or more prior lines / heavily pretreated; Adjuvant = after "
-    "surgery; Neoadjuvant = before surgery; Maintenance = maintenance setting; NR = not reported/unclear.\n"
-    "Pick investigational_drug by DRUG-DEVELOPMENT role, not arm order: a marketed drug used as comparator "
-    "or SOC (e.g. cetuximab, pembrolizumab, bevacizumab) is NOT the investigational drug when a novel agent "
-    "is the experimental arm. Do not invent."
+    "line_of_therapy: 1L = first-line/treatment-naive advanced disease; 2L = after ONE prior line; "
+    "3L+ = two or more prior lines; Adjuvant = after surgery; Neoadjuvant = before surgery; "
+    "Maintenance = maintenance; NR = unclear.\n"
+    "selection_biomarkers = criteria used to ENROLL/stratify patients (mutations, expression, MSI/MMR), "
+    "NOT the drug's mechanism target. Use canonical gene/marker symbols. "
+    "Pick investigational_drug by DRUG-DEVELOPMENT role, not arm order: a marketed drug used as comparator/SOC "
+    "(cetuximab, pembrolizumab, bevacizumab) is NOT investigational when a novel agent is the experimental arm. "
+    "Do not invent; use null/[] when unstated."
 )
 
 
@@ -675,16 +687,27 @@ def _trial_context(d: dict) -> str:
     )
 
 
+def _strlist(v) -> list:
+    return [str(x).strip() for x in v if str(x).strip()] if isinstance(v, list) else []
+
+
 def classify_trial(d: dict) -> dict:
     raw = ollama(f"{SYSTEM_TRIAL}\n\n{_trial_context(d)}\n\nJSON:", timeout=180, num_ctx=4096)
     data, _ = _loads_lenient(raw)
     if not isinstance(data, dict):
         return {"_error": "parse"}
     line = (data.get("line_of_therapy") or "NR").strip()
+    stage = (data.get("stage") or "unknown").strip().lower()
+    hist = data.get("histology")
     return {
         "investigational_drug": (data.get("investigational_drug") or "").strip(),
-        "cohort": (data.get("cohort") or "").strip(),
+        "tumor_type": (data.get("tumor_type") or "").strip().lower(),
+        "histology": (hist.strip() if isinstance(hist, str) and hist.strip() else None),
+        "stage": stage if stage in _STAGES else "unknown",
         "line_of_therapy": line if line in _LINES else "NR",
+        "selection_biomarkers": _strlist(data.get("selection_biomarkers")),
+        "prior_therapy": _strlist(data.get("prior_therapy")),
+        "cohort_label": (data.get("cohort_label") or "").strip(),
         "confidence": float(data.get("confidence", 0.0)) if isinstance(data.get("confidence", 0.0), (int, float)) else 0.0,
     }
 
@@ -694,7 +717,7 @@ def _trial_key(d: dict) -> str:
     return ncts[0] if ncts else ""
 
 
-def run_trials(limit: int | None) -> None:
+def run_trials(limit: int | None, category: str | None = None) -> None:
     drugs = json.load(open(PIPELINE, encoding="utf-8"))["drugs"]
     cache = json.load(open(TRIAL_CACHE, encoding="utf-8")) if os.path.exists(TRIAL_CACHE) else {}
 
@@ -705,14 +728,21 @@ def run_trials(limit: int | None) -> None:
             json.dump(cache, f, ensure_ascii=False, indent=2)
         os.replace(tmp, TRIAL_CACHE)
 
+    cat = (category or "").strip().lower()
     todo = []
     for d in drugs:
         k = _trial_key(d)
-        if k and k not in cache:
-            todo.append((k, d))
+        if not k or k in cache:
+            continue
+        if cat:
+            cats = [c.lower() for c in (d.get("cancer_categories") or [d.get("cancer_category")]) if c]
+            if cat not in cats:
+                continue
+        todo.append((k, d))
     if limit:
         todo = todo[:limit]
-    print(f"trial 검토 대상 {len(todo)}건 (캐시됨 {len(cache)})")
+    scope = f"[{category}] " if category else ""
+    print(f"trial 검토 대상 {scope}{len(todo)}건 (캐시됨 {len(cache)})")
 
     t0 = time.time()
     for i, (k, d) in enumerate(todo, 1):
@@ -741,6 +771,7 @@ if __name__ == "__main__":
     ap.add_argument("--only-unknown", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="xref: 근거 번들만 출력(LLM 미호출)")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--category", default=None, help="trial: cancer_category 스코프 (예: Colorectal)")
     args = ap.parse_args()
     if args.mode == "eval":
         run_eval(args.limit or 60)
@@ -751,6 +782,6 @@ if __name__ == "__main__":
     elif args.mode == "xref":
         run_xref(args.limit, dry_run=args.dry_run)
     elif args.mode == "trial":
-        run_trials(args.limit)
+        run_trials(args.limit, args.category)
     else:
         run_drugs(args.only_unknown, args.limit)

@@ -300,8 +300,18 @@ def merge_trial(write: bool) -> None:
         conf = res.get("confidence", 0.0)
         if conf < TRIAL_COHORT_CONF:
             continue
-        if res.get("cohort"):
-            d["cohort"], d["cohort_src"] = res["cohort"], "llm"
+        label = res.get("cohort_label") or res.get("cohort")  # 하위호환
+        if label:
+            d["cohort"], d["cohort_src"] = label, "llm"
+            # 클러스터링용 구조화 cohort
+            d["cohort_struct"] = {
+                "tumor_type": res.get("tumor_type"),
+                "histology": res.get("histology"),
+                "stage": res.get("stage"),
+                "line_of_therapy": res.get("line_of_therapy"),
+                "selection_biomarkers": res.get("selection_biomarkers") or [],
+                "prior_therapy": res.get("prior_therapy") or [],
+            }
             n_cohort += 1
         if res.get("line_of_therapy"):
             d["line_of_therapy"], d["line_src"] = res["line_of_therapy"], "llm"
