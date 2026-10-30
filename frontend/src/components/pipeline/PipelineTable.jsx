@@ -77,12 +77,25 @@ function DrugCell({ d, nctIndex }) {
         )}
       </div>
 
-      {/* 병용 약물 */}
-      {combo.length > 0 && (
-        <div className="text-xs text-slate-400 mt-0.5" title={combo.join(', ')}>
-          + {combo.join(', ')}
-        </div>
-      )}
+      {/* 병용 약물 — arm 기반 식별 시 실험약물(대표) vs 표준치료(백본) 구분 */}
+      {combo.length > 0 && (() => {
+        const backbone = d.backbone_drugs ?? []
+        const backboneSet = new Set(backbone.map((x) => x.toLowerCase()))
+        const extraInvest = combo.filter((x) => !backboneSet.has(x.toLowerCase()))
+        const regimenTitle = `Regimen: ${(d.all_drugs ?? []).join(' + ')}`
+        return (
+          <div className="text-xs text-slate-400 mt-0.5" title={regimenTitle}>
+            {extraInvest.length > 0 && <span>+ {extraInvest.join(', ')}</span>}
+            {backbone.length > 0 && (
+              <span className={extraInvest.length > 0 ? 'ml-1' : ''}>
+                <span className="text-slate-300">+ {backbone.join(', ')}</span>
+                <span className="ml-1 text-[9px] font-semibold bg-slate-100 text-slate-500 px-1 rounded align-middle"
+                      title="두 군 공통 — 표준치료(SOC) 백본">SOC</span>
+              </span>
+            )}
+          </div>
+        )
+      })()}
 
       {/* AI 한국어 요약 — 토글 (기본 숨김, 클릭 시 펼침) */}
       {d.summary_ko && (
@@ -230,7 +243,15 @@ function makeColumns(nctIndex) {
       const uniq = [...new Set(conds)]
       return (
         <div className="min-w-0">
-          <div className="text-xs font-medium text-slate-600">{d.cancer_category || '—'}</div>
+          <div className="text-xs font-medium text-slate-600">
+            {d.cancer_category || '—'}
+            {d.indication_needs_review && (
+              <span
+                className="ml-1 text-amber-500 cursor-help"
+                title={`제목과 등록 질환(condition)이 불일치 — 제목 기준으로 분류함.\nconditions: ${uniq.join(', ')}`}
+              >⚠</span>
+            )}
+          </div>
           {uniq.length > 0 && (
             <div className="text-xs text-slate-400 line-clamp-2" title={uniq.join(' · ')}>
               {uniq.join(', ')}

@@ -214,6 +214,84 @@ def select_primary_drug(drug_names: list[str]) -> tuple[str, list[str]]:
     combo = [c for i, c in enumerate(cleaned) if i != best_idx]
     return primary, combo
 
+
+# arm 타입: 대조/비치료군 (실험약물 판별에서 제외)
+_COMPARATOR_ARM_TYPES = {
+    "ACTIVE_COMPARATOR", "PLACEBO_COMPARATOR", "SHAM_COMPARATOR", "NO_INTERVENTION",
+}
+
+# "Drug: Bevacizumab" → "Bevacizumab" (타입 접두어 제거)
+_ARM_INTERVENTION_PREFIX = re.compile(
+    r"^(drug|biological|combination product|genetic|radiation|procedure|device|"
+    r"dietary supplement|behavioral|diagnostic test|other)\s*:\s*",
+    re.IGNORECASE,
+)
+
+
+def parse_arms(arms_mod: dict, allowed_drugs: set) -> list[dict]:
+    """armGroups → [{label, type, drugs:[정규화 약물명]}]. 약물 intervention만(allowed_drugs) 남긴다."""
+    arms = []
+    for ag in arms_mod.get("armGroups", []):
+        names = []
+        for iname in ag.get("interventionNames", []):
+            nm = _ARM_INTERVENTION_PREFIX.sub("", iname).strip()
+            c = _clean_drug_name(nm)
+            if c and c.lower() in allowed_drugs and c not in names:
+                names.append(c)
+        arms.append({
+            "label": ag.get("label", ""),
+            "type": ag.get("type", ""),
+            "drugs": names,
+        })
+    return arms
+
+
+def select_arm_aware(arms: list[dict], cleaned_all: list[str]) -> dict | None:
+    """arm 구조로 시험약물/백본 식별. 판별 불가 시 None(→접미사 점수 폴백).
+
+    백본 = 모든 arm 공통 약물(표준치료). 시험약물 = 실험군에만 있고 대조군엔 없는 약물.
+    예) ArmA: FOLFIRI+Bev+Pelareorep / ArmB: FOLFIRI+Bev → 백본={FOLFIRI,Bev},
+        시험약물={Pelareorep}.
+    """
+    drug_sets = [set(d.lower() for d in a["drugs"]) for a in arms if a["drugs"]]
+    if len(drug_sets) < 2:
+        return None  # 단일 arm(또는 약물 arm 1개) → 비교 불가
+
+    backbone = set.intersection(*drug_sets)
+    exp, comp = set(), set()
+    for a in arms:
+        ds = set(d.lower() for d in a["drugs"])
+        if a["type"] in _COMPARATOR_ARM_TYPES:
+            comp |= ds
+        else:
+            exp |= ds
+
+    invest = (exp - backbone) - comp
+    if not invest:
+        # 명시적 실험/대조 구분이 없을 때: arm 간 '달라지는' 약물을 시험약물로 본다.
+        varying = set().union(*drug_sets) - backbone
+        invest = varying - comp
+    if not invest:
+        return None  # 모든 arm이 동일 → 폴백
+
+    low2orig = {}
+    for a in arms:
+        for d in a["drugs"]:
+            low2orig.setdefault(d.lower(), d)
+    order = {d.lower(): i for i, d in enumerate(cleaned_all)}
+    invest_list = sorted((low2orig.get(d, d) for d in invest), key=lambda x: order.get(x.lower(), 10 ** 9))
+    backbone_list = sorted((low2orig.get(d, d) for d in backbone), key=lambda x: order.get(x.lower(), 10 ** 9))
+
+    # 시험약물 중 대표: 점수 최고(동점 시 레지멘 등장 순)
+    primary = max(invest_list, key=lambda x: (_drug_score(x), -order.get(x.lower(), 10 ** 9)))
+    combo = [d for d in cleaned_all if d != primary]
+    return {
+        "drug_name": primary,
+        "combo_drugs": combo,
+        "investigational_drugs": invest_list,
+        "backbone_drugs": backbone_list,
+    }
+
 CANCER_CATEGORY_MAP: dict[str, list[str]] = {
     "Lung":           ["lung", "NSCLC", "SCLC", "non-small cell", "small cell lung", "pulmonary"],
     "Colorectal":     ["colorectal", "colon", "rectal", "rectum", "CRC"],
@@ -474,9 +552,29 @@ def extract_study_fields(study: dict) -> dict | None:
     if not drug_interventions:
         return None
 
-    # 대표 약물 선택 (병용요법에서 주연 식별) + 병용 약물 보존
+    # 대표 약물 선택: arm 구조(실험군∖대조군)로 '실제 시험약물'을 먼저 식별하고,
+    # 판별 불가 시(단일 arm 등) 접미사 점수로 폴백. 병용 레지멘(all_drugs)은 전체 보존.
     all_names = [i.get("name", "") for i in drug_interventions if i.get("name")]
-    drug_name, combo_drugs = select_primary_drug(all_names)
+    cleaned_all, _seen = [], set()
+    for nm in all_names:
+        c = _clean_drug_name(nm)
+        if c and c.lower() not in _seen:
+            _seen.add(c.lower())
+            cleaned_all.append(c)
+
+    arm_groups = parse_arms(arms_mod, _seen)
+    arm_sel = select_arm_aware(arm_groups, cleaned_all)
+    if arm_sel:
+        drug_name = arm_sel["drug_name"]
+        combo_drugs = arm_sel["combo_drugs"]
+        investigational_drugs = arm_sel["investigational_drugs"]
+        backbone_drugs = arm_sel["backbone_drugs"]
+        drug_selection = "arm"
+    else:
+        drug_name, combo_drugs = select_primary_drug(all_names)
+        investigational_drugs = [drug_name] if drug_name else []
+        backbone_drugs = []
+        drug_selection = "score"
     is_combination = len(combo_drugs) > 0
     all_drugs = [drug_name] + combo_drugs
 
@@ -545,6 +643,10 @@ def extract_study_fields(study: dict) -> dict | None:
         "combo_drugs": combo_drugs,
         "all_drugs": all_drugs,
         "is_combination": is_combination,
+        "investigational_drugs": investigational_drugs,
+        "backbone_drugs": backbone_drugs,
+        "drug_selection": drug_selection,
+        "arms": arm_groups,
         "company": lead_sponsor,
         "company_normalized": (normalize_companies(lead_sponsor) or [None])[0],
         "collaborators": collaborators,
