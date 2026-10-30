@@ -368,6 +368,70 @@ def categorize_conditions(conditions: list) -> list:
     return non_other or cats or ["Other"]
 
 
+# 우산/미상 카테고리 — 제목 vs condition "충돌" 판정에서 제외 (부위 미상이라 모순이 아님).
+_UMBRELLA_CATEGORIES = {"Solid Tumor", "Cancer (NOS)", "Other"}
+
+# "brain metastases"(뇌전이)는 원발이 아니므로 Glioma로 오분류되지 않도록 제목 스캔 전 제거.
+_BRAIN_METS_RE = re.compile(r"brain\s+metasta\w*", re.IGNORECASE)
+
+
+def _categories_in_text(text: str) -> list:
+    """text(주로 제목)에 word-boundary로 매칭되는 모든 암종을 '첫 등장 위치' 순으로 반환.
+    특정 암종이 하나라도 있으면 우산 카테고리(Solid Tumor/Cancer NOS)는 제외한다."""
+    if not text:
+        return []
+    text = _BRAIN_METS_RE.sub(" ", text)
+    hits: dict[str, int] = {}
+    for category, keywords in CANCER_CATEGORY_MAP.items():
+        for kw in keywords:
+            m = re.search(
+                r"(?<![A-Za-z0-9])" + re.escape(kw) + r"(?![A-Za-z0-9])",
+                text, re.IGNORECASE,
+            )
+            if m:
+                hits[category] = min(hits.get(category, 10 ** 9), m.start())
+                break
+    ordered = [c for c, _ in sorted(hits.items(), key=lambda x: x[1])]
+    specific = [c for c in ordered if c not in _UMBRELLA_CATEGORIES]
+    return specific or ordered
+
+
+def resolve_indication(
+    conditions: list, brief_title: str = "", official_title: str = ""
+) -> tuple[str, list, bool]:
+    """(primary_category, cancer_categories, needs_review) 반환.
+
+    제목 우선 전략: CT.gov의 conditions 필드는 등록 오류가 잦으므로(예: 담도암 시험을
+    'Colon and Rectal Cancer'로 등록) 제목(brief+official)에서 암종이 식별되면 그것을
+    대표로 삼고, condition 기반 카테고리는 보조로 합친다. 제목과 condition이 서로 다른
+    특정 암종을 가리키면(교집합 없음) needs_review=True 로 표시한다."""
+    title_cats = _categories_in_text(f"{brief_title} {official_title}")
+    cond_cats = categorize_conditions(conditions)
+    cond_specific = [c for c in cond_cats if c not in _UMBRELLA_CATEGORIES]
+
+    if title_cats:
+        primary = title_cats[0]
+        overlap = set(title_cats) & set(cond_specific)
+        if cond_specific and not overlap:
+            # 충돌: 제목과 condition이 서로 다른 특정 암종 → condition 등록 오류로 보고
+            # 제목만 신뢰(조건 유래 카테고리를 필터 집합에서 제외). 검토 플래그.
+            categories = title_cats
+            needs_review = True
+        else:
+            # 일치하거나 겹침 → basket 가능성, 합집합 유지.
+            categories = list(dict.fromkeys(title_cats + cond_specific))
+            needs_review = False
+    elif cond_specific:
+        primary = cond_specific[0]
+        categories = cond_specific
+        needs_review = False
+    else:
+        primary = cond_cats[0] if cond_cats else "Other"
+        categories = cond_cats or ["Other"]
+        needs_review = False
+    return primary, categories, needs_review
+
+
 # ---------------------------------------------------------------------------
 # ClinicalTrials.gov 응답 → 구조화 필드 추출
 # ---------------------------------------------------------------------------
@@ -462,8 +526,11 @@ def extract_study_fields(study: dict) -> dict | None:
     modality = infer_modality(drug_name, intervention_desc)
     target = infer_target(drug_name, brief_summary)
     biomarker_found, biomarker_list = infer_biomarkers(eligibility_text, brief_summary)
-    cancer_category, condition_normalized = normalize_cancer_category(condition)
-    cancer_categories = categorize_conditions(conditions)  # 복수 암종(basket) 필터용
+    # 제목 우선 + 복수 암종(basket) + 제목/condition 충돌 플래그.
+    condition_normalized = condition
+    cancer_category, cancer_categories, indication_needs_review = resolve_indication(
+        conditions, brief_title, official_title
+    )
     # 비종양/보조요법(CINV·호중구감소·근무력증 등) 식별 — 프론트에서 걸러내는 데 사용.
     is_oncology = is_oncology_indication(conditions, cancer_categories)
 
@@ -490,6 +557,7 @@ def extract_study_fields(study: dict) -> dict | None:
         "condition_normalized": condition_normalized,
         "cancer_category": cancer_category,
         "cancer_categories": cancer_categories,
+        "indication_needs_review": indication_needs_review,
         "is_oncology": is_oncology,
         "phase": phase,
         "phases": phase_list,
