@@ -28,6 +28,10 @@ function AiTag({ ruleValue }) {
 // 실험군 = 시험약물(investigational)을 포함한 arm들의 약물 합집합,
 // 대조군 = 시험약물이 없는 arm들의 약물 합집합(없으면 단일군).
 function deriveRegimens(d) {
+  // 서버에서 미리 계산된 레지멘 우선 사용
+  if (d.exp_regimen?.length || d.control_regimen?.length) {
+    return { exp: d.exp_regimen ?? [], ctrl: d.control_regimen ?? [] }
+  }
   const invest = new Set((d.investigational_drugs?.length ? d.investigational_drugs : [d.drug_name])
     .filter(Boolean).map((s) => s.toLowerCase()))
   const arms = (d.arms ?? []).filter((a) => (a.drugs ?? []).length)

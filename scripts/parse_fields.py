@@ -285,11 +285,27 @@ def select_arm_aware(arms: list[dict], cleaned_all: list[str]) -> dict | None:
     # 시험약물 중 대표: 점수 최고(동점 시 레지멘 등장 순)
     primary = max(invest_list, key=lambda x: (_drug_score(x), -order.get(x.lower(), 10 ** 9)))
     combo = [d for d in cleaned_all if d != primary]
+
+    # 실험군/대조군 레지멘: 시험약물을 포함한 arm = 실험군, 아닌 arm = 대조군
+    def _arm_has_invest(a):
+        return any(x.lower() in invest for x in a["drugs"])
+    exp_regimen, ctrl_regimen = [], []
+    seen_e, seen_c = set(), set()
+    for a in arms:
+        bucket, seen = (exp_regimen, seen_e) if _arm_has_invest(a) else (ctrl_regimen, seen_c)
+        for d in a["drugs"]:
+            if d.lower() not in seen:
+                seen.add(d.lower())
+                bucket.append(d)
+    exp_regimen.sort(key=lambda x: (0 if x.lower() in invest else 1, order.get(x.lower(), 10 ** 9)))
+
     return {
         "drug_name": primary,
         "combo_drugs": combo,
         "investigational_drugs": invest_list,
         "backbone_drugs": backbone_list,
+        "exp_regimen": exp_regimen,
+        "control_regimen": ctrl_regimen,
     }
 
 CANCER_CATEGORY_MAP: dict[str, list[str]] = {
@@ -353,15 +369,23 @@ def _word_boundary_match(text: str, keyword: str) -> bool:
     return bool(re.search(pattern, text, re.IGNORECASE))
 
 
-def infer_target(intervention_name: str, brief_summary: str) -> str:
+def infer_target(intervention_name: str, brief_summary: str, exclude_terms=None) -> str:
+    """대표약물 타깃 추론. exclude_terms: 이 레지멘의 병용/백본 약물명 — 타깃이 '곁다리
+    약물명' 키워드로 걸리는 누수를 막는다(예: 대표=Pelareorep인데 요약문의 bevacizumab
+    때문에 VEGF/VEGFR로 잘못 잡히던 버그)."""
+    exclude = {t.lower() for t in (exclude_terms or [])}
     combined = f"{intervention_name} {brief_summary}"
     for target, keywords in TARGET_KEYWORDS.items():
         for kw in keywords:
+            if kw.lower() in exclude:
+                continue
             if _ci_contains(combined, kw):
                 return target
     # word-boundary 필요한 짧은 약어 (substring 오매칭 방지)
     for target, keywords in TARGET_EXACT_KEYWORDS.items():
         for kw in keywords:
+            if kw.lower() in exclude:
+                continue
             if _word_boundary_match(combined, kw):
                 return target
     return "Unknown"
@@ -569,11 +593,15 @@ def extract_study_fields(study: dict) -> dict | None:
         combo_drugs = arm_sel["combo_drugs"]
         investigational_drugs = arm_sel["investigational_drugs"]
         backbone_drugs = arm_sel["backbone_drugs"]
+        exp_regimen = arm_sel["exp_regimen"]
+        control_regimen = arm_sel["control_regimen"]
         drug_selection = "arm"
     else:
         drug_name, combo_drugs = select_primary_drug(all_names)
         investigational_drugs = [drug_name] if drug_name else []
         backbone_drugs = []
+        exp_regimen = [drug_name] + combo_drugs if drug_name else []
+        control_regimen = []
         drug_selection = "score"
     is_combination = len(combo_drugs) > 0
     all_drugs = [drug_name] + combo_drugs
@@ -622,7 +650,7 @@ def extract_study_fields(study: dict) -> dict | None:
 
     # 파싱
     modality = infer_modality(drug_name, intervention_desc)
-    target = infer_target(drug_name, brief_summary)
+    target = infer_target(drug_name, brief_summary, exclude_terms=combo_drugs)
     biomarker_found, biomarker_list = infer_biomarkers(eligibility_text, brief_summary)
     # 제목 우선 + 복수 암종(basket) + 제목/condition 충돌 플래그.
     condition_normalized = condition
@@ -645,6 +673,8 @@ def extract_study_fields(study: dict) -> dict | None:
         "is_combination": is_combination,
         "investigational_drugs": investigational_drugs,
         "backbone_drugs": backbone_drugs,
+        "exp_regimen": exp_regimen,
+        "control_regimen": control_regimen,
         "drug_selection": drug_selection,
         "arms": arm_groups,
         "company": lead_sponsor,
