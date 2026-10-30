@@ -191,10 +191,21 @@ def _drug_score(name: str) -> int:
     return 2
 
 
+# 숫자를 포함하지만 신약 코드가 아닌 '화학요법 레지멘'(FOLFOX/mFOLFOX6/FOLFOX4 등).
+# 코드명 오인(예: mFOLFOX6를 시험약물로) 방지. 공백 제거 후 매칭.
+_CHEMO_REGIMEN_RE = re.compile(
+    r"^(m|modified)?(folfox|folfiri|folfirinox|folfoxiri|xelox|cape?ox|capiri|"
+    r"xeliri|gemox|folf- ?ox)\d*$",
+    re.IGNORECASE,
+)
+
+
 def _is_code_name(name: str) -> bool:
     """미승인 신약 코드명 패턴(영문+숫자 조합: IDE-161, BL-M07D1, 7MW3711).
-    승인약(platin/rubicin 계열 화학요법)은 제외. 코드명은 거의 항상 '시험약물'이다."""
+    승인약(platin/rubicin 계열)·화학요법 레지멘(mFOLFOX6 등)은 제외. 코드명은 거의 항상 '시험약물'."""
     n = _clean_drug_name(name).lower()
+    if n in CHEMO_BACKBONE or _CHEMO_REGIMEN_RE.match(n.replace(" ", "")):
+        return False
     return bool(re.search(r"[A-Za-z]+[-]?\d", name)) and not n.endswith(("platin", "rubicin"))
 
 
