@@ -186,9 +186,16 @@ def _drug_score(name: str) -> int:
     if n.endswith(_TARGETED_SUFFIXES):
         return 3
     # 코드명 패턴 (영문+숫자 조합, 예: NGM120, BL-M07D1, 7MW3711)
-    if re.search(r"[A-Za-z]+[-]?\d", name) and not n.endswith(("platin", "rubicin")):
+    if _is_code_name(name):
         return 3
     return 2
+
+
+def _is_code_name(name: str) -> bool:
+    """미승인 신약 코드명 패턴(영문+숫자 조합: IDE-161, BL-M07D1, 7MW3711).
+    승인약(platin/rubicin 계열 화학요법)은 제외. 코드명은 거의 항상 '시험약물'이다."""
+    n = _clean_drug_name(name).lower()
+    return bool(re.search(r"[A-Za-z]+[-]?\d", name)) and not n.endswith(("platin", "rubicin"))
 
 
 def select_primary_drug(drug_names: list[str]) -> tuple[str, list[str]]:
@@ -257,30 +264,40 @@ def select_arm_aware(arms: list[dict], cleaned_all: list[str]) -> dict | None:
     if len(drug_sets) < 2:
         return None  # 단일 arm(또는 약물 arm 1개) → 비교 불가
 
-    backbone = set.intersection(*drug_sets)
-    exp, comp = set(), set()
-    for a in arms:
-        ds = set(d.lower() for d in a["drugs"])
-        if a["type"] in _COMPARATOR_ARM_TYPES:
-            comp |= ds
-        else:
-            exp |= ds
-
-    invest = (exp - backbone) - comp
-    if not invest:
-        # 명시적 실험/대조 구분이 없을 때: arm 간 '달라지는' 약물을 시험약물로 본다.
-        varying = set().union(*drug_sets) - backbone
-        invest = varying - comp
-    if not invest:
-        return None  # 모든 arm이 동일 → 폴백
+    # 1순위: 코드네임 신약이 정확히 하나면, arm 공통(단독+병용)이어도 그게 시험약물.
+    #   예) IDE-161 단독 arm + (IDE-161 + pembrolizumab) arm → IDE-161이 주인공,
+    #       pembrolizumab은 병용 추가제. arm-delta만 쓰면 '변하는' pembrolizumab을
+    #       오선정하므로 코드네임 규칙을 우선한다.
+    code_names = [d for d in cleaned_all if _is_code_name(d)]
+    if len(code_names) == 1:
+        invest = {code_names[0].lower()}
+    else:
+        backbone0 = set.intersection(*drug_sets)
+        exp, comp = set(), set()
+        for a in arms:
+            ds = set(d.lower() for d in a["drugs"])
+            if a["type"] in _COMPARATOR_ARM_TYPES:
+                comp |= ds
+            else:
+                exp |= ds
+        invest = (exp - backbone0) - comp
+        if not invest:
+            # 명시적 실험/대조 구분이 없을 때: arm 간 '달라지는' 약물을 시험약물로 본다.
+            invest = (set().union(*drug_sets) - backbone0) - comp
+        if not invest:
+            return None  # 모든 arm이 동일 → 폴백
 
     low2orig = {}
     for a in arms:
         for d in a["drugs"]:
             low2orig.setdefault(d.lower(), d)
     order = {d.lower(): i for i, d in enumerate(cleaned_all)}
+    invest &= set(order)
+    if not invest:
+        return None
     invest_list = sorted((low2orig.get(d, d) for d in invest), key=lambda x: order.get(x.lower(), 10 ** 9))
-    backbone_list = sorted((low2orig.get(d, d) for d in backbone), key=lambda x: order.get(x.lower(), 10 ** 9))
+    # 백본/병용 = 시험약물이 아닌 나머지 (표시는 exp/control 레지멘을 사용)
+    backbone_list = [d for d in cleaned_all if d.lower() not in invest]
 
     # 시험약물 중 대표: 점수 최고(동점 시 레지멘 등장 순)
     primary = max(invest_list, key=lambda x: (_drug_score(x), -order.get(x.lower(), 10 ** 9)))
@@ -428,13 +445,20 @@ def _extract_references(refs_mod: dict) -> list[dict]:
     return links
 
 
+def _cancer_kw_search(text: str, kw: str):
+    """암종 키워드 매칭: word-boundary + 복수형 허용('Solid Tumors'도 'solid tumor'로 매칭).
+    optional 's'라 기존 매칭을 잃지 않고 복수형만 추가로 잡는다."""
+    pat = r"(?<![A-Za-z0-9])" + re.escape(kw) + r"s?(?![A-Za-z0-9])"
+    return re.search(pat, text, re.IGNORECASE)
+
+
 def normalize_cancer_category(condition: str) -> tuple[str, str]:
     """(cancer_category, condition_normalized) 반환.
     단어경계 매칭 — 약어 키워드("CRC","RCC" 등)가 다른 단어 부분문자열에 잘못 걸리는 것 방지
     (예: Colorectal "CRC"가 "ccRCC"(신장암)에 매칭되던 버그)."""
     for category, keywords in CANCER_CATEGORY_MAP.items():
         for kw in keywords:
-            if _word_boundary_match(condition, kw):
+            if _cancer_kw_search(condition, kw):
                 return category, condition
     return "Other", condition
 
@@ -486,10 +510,7 @@ def _categories_in_text(text: str) -> list:
     hits: dict[str, int] = {}
     for category, keywords in CANCER_CATEGORY_MAP.items():
         for kw in keywords:
-            m = re.search(
-                r"(?<![A-Za-z0-9])" + re.escape(kw) + r"(?![A-Za-z0-9])",
-                text, re.IGNORECASE,
-            )
+            m = _cancer_kw_search(text, kw)
             if m:
                 hits[category] = min(hits.get(category, 10 ** 9), m.start())
                 break
@@ -508,21 +529,29 @@ def resolve_indication(
     대표로 삼고, condition 기반 카테고리는 보조로 합친다. 제목과 condition이 서로 다른
     특정 암종을 가리키면(교집합 없음) needs_review=True 로 표시한다."""
     title_cats = _categories_in_text(f"{brief_title} {official_title}")
+    title_specific = [c for c in title_cats if c not in _UMBRELLA_CATEGORIES]
     cond_cats = categorize_conditions(conditions)
     cond_specific = [c for c in cond_cats if c not in _UMBRELLA_CATEGORIES]
 
-    if title_cats:
-        primary = title_cats[0]
-        overlap = set(title_cats) & set(cond_specific)
+    if title_specific:
+        primary = title_specific[0]
+        overlap = set(title_specific) & set(cond_specific)
         if cond_specific and not overlap:
             # 충돌: 제목과 condition이 서로 다른 특정 암종 → condition 등록 오류로 보고
             # 제목만 신뢰(조건 유래 카테고리를 필터 집합에서 제외). 검토 플래그.
-            categories = title_cats
+            categories = title_specific
             needs_review = True
         else:
             # 일치하거나 겹침 → basket 가능성, 합집합 유지.
-            categories = list(dict.fromkeys(title_cats + cond_specific))
+            categories = list(dict.fromkeys(title_specific + cond_specific))
             needs_review = False
+    elif title_cats:
+        # 제목이 전암종 umbrella("Advanced Solid Tumors" 등) — 특정 암종 명시 없음.
+        # 이런 all-comers 바스켓은 condition의 개별 암종(유방/대장…)으로 분산하면 모든
+        # 암종 필터를 오염시키므로, umbrella(Solid Tumor / Cancer NOS) 대표 하나로만 분류한다.
+        primary = title_cats[0]
+        categories = [primary]
+        needs_review = False
     elif cond_specific:
         primary = cond_specific[0]
         categories = cond_specific
