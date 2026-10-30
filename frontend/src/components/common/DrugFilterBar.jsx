@@ -26,12 +26,30 @@ const AXES = [
 export default function DrugFilterBar({ options, filters, onChange, extras = null, showCompletion = false }) {
   const [barOpen, setBarOpen] = useState(false)
   const set = (key, value) => onChange({ ...filters, [key]: value })
-  const toggle = (key, value) => {
-    const cur = filters[key] ?? []
-    set(key, cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value])
+  const exKey = (key) => `${key}Excl`
+  // 포함 토글: include에 추가/제거 (추가 시 exclude에서 제외)
+  const toggleInclude = (key, value) => {
+    const inc = filters[key] ?? []
+    const exc = filters[exKey(key)] ?? []
+    onChange({
+      ...filters,
+      [key]: inc.includes(value) ? inc.filter((v) => v !== value) : [...inc, value],
+      [exKey(key)]: exc.filter((v) => v !== value),
+    })
   }
+  // 제외 토글: exclude에 추가/제거 (추가 시 include에서 제외)
+  const toggleExclude = (key, value) => {
+    const inc = filters[key] ?? []
+    const exc = filters[exKey(key)] ?? []
+    onChange({
+      ...filters,
+      [exKey(key)]: exc.includes(value) ? exc.filter((v) => v !== value) : [...exc, value],
+      [key]: inc.filter((v) => v !== value),
+    })
+  }
+  const clearAxis = (key) => onChange({ ...filters, [key]: [], [exKey(key)]: [] })
 
-  const arrCount = AXES.reduce((n, a) => n + (filters[a.key]?.length ?? 0), 0)
+  const arrCount = AXES.reduce((n, a) => n + (filters[a.key]?.length ?? 0) + (filters[exKey(a.key)]?.length ?? 0), 0)
   const activeCount =
     arrCount +
     (filters.keyword ? 1 : 0) +
@@ -75,9 +93,11 @@ export default function DrugFilterBar({ options, filters, onChange, extras = nul
             key={a.key}
             label={a.label}
             options={opts}
-            selected={filters[a.key] ?? []}
-            onToggle={(v) => toggle(a.key, v)}
-            onClear={() => set(a.key, [])}
+            included={filters[a.key] ?? []}
+            excluded={filters[exKey(a.key)] ?? []}
+            onInclude={(v) => toggleInclude(a.key, v)}
+            onExclude={(v) => toggleExclude(a.key, v)}
+            onClear={() => clearAxis(a.key)}
             searchable={a.searchable}
             renderOption={a.render}
           />
@@ -141,10 +161,13 @@ function Divider() {
   return <span className="text-slate-200 text-lg select-none">|</span>
 }
 
-function MultiSelect({ label, options, selected, onToggle, onClear, renderOption, searchable }) {
+function MultiSelect({ label, options, included, excluded, onInclude, onExclude, onClear, renderOption, searchable }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const render = renderOption ?? ((v) => v)
+  const incSet = new Set(included)
+  const excSet = new Set(excluded)
+  const active = included.length + excluded.length
 
   const shown = searchable
     ? (query.trim()
@@ -158,14 +181,17 @@ function MultiSelect({ label, options, selected, onToggle, onClear, renderOption
       <button
         onClick={() => setOpen((v) => !v)}
         className={`flex items-center gap-1 border rounded px-2 py-1 text-sm transition-colors ${
-          selected.length > 0 ? 'border-blue-400 bg-blue-50' : 'border-slate-300 bg-white hover:bg-slate-50'
+          active > 0 ? 'border-blue-400 bg-blue-50' : 'border-slate-300 bg-white hover:bg-slate-50'
         }`}
       >
-        <span className={`text-xs font-semibold uppercase tracking-wide ${selected.length > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+        <span className={`text-xs font-semibold uppercase tracking-wide ${active > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
           {label}
         </span>
-        {selected.length > 0 && (
-          <span className="bg-blue-500 text-white text-xs font-semibold rounded-full px-1.5">{selected.length}</span>
+        {included.length > 0 && (
+          <span className="bg-blue-500 text-white text-xs font-semibold rounded-full px-1.5">＋{included.length}</span>
+        )}
+        {excluded.length > 0 && (
+          <span className="bg-red-500 text-white text-xs font-semibold rounded-full px-1.5">－{excluded.length}</span>
         )}
         <span className="text-slate-400 ml-1">{open ? '▴' : '▾'}</span>
       </button>
@@ -173,7 +199,7 @@ function MultiSelect({ label, options, selected, onToggle, onClear, renderOption
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-20 w-64 max-w-64 max-h-72 overflow-y-auto">
+          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded shadow-lg z-20 w-72 max-w-72 max-h-72 overflow-y-auto">
             {searchable && (
               <div className="p-2 border-b border-slate-100 sticky top-0 bg-white">
                 <input
@@ -186,30 +212,38 @@ function MultiSelect({ label, options, selected, onToggle, onClear, renderOption
                 />
               </div>
             )}
-            {selected.length > 0 && (
-              <button
-                onClick={onClear}
-                className="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 border-b border-slate-100"
-              >
-                Clear all
-              </button>
-            )}
+            <div className="flex items-center justify-between px-3 py-1 text-[10px] text-slate-400 border-b border-slate-100 sticky top-0 bg-white">
+              <span>＋ include · － exclude</span>
+              {active > 0 && (
+                <button onClick={onClear} className="hover:text-red-500">Clear</button>
+              )}
+            </div>
             {shown.length === 0 && <div className="px-3 py-2 text-xs text-slate-400">No matches</div>}
-            {shown.map((opt) => (
-              <label
-                key={opt}
-                title={String(render(opt))}
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.includes(opt)}
-                  onChange={() => onToggle(opt)}
-                  className="w-3.5 h-3.5 accent-blue-500 shrink-0"
-                />
-                <span className="text-sm text-slate-700 truncate min-w-0">{render(opt)}</span>
-              </label>
-            ))}
+            {shown.map((opt) => {
+              const inc = incSet.has(opt)
+              const exc = excSet.has(opt)
+              return (
+                <div
+                  key={opt}
+                  title={String(render(opt))}
+                  className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50"
+                >
+                  <button
+                    onClick={() => onInclude(opt)}
+                    className={`shrink-0 w-5 h-5 rounded text-xs font-bold ${inc ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400 hover:bg-blue-100'}`}
+                    title="Include"
+                  >＋</button>
+                  <button
+                    onClick={() => onExclude(opt)}
+                    className={`shrink-0 w-5 h-5 rounded text-xs font-bold ${exc ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-400 hover:bg-red-100'}`}
+                    title="Exclude"
+                  >－</button>
+                  <span className={`text-sm truncate min-w-0 ${exc ? 'text-red-400 line-through' : 'text-slate-700'}`}>
+                    {render(opt)}
+                  </span>
+                </div>
+              )
+            })}
             {searchable && query.trim() === '' && options.length > 200 && (
               <div className="px-3 py-1.5 text-xs text-slate-400 italic">
                 Showing first 200 — type to search all {options.length.toLocaleString()}

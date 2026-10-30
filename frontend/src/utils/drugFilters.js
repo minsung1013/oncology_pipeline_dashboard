@@ -91,6 +91,19 @@ export function applyDrugFilters(drugs, f = {}) {
   const statuses = new Set(f.statuses ?? [])
   const lines = new Set(f.lines ?? [])
   const countries = new Set(f.countries ?? [])
+  // exclude(제외) 세트 — 어느 하나라도 매치되면 행 제거
+  const ex = {
+    companies: new Set(f.companiesExcl ?? []),
+    countries: new Set(f.countriesExcl ?? []),
+    drugs: new Set(f.drugsExcl ?? []),
+    cancers: new Set(f.cancersExcl ?? []),
+    modalities: new Set(f.modalitiesExcl ?? []),
+    targets: new Set(f.targetsExcl ?? []),
+    biomarkers: new Set(f.biomarkersExcl ?? []),
+    statuses: new Set(f.statusesExcl ?? []),
+    lines: new Set(f.linesExcl ?? []),
+    phases: new Set(f.phasesExcl ?? []),
+  }
   const sFrom = yr(f.startYear?.from), sTo = yr(f.startYear?.to)
   const cFrom = yr(f.completionYear?.from), cTo = yr(f.completionYear?.to)
   const kw = (f.keyword ?? '').trim().toLowerCase()
@@ -115,6 +128,18 @@ export function applyDrugFilters(drugs, f = {}) {
       const ok = [...phases].some((p) => (p === 'NA' ? isUn || dp.includes('NA') : dp.includes(p)))
       if (!ok) return false
     }
+
+    // exclude 적용
+    if (ex.companies.size && ex.companies.has(d.company_normalized)) return false
+    if (ex.drugs.size && ex.drugs.has(d.drug_name)) return false
+    if (ex.cancers.size && drugCancers(d).some((c) => ex.cancers.has(c))) return false
+    if (ex.modalities.size && ex.modalities.has(d.modality)) return false
+    if (ex.targets.size && ex.targets.has(d.target)) return false
+    if (ex.biomarkers.size && (d.biomarker_list ?? []).some((b) => ex.biomarkers.has(b))) return false
+    if (ex.statuses.size && ex.statuses.has(d.overall_status)) return false
+    if (ex.lines.size && ex.lines.has(d.line_of_therapy)) return false
+    if (ex.countries.size && (d.countries ?? []).some((c) => ex.countries.has(c))) return false
+    if (ex.phases.size && (d.phases ?? []).some((p) => ex.phases.has(p))) return false
 
     if (partnership !== 'all' && d.partnership_status !== partnership) return false
     if (regimen === 'mono' && d.is_combination) return false

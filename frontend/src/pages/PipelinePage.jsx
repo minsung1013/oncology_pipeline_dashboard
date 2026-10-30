@@ -4,6 +4,7 @@ import DrugFilterBar from '../components/common/DrugFilterBar'
 import CompanyList from '../components/pipeline/CompanyList'
 import PipelineTable from '../components/pipeline/PipelineTable'
 import { applyDrugFilters, getDrugFilterOptions, groupByCompany, drugCompanies } from '../utils/drugFilters'
+import { exportDrugsCsv } from '../utils/exportCsv'
 import { getShared, setShared, getTabState, setTabState } from '../utils/filterStore'
 
 import { getPipeline, getNctIndex } from '../utils/dataSource'
@@ -212,6 +213,13 @@ export default function PipelinePage() {
                 </button>
               </span>
             )}
+            <button
+              onClick={() => exportDrugsCsv(tableDrugs, `pipeline_${new Date().toISOString().slice(0, 10)}.csv`)}
+              className="ml-auto text-xs text-slate-600 hover:text-slate-900 border border-slate-200 rounded px-2 py-0.5 bg-white"
+              title="현재 필터된 행을 CSV(Excel)로 내보내기"
+            >
+              ⬇ Export CSV ({tableDrugs.length.toLocaleString()})
+            </button>
           </div>
           <PipelineTable drugs={tableDrugs} nctIndex={nctIndex} />
         </div>
