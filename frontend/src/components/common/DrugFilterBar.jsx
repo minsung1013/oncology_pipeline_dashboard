@@ -11,6 +11,7 @@ const STATUS_ORDER = STATUS_META.map((s) => s.key)
 // 공유 다중선택 축 (options[key]가 선택지, filters[key]가 선택값)
 const AXES = [
   { key: 'companies', label: 'Company', searchable: true },
+  { key: 'countries', label: 'Country', searchable: true },
   { key: 'drugs', label: 'Drug', searchable: true },
   { key: 'cancers', label: 'Indication', searchable: true },
   { key: 'modalities', label: 'Modality' },

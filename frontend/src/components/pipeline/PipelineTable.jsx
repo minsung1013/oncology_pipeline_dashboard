@@ -138,13 +138,48 @@ function RegimenCell({ drugs, muted }) {
 function makeColumns(nctIndex) {
   return [
   col.accessor('brief_title', {
-    header: '임상 제목',
+    header: 'Title',
     cell: ({ row }) => <TitleCell d={row.original} nctIndex={nctIndex} />,
-    size: 320,
+    size: 200,
+  }),
+
+  col.accessor('cohort', {
+    header: 'Cohort',
+    enableSorting: false,
+    cell: ({ getValue, row }) => {
+      const v = getValue()
+      if (!v) return <span className="text-slate-300">—</span>
+      const ai = row.original.cohort_src === 'llm'
+      return (
+        <span className="text-xs text-slate-600 break-words leading-tight block" title={v}>
+          {v}{ai && <AiTag ruleValue="" />}
+        </span>
+      )
+    },
+    size: 180,
+  }),
+
+  col.accessor('line_of_therapy', {
+    header: 'Line',
+    cell: ({ getValue }) => {
+      const v = getValue()
+      if (!v) return <span className="text-slate-300">—</span>
+      const colorMap = {
+        '1L': 'bg-green-100 text-green-700',
+        '2L': 'bg-amber-100 text-amber-700',
+        '3L+': 'bg-red-100 text-red-700',
+        Adjuvant: 'bg-sky-100 text-sky-700',
+        Neoadjuvant: 'bg-indigo-100 text-indigo-700',
+        Maintenance: 'bg-violet-100 text-violet-700',
+      }
+      const cls = colorMap[v] ?? 'bg-slate-100 text-slate-500'
+      return <span className={`text-xs font-semibold px-2 py-0.5 rounded ${cls}`}>{v}</span>
+    },
+    size: 70,
   }),
 
   col.accessor('drug_name', {
-    header: '대표약물',
+    header: 'Drug',
     cell: ({ getValue, row }) => {
       const d = row.original
       const ncts = d.nct_ids ?? []
@@ -154,21 +189,21 @@ function makeColumns(nctIndex) {
         ? <a href={url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-medium break-words leading-tight">{v}</a>
         : <span className="font-medium break-words leading-tight">{v}</span>
     },
-    size: 150,
+    size: 120,
   }),
 
   col.accessor('exp_regimen', {
-    header: '실험군',
+    header: 'Experimental',
     enableSorting: false,
     cell: ({ row }) => <RegimenCell drugs={deriveRegimens(row.original).exp} />,
-    size: 190,
+    size: 150,
   }),
 
   col.accessor('control_regimen', {
-    header: '대조군',
+    header: 'Control',
     enableSorting: false,
     cell: ({ row }) => <RegimenCell drugs={deriveRegimens(row.original).ctrl} muted />,
-    size: 160,
+    size: 140,
   }),
 
   col.accessor('company', {
@@ -213,7 +248,7 @@ function makeColumns(nctIndex) {
   }),
 
   col.accessor('biomarker_list', {
-    header: '바이오마커',
+    header: 'Biomarker',
     enableSorting: false,
     cell: ({ getValue }) => {
       const list = getValue() ?? []
@@ -235,7 +270,7 @@ function makeColumns(nctIndex) {
   }),
 
   col.accessor('target', {
-    header: '타겟',
+    header: 'Target',
     cell: ({ getValue, row }) => {
       const v = getValue()
       const ai = row.original.target_src === 'llm'
@@ -251,7 +286,7 @@ function makeColumns(nctIndex) {
   }),
 
   col.accessor('modality', {
-    header: '모달리티',
+    header: 'Modality',
     cell: ({ getValue, row }) => (
       <span className="inline-flex items-center">
         <ModalityBadge modality={getValue()} />
@@ -262,7 +297,7 @@ function makeColumns(nctIndex) {
   }),
 
   col.accessor('cancer_category', {
-    header: '인디케이션',
+    header: 'Indication',
     cell: ({ row }) => {
       const d = row.original
       // 복수 암종 보존: conditions 전체를 표시(중복 제거), 없으면 대표 condition
@@ -292,41 +327,6 @@ function makeColumns(nctIndex) {
       )
     },
     size: 150,
-  }),
-
-  col.accessor('cohort', {
-    header: 'Cohort',
-    enableSorting: false,
-    cell: ({ getValue, row }) => {
-      const v = getValue()
-      if (!v) return <span className="text-slate-300">—</span>
-      const ai = row.original.cohort_src === 'llm'
-      return (
-        <span className="text-xs text-slate-600 break-words leading-tight block" title={v}>
-          {v}{ai && <AiTag ruleValue="" />}
-        </span>
-      )
-    },
-    size: 200,
-  }),
-
-  col.accessor('line_of_therapy', {
-    header: 'Line',
-    cell: ({ getValue }) => {
-      const v = getValue()
-      if (!v) return <span className="text-slate-300">—</span>
-      const colorMap = {
-        '1L': 'bg-green-100 text-green-700',
-        '2L': 'bg-amber-100 text-amber-700',
-        '3L+': 'bg-red-100 text-red-700',
-        Adjuvant: 'bg-sky-100 text-sky-700',
-        Neoadjuvant: 'bg-indigo-100 text-indigo-700',
-        Maintenance: 'bg-violet-100 text-violet-700',
-      }
-      const cls = colorMap[v] ?? 'bg-slate-100 text-slate-500'
-      return <span className={`text-xs font-semibold px-2 py-0.5 rounded ${cls}`}>{v}</span>
-    },
-    size: 100,
   }),
 
   col.accessor('phase', {
@@ -416,19 +416,16 @@ export default function PipelineTable({ drugs, nctIndex = {} }) {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      <div className="overflow-auto flex-1">
-        <table
-          className="text-sm border-collapse"
-          style={{ width: table.getTotalSize() }}
-        >
+      <div className="overflow-y-auto overflow-x-hidden flex-1">
+        <table className="text-sm border-collapse w-full table-fixed">
           <thead className="sticky top-0 bg-slate-50 z-10">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-slate-200">
                 {hg.headers.map((header) => (
                   <th
                     key={header.id}
-                    style={{ width: header.getSize(), position: 'relative' }}
-                    className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap"
+                    style={{ width: `${(header.getSize() / table.getTotalSize()) * 100}%`, position: 'relative' }}
+                    className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide break-words"
                   >
                     {header.column.getCanSort() ? (
                       <button
@@ -465,8 +462,7 @@ export default function PipelineTable({ drugs, nctIndex = {} }) {
                 {row.getVisibleCells().map((cell) => (
                   <td
                     key={cell.id}
-                    style={{ width: cell.column.getSize() }}
-                    className="px-3 py-2 align-top overflow-hidden"
+                    className="px-3 py-2 align-top break-words"
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>

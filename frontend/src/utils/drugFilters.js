@@ -18,7 +18,7 @@ export const drugCancers = (d) =>
 export const DRUG_FILTER_DEFAULT = {
   // 다중선택 축
   companies: [], drugs: [], cancers: [], phases: [], modalities: [],
-  targets: [], biomarkers: [], statuses: [], lines: [],
+  targets: [], biomarkers: [], statuses: [], lines: [], countries: [],
   // 연도 범위
   startYear: { from: 'all', to: 'all' },
   completionYear: { from: 'all', to: 'all' },
@@ -66,6 +66,8 @@ export function getDrugFilterOptions(drugs) {
   const lines = [...new Set(drugs.map((d) => d.line_of_therapy).filter(Boolean))]
     .sort((a, b) => LINE_ORDER.indexOf(a) - LINE_ORDER.indexOf(b))
 
+  const countries = byFrequency(drugs, (d) => d.countries ?? [])
+
   const startYears = [...new Set(
     drugs.map((d) => parseInt(d.start_date?.slice(0, 4))).filter((y) => y > 2000 && y < 2040),
   )].sort((a, b) => a - b)
@@ -74,7 +76,7 @@ export function getDrugFilterOptions(drugs) {
   )].sort((a, b) => a - b)
 
   // 키 = 필터 축 키와 동일 (FilterBar config가 options[key]로 참조)
-  return { companies, drugs: drugNames, cancers, phases, modalities, targets, biomarkers, statuses, lines, startYears, completionYears }
+  return { companies, drugs: drugNames, cancers, phases, modalities, targets, biomarkers, statuses, lines, countries, startYears, completionYears }
 }
 
 // 표준 필터 적용. 파이프라인 전용 필드는 기본값이면 무해(Visualize 호환).
@@ -88,6 +90,7 @@ export function applyDrugFilters(drugs, f = {}) {
   const bios = new Set(f.biomarkers ?? [])
   const statuses = new Set(f.statuses ?? [])
   const lines = new Set(f.lines ?? [])
+  const countries = new Set(f.countries ?? [])
   const sFrom = yr(f.startYear?.from), sTo = yr(f.startYear?.to)
   const cFrom = yr(f.completionYear?.from), cTo = yr(f.completionYear?.to)
   const kw = (f.keyword ?? '').trim().toLowerCase()
@@ -105,6 +108,7 @@ export function applyDrugFilters(drugs, f = {}) {
     if (bios.size > 0 && !(d.biomarker_list ?? []).some((b) => bios.has(b))) return false
     if (statuses.size > 0 && !statuses.has(d.overall_status)) return false
     if (lines.size > 0 && !lines.has(d.line_of_therapy)) return false
+    if (countries.size > 0 && !(d.countries ?? []).some((c) => countries.has(c))) return false
     if (phases.size > 0) {
       const dp = d.phases ?? []
       const isUn = dp.length === 0 || dp.every((p) => p === 'UNKNOWN')
