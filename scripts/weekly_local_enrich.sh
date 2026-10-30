@@ -47,11 +47,14 @@ export LLM_MODEL="qwen3:30b-a3b-q4_K_M" LLM_NUM_GPU=44
 python3 scripts/llm_enrich.py --mode drugs --only-unknown   # 신규 약물 modality/target/biomarker
 python3 scripts/llm_enrich.py --mode abstracts             # 신규 학회초록 + 논문 요약
 python3 scripts/llm_enrich.py --mode pipeline              # 신규 임상시험 요약
+# 전문검토(시험약물 검증 + 구조화 cohort + line) — 품질 우선 검증모델. NCT키 캐시라 재파싱에 안전.
+LLM_MODEL="qwen3.5:27b" python3 scripts/llm_enrich.py --mode trial
 
 # 4) 캐시 → 데이터 병합 + 정규화 --------------------------------------------
 python3 scripts/llm_merge.py --write || true
 python3 scripts/llm_merge.py --mode abstracts --write || true
 python3 scripts/llm_merge.py --mode pipeline --write || true
+python3 scripts/llm_merge.py --mode trial --write || true
 python3 scripts/normalize_fields.py --write || true
 
 # 4.5) 크로스소스 보완 (신규 약물): nct_index 갱신 후 27b(품질)로 채움/교정 ------
@@ -66,7 +69,7 @@ python3 scripts/upload_r2.py
 python3 scripts/sync_parsed.py upload || true
 
 # 6) 캐시를 git에 보존 (CI 재적용 + 다음 주 증분 베이스) ----------------------
-git add data/cache/llm_drug_cache.json data/cache/llm_abstract_cache.json data/cache/llm_pipeline_cache.json data/cache/llm_xref_cache.json 2>/dev/null || true
+git add data/cache/llm_drug_cache.json data/cache/llm_abstract_cache.json data/cache/llm_pipeline_cache.json data/cache/llm_xref_cache.json data/cache/llm_trial_cache.json 2>/dev/null || true
 git diff --staged --quiet || git commit -m "chore: weekly local LLM enrich $(date +%Y-%m-%d)"
 git push || true
 

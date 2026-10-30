@@ -15,6 +15,7 @@ const AXES = [
   { key: 'cancers', label: 'Indication', searchable: true },
   { key: 'modalities', label: 'Modality' },
   { key: 'phases', label: 'Phase', render: phaseLabel },
+  { key: 'lines', label: 'Line' },
   { key: 'statuses', label: 'Status', render: statusLabel,
     sort: (a, b) => STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b) },
   { key: 'targets', label: 'Target', searchable: true },
