@@ -32,6 +32,7 @@ const EMPTY_FILTERS = DRUG_FILTER_DEFAULT
 // 필터칩 표시용 (key → 라벨, 값 렌더러)
 const CHIP_META = {
   companies: { label: 'Company', render: (v) => v },
+  countries: { label: 'Country', render: (v) => v },
   drugs: { label: 'Drug', render: (v) => v },
   cancers: { label: 'Cancer', render: (v) => v },
   phases: { label: 'Phase', render: phaseLabel },
@@ -39,6 +40,12 @@ const CHIP_META = {
   targets: { label: 'Target', render: (v) => v },
   biomarkers: { label: 'Biomarker', render: (v) => v },
   statuses: { label: 'Status', render: statusLabel },
+  lines: { label: 'Line', render: (v) => v },
+}
+// include/exclude 양쪽 축 모두 칩 라벨 해석 (알 수 없는 키는 안전 폴백)
+function chipMeta(key) {
+  const base = key.endsWith('Excl') ? key.slice(0, -4) : key
+  return { excl: key.endsWith('Excl'), ...(CHIP_META[base] ?? { label: base, render: (v) => v }) }
 }
 
 export default function VisualizePage() {
@@ -106,7 +113,7 @@ export default function VisualizePage() {
   // 그래프 클릭 → 해당 축 필터 토글
   const toggleFilter = (key, value) => {
     setFilters((prev) => {
-      const cur = prev[key]
+      const cur = prev[key] ?? []
       const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]
       return { ...prev, [key]: next }
     })
@@ -188,18 +195,24 @@ export default function VisualizePage() {
         {/* Active filter chips */}
         {hasActive && (
           <div className="flex items-center gap-1.5 flex-wrap mt-2">
-            {activeChips.map(({ key, value }) => (
-              <button
-                key={`${key}:${value}`}
-                onClick={() => toggleFilter(key, value)}
-                className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                title="Remove filter"
-              >
-                <span className="text-blue-400">{CHIP_META[key].label}:</span>
-                {CHIP_META[key].render(value)}
-                <span className="text-blue-400">✕</span>
-              </button>
-            ))}
+            {activeChips.map(({ key, value }) => {
+              const m = chipMeta(key)
+              const c = m.excl
+                ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+              return (
+                <button
+                  key={`${key}:${value}`}
+                  onClick={() => toggleFilter(key, value)}
+                  className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border ${c}`}
+                  title="Remove filter"
+                >
+                  <span className="opacity-60">{m.excl ? '－' : ''}{m.label}:</span>
+                  {m.render(value)}
+                  <span className="opacity-60">✕</span>
+                </button>
+              )
+            })}
             {yearActive && (
               <button
                 onClick={() => setFilters((prev) => ({ ...prev, startYear: { from: 'all', to: 'all' } }))}
