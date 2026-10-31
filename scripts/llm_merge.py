@@ -27,6 +27,30 @@ PIPELINE_CACHE = "data/cache/llm_pipeline_cache.json"  # 임상시험 엔트리 
 TRIAL_CACHE = "data/cache/llm_trial_cache.json"        # 전문검토: 시험약물 검증 + cohort + line
 TRIAL_COHORT_CONF = 0.5   # cohort/line 채택 최소 신뢰도
 TRIAL_DRUG_CONF = 0.8     # 대표약물 교정 최소 신뢰도 (병용·다arm만)
+TRIAL_FILL_CONF = 0.6     # modality/target: Unknown 채움 최소 신뢰도
+TRIAL_OVERRIDE_CONF = 0.8 # modality/target: 기존값 교정 최소 신뢰도
+
+# 세포독성 화학요법 — 단일 분자 타겟이 없으므로 modality/target을 'Chemotherapy'로 별도 표기.
+_CHEMO_AGENTS = {
+    "fluorouracil", "5-fu", "5-fluorouracil", "capecitabine", "tegafur", "s-1", "ftd/tpi",
+    "trifluridine", "trifluridine/tipiracil", "tas-102", "raltitrexed", "leucovorin", "levoleucovorin",
+    "oxaliplatin", "cisplatin", "carboplatin", "nedaplatin", "irinotecan", "liposomal irinotecan",
+    "topotecan", "gemcitabine", "paclitaxel", "nab-paclitaxel", "docetaxel", "cabazitaxel",
+    "doxorubicin", "liposomal doxorubicin", "epirubicin", "daunorubicin", "mitomycin", "mitomycin c",
+    "cyclophosphamide", "ifosfamide", "pemetrexed", "etoposide", "vincristine", "vinblastine",
+    "vinorelbine", "methotrexate", "cytarabine", "bendamustine", "temozolomide", "dacarbazine",
+    "fludarabine", "melphalan", "busulfan", "eribulin", "trabectedin",
+}
+_CHEMO_RE = re.compile(
+    r"(folfox|folfiri|folfirinox|folfoxiri|capox|capeox|xelox|xeliri|flot|gemox|mfolfox|"
+    r"platin\b|rubicin\b|taxel\b|taxotere)", re.IGNORECASE)
+
+
+def _is_chemo(name: str) -> bool:
+    n = _norm_name(name)
+    if not n:
+        return False
+    return n in _CHEMO_AGENTS or bool(_CHEMO_RE.search(n))
 XREF_CACHE = "data/cache/llm_xref_cache.json"          # 크로스소스 보완(modality/target/bio)
 XREF_REVIEW = "data/parsed/xref_review.json"           # 채움·교정 리뷰 리포트
 XREF_FILL_CONF = 0.7     # Unknown 채움 최소 신뢰도
@@ -344,7 +368,19 @@ def merge_trial(write: bool) -> None:
         n_tgt += _apply("target", res.get("target"))
         if res.get("target_reasoning"):
             d["target_note"] = res["target_reasoning"]
-        d["moa"] = f"{d.get('modality')} targeting {d.get('target')}" if d.get("target") not in (None, "", "Unknown") else d.get("modality")
+
+        # 화학요법 별도 표기: 대표약물이 세포독성/레지멘이면 modality/target='Chemotherapy'
+        if _is_chemo(d.get("drug_name", "")):
+            if d.get("modality") != "Chemotherapy":
+                d.setdefault("modality_rule", d.get("modality"))
+                d["modality"], d["modality_src"] = "Chemotherapy", "chemo-rule"
+                n_mod += 1
+            if d.get("target") != "Chemotherapy":
+                d.setdefault("target_rule", d.get("target"))
+                d["target"], d["target_src"] = "Chemotherapy", "chemo-rule"
+                n_tgt += 1
+
+        d["moa"] = f"{d.get('modality')} targeting {d.get('target')}" if d.get("target") not in (None, "", "Unknown", "Chemotherapy") else d.get("modality")
 
     print(f"=== 전문검토 병합 ===\n  cohort {n_cohort} · line {n_line} · 약물 {n_drug} · modality {n_mod} · target {n_tgt} (캐시 {len(cache)})")
     if write:

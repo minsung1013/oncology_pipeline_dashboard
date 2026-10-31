@@ -49,6 +49,7 @@ const MODALITY_COLORS = {
   'Cell Therapy':       'bg-fuchsia-100 text-fuchsia-700',
   'Oncolytic Virus':    'bg-amber-100 text-amber-700',
   'Radiopharmaceutical':'bg-red-100 text-red-700',
+  'Chemotherapy':       'bg-stone-200 text-stone-600',
   'Unknown':            'bg-slate-100 text-slate-400',
 }
 

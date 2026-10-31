@@ -49,7 +49,8 @@ TRIAL_CACHE = "data/cache/llm_trial_cache.json"        # 전문검토: 시험약
 MODALITIES = [
     "ADC", "Bispecific Antibody", "CAR-T", "Monoclonal Antibody",
     "Fusion Protein", "Recombinant Protein", "Small Molecule",
-    "mRNA", "Peptide", "Vaccine", "Cell Therapy", "Oncolytic Virus", "Radiopharmaceutical", "Unknown",
+    "mRNA", "Peptide", "Vaccine", "Cell Therapy", "Oncolytic Virus", "Radiopharmaceutical",
+    "Chemotherapy", "Unknown",
 ]
 _MOD_LOOKUP = {m.lower(): m for m in MODALITIES}
 
@@ -652,7 +653,9 @@ SYSTEM_TRIAL = (
     'e.g. "Sorafenib (Nexavar, BAY43-9006) + mFOLFOX6" -> "Sorafenib")>, '
     '"modality": <EXACTLY one of: ADC, Bispecific Antibody, CAR-T, Monoclonal Antibody, Fusion Protein, '
     "Recombinant Protein, Small Molecule, mRNA, Peptide, Vaccine, Cell Therapy, Oncolytic Virus, "
-    "Radiopharmaceutical, Unknown>, "
+    "Radiopharmaceutical, Chemotherapy, Unknown. Use 'Chemotherapy' for cytotoxic chemo agents/regimens "
+    "(5-FU/capecitabine, platinum, taxane, irinotecan, oxaliplatin, gemcitabine, FOLFOX/FOLFIRI/CAPOX, "
+    "anthracycline) and set target 'Chemotherapy'>, "
     '"target": <the SINGLE most relevant molecular target the investigational drug acts on AS THE THERAPEUTIC '
     "RATIONALE IN THIS TRIAL, as a gene/protein symbol (e.g. BRAF, VEGFR2, HER2, EGFR, PD-1). For "
     "multi-kinase/multi-target drugs, choose the target most relevant to THIS indication and eligibility "
