@@ -643,10 +643,22 @@ _LINES = {"1L", "2L", "3L+", "Adjuvant", "Neoadjuvant", "Maintenance", "NR"}
 _STAGES = {"metastatic", "locally advanced", "resectable", "early", "recurrent", "unknown"}
 
 SYSTEM_TRIAL = (
-    "You are an oncology clinical trial analyst. Extract a STRUCTURED, analysis-ready description of the "
-    "enrolled patient population (for later clustering) plus the investigational drug. Output STRICT JSON only:\n"
+    "You are an oncology clinical trial analyst. The THREE MOST IMPORTANT outputs are the investigational "
+    "drug, its modality, and its molecular target IN THIS TRIAL'S CONTEXT. Also extract a structured "
+    "patient-population description. Output STRICT JSON only:\n"
     '{"investigational_drug": <the SINGLE primary novel/experimental agent under investigation by the '
-    "sponsor — NOT the active comparator, NOT a standard-of-care chemo backbone, NOT placebo>, "
+    "sponsor — NOT the active comparator, NOT a standard-of-care chemo backbone, NOT placebo. "
+    "Give the CLEAN generic drug name only (strip brand/code/dose/combination text, "
+    'e.g. "Sorafenib (Nexavar, BAY43-9006) + mFOLFOX6" -> "Sorafenib")>, '
+    '"modality": <EXACTLY one of: ADC, Bispecific Antibody, CAR-T, Monoclonal Antibody, Fusion Protein, '
+    "Recombinant Protein, Small Molecule, mRNA, Peptide, Vaccine, Cell Therapy, Oncolytic Virus, "
+    "Radiopharmaceutical, Unknown>, "
+    '"target": <the SINGLE most relevant molecular target the investigational drug acts on AS THE THERAPEUTIC '
+    "RATIONALE IN THIS TRIAL, as a gene/protein symbol (e.g. BRAF, VEGFR2, HER2, EGFR, PD-1). For "
+    "multi-kinase/multi-target drugs, choose the target most relevant to THIS indication and eligibility "
+    "(e.g. sorafenib in BRAF-mutant-selected disease -> BRAF; in unselected angiogenesis-rationale disease "
+    '-> VEGFR2). "Unknown" if none>, '
+    '"target_reasoning": <one short clause justifying the target choice for this trial>, '
     '"tumor_type": <primary tumor type, lowercase, e.g. "colorectal","non-small cell lung","breast"; '
     'or "various" for all-comers solid-tumor baskets>, '
     '"histology": <e.g. "adenocarcinoma","squamous cell carcinoma"; or null if unspecified>, '
@@ -701,6 +713,9 @@ def classify_trial(d: dict) -> dict:
     hist = data.get("histology")
     return {
         "investigational_drug": (data.get("investigational_drug") or "").strip(),
+        "modality": normalize_modality(data.get("modality")),
+        "target": (data.get("target") or "Unknown").strip() or "Unknown",
+        "target_reasoning": (data.get("target_reasoning") or "").strip(),
         "tumor_type": (data.get("tumor_type") or "").strip().lower(),
         "histology": (hist.strip() if isinstance(hist, str) and hist.strip() else None),
         "stage": stage if stage in _STAGES else "unknown",
@@ -732,7 +747,8 @@ def run_trials(limit: int | None, category: str | None = None) -> None:
     todo = []
     for d in drugs:
         k = _trial_key(d)
-        if not k or k in cache:
+        # 'target' 없는 옛 캐시(스키마 이전)는 modality/target 보강을 위해 재처리
+        if not k or (k in cache and "target" in cache[k]):
             continue
         if cat:
             cats = [c.lower() for c in (d.get("cancer_categories") or [d.get("cancer_category")]) if c]

@@ -291,7 +291,7 @@ def merge_trial(write: bool) -> None:
     drugs = data["drugs"]
     cache = json.load(open(TRIAL_CACHE, encoding="utf-8"))
 
-    n_cohort = n_line = n_drug = 0
+    n_cohort = n_line = n_drug = n_mod = n_tgt = 0
     for d in drugs:
         ncts = d.get("nct_ids") or []
         res = cache.get(ncts[0]) if ncts else None
@@ -317,20 +317,36 @@ def merge_trial(write: bool) -> None:
             d["line_of_therapy"], d["line_src"] = res["line_of_therapy"], "llm"
             n_line += 1
 
-        # 대표약물 교정 — 병용/다arm 시험만
-        is_multi = d.get("is_combination") or len(d.get("arms") or []) > 1
+        # ── 최우선: 핵심약물 / modality / target (맥락 기반 LLM) ──
+        # 대표약물: LLM 클린 생성명을 신뢰(conf>=0.8). 원본은 drug_name_rule에 보존.
         llm_drug = (res.get("investigational_drug") or "").strip()
-        if is_multi and llm_drug and conf >= TRIAL_DRUG_CONF:
-            alld = d.get("all_drugs") or []
-            match = next((x for x in alld if _norm_name(x) == _norm_name(llm_drug)), None)
-            if match and _norm_name(match) != _norm_name(d.get("drug_name", "")):
-                d.setdefault("drug_name_rule", d.get("drug_name"))
-                d["drug_name"], d["drug_name_src"] = match, "llm"
-                d["combo_drugs"] = [x for x in alld if _norm_name(x) != _norm_name(match)]
-                d["all_drugs"] = [match] + d["combo_drugs"]
-                n_drug += 1
+        if llm_drug and conf >= TRIAL_DRUG_CONF and _norm_name(llm_drug) != _norm_name(d.get("drug_name", "")):
+            d.setdefault("drug_name_rule", d.get("drug_name"))
+            d["drug_name"], d["drug_name_src"] = llm_drug, "trial"
+            n_drug += 1
 
-    print(f"=== 전문검토 병합 ===\n  cohort {n_cohort} · line {n_line} · 약물교정 {n_drug} (캐시 {len(cache)})")
+        # modality / target: 맥락 기반 값 채움(Unknown conf>=0.6) 또는 교정(상이 conf>=0.8)
+        def _apply(field, new):
+            if not new or new == "Unknown":
+                return 0
+            cur = d.get(field)
+            blank = cur in (None, "", "Unknown")
+            if blank and conf >= TRIAL_FILL_CONF:
+                d.setdefault(f"{field}_rule", cur)
+                d[field], d[f"{field}_src"] = new, "trial"
+                return 1
+            if not blank and _norm_name(cur) != _norm_name(new) and conf >= TRIAL_OVERRIDE_CONF:
+                d.setdefault(f"{field}_rule", cur)
+                d[field], d[f"{field}_src"] = new, "trial"
+                return 1
+            return 0
+        n_mod += _apply("modality", res.get("modality"))
+        n_tgt += _apply("target", res.get("target"))
+        if res.get("target_reasoning"):
+            d["target_note"] = res["target_reasoning"]
+        d["moa"] = f"{d.get('modality')} targeting {d.get('target')}" if d.get("target") not in (None, "", "Unknown") else d.get("modality")
+
+    print(f"=== 전문검토 병합 ===\n  cohort {n_cohort} · line {n_line} · 약물 {n_drug} · modality {n_mod} · target {n_tgt} (캐시 {len(cache)})")
     if write:
         json.dump(data, open(PIPELINE, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
         print(f"저장 완료 -> {PIPELINE}")
