@@ -123,6 +123,29 @@ function TitleCell({ d, nctIndex }) {
   )
 }
 
+// 규칙기반 코호트 세분화 칩 (NR/빈값 제외). MSI/RAS/BRAF/HER2/NTRK/side/stage/liver.
+function CohortChips({ cr }) {
+  const chips = []
+  const push = (label, cls) => chips.push({ label, cls })
+  if (cr.msi && cr.msi !== 'NR') push(cr.msi, cr.msi === 'MSI-H' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600')
+  if (cr.ras && cr.ras !== 'NR') push(`RAS ${cr.ras}`, cr.ras === 'mutant' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700')
+  if (cr.braf && cr.braf !== 'NR') push(`BRAF ${cr.braf}`, cr.braf === 'mutant' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700')
+  if (cr.her2 && cr.her2 !== 'NR') push(`HER2${cr.her2}`, 'bg-sky-100 text-sky-700')
+  if (cr.ntrk && cr.ntrk !== 'NR') push(`NTRK${cr.ntrk}`, 'bg-amber-100 text-amber-700')
+  if (cr.sidedness && cr.sidedness !== 'NR') push(cr.sidedness, 'bg-slate-100 text-slate-600')
+  if (cr.stage && cr.stage !== 'NR') push(`stage ${cr.stage}`, 'bg-slate-100 text-slate-600')
+  if (cr.liver_met === 'yes') push('liver mets', 'bg-slate-100 text-slate-600')
+  if (!chips.length && !cr.basket) return null
+  return (
+    <div className="flex flex-wrap gap-0.5 mt-0.5">
+      {chips.map((c) => (
+        <span key={c.label} className={`text-[9px] font-semibold px-1 rounded ${c.cls}`}>{c.label}</span>
+      ))}
+      {cr.basket && <span className="text-[9px] font-semibold px-1 rounded bg-orange-100 text-orange-600" title="복수암종 바스켓 — 바이오마커가 타암종 기준일 수 있음">basket</span>}
+    </div>
+  )
+}
+
 // 레지멘 셀 (실험군/대조군 공용)
 function RegimenCell({ drugs, muted }) {
   const list = drugs ?? []
@@ -147,16 +170,24 @@ function makeColumns(nctIndex) {
     header: 'Cohort',
     enableSorting: false,
     cell: ({ getValue, row }) => {
+      const d = row.original
       const v = getValue()
-      if (!v) return <span className="text-slate-300">—</span>
-      const ai = row.original.cohort_src === 'llm'
+      const cr = d.cohort_rules
+      if (!v && !cr) return <span className="text-slate-300">—</span>
       return (
-        <span className="text-xs text-slate-600 break-words leading-tight block" title={v}>
-          {v}{ai && <AiTag ruleValue="" />}
-        </span>
+        <div className="min-w-0">
+          {/* 기존 LLM 코호트 요약 */}
+          {v && (
+            <span className="text-xs text-slate-600 break-words leading-tight block" title={v}>
+              {v}{d.cohort_src === 'llm' && <AiTag ruleValue="" />}
+            </span>
+          )}
+          {/* 규칙기반 세분화(선별기준) — NR 아닌 것만 칩으로 추가 표시 */}
+          {cr && <CohortChips cr={cr} />}
+        </div>
       )
     },
-    size: 180,
+    size: 200,
   }),
 
   col.accessor('line_of_therapy', {

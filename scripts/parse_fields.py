@@ -609,6 +609,106 @@ def classify_stop_reason(why_stopped: str, overall_status: str) -> str:
     return "Other"
 
 
+# ---------------------------------------------------------------------------
+# 규칙기반 코호트 세분화 (대장암) — eligibility 전문에서 선별기준 추출. LLM 불필요.
+# ---------------------------------------------------------------------------
+_COH_NEG = re.compile(r"(non[- ]?|not |without |un)$", re.IGNORECASE)
+_ROMAN2NUM = {"1": 1, "2": 2, "3": 3, "4": 4, "i": 1, "ii": 2, "iii": 3, "iv": 4}
+
+
+def _coh_roman(t: str) -> str:
+    for a, b in [("Ⅳ", "IV"), ("Ⅲ", "III"), ("Ⅱ", "II"), ("Ⅰ", "I"),
+                 ("ⅳ", "IV"), ("ⅲ", "III"), ("ⅱ", "II"), ("ⅰ", "I")]:
+        t = t.replace(a, b)
+    return t
+
+
+def _coh_hits(text: str, core: str) -> bool:
+    """core 매칭 중 부정어(non/not/without) 선행이 아닌 것이 있으면 True."""
+    for m in re.finditer(core, text, re.IGNORECASE):
+        if not _COH_NEG.search(text[max(0, m.start() - 6):m.start()]):
+            return True
+    return False
+
+
+def _coh_neg_hits(text: str, core: str) -> bool:
+    for m in re.finditer(core, text, re.IGNORECASE):
+        if _COH_NEG.search(text[max(0, m.start() - 6):m.start()]):
+            return True
+    return False
+
+
+def _coh_pick(pos, neg, inc, exc, pos_pat, neg_pat):
+    p, n = _coh_hits(inc, pos_pat), _coh_hits(inc, neg_pat)
+    if p and n:
+        return "NR"                       # 둘 다 적격 = 선별 아님(all-comers)
+    if p:
+        return pos
+    if n:
+        return neg
+    if _coh_hits(exc, pos_pat):
+        return neg                        # pos를 제외 → neg 코호트
+    if _coh_hits(exc, neg_pat):
+        return pos
+    return "NR"
+
+
+def extract_cohort_rules(title: str, summary: str, conditions: str, eligibility: str) -> dict:
+    """대장암 코호트 세분화(규칙). 환자 선별기준(enrollment) 기준, 미제한이면 NR."""
+    low = (eligibility or "").lower()
+    m = re.search(r"exclusion criteria", low)
+    inc, exc = (eligibility[:m.start()], eligibility[m.start():]) if m else (eligibility, "")
+    inc2 = _coh_roman(f"{title} {summary} {conditions} {inc}")
+    exc = _coh_roman(exc)
+    full = _coh_roman(f"{title} {summary} {conditions} {eligibility}")
+
+    msih = _coh_hits(inc2, r"msi-?h|msi[- ]high|microsatellite instability[- ]high|dmmr|mismatch repair[- ]?deficient")
+    mss = (_coh_hits(inc2, r"\bmss\b|microsatellite stable|pmmr|mismatch repair[- ]?proficient")
+           or _coh_neg_hits(inc2, r"mismatch repair[- ]?deficient|dmmr"))
+    msi = "NR" if (msih and mss) else ("MSI-H" if msih else ("MSS" if mss else "NR"))
+
+    ras = _coh_pick("wt", "mutant", inc2, exc,
+                    r"(k|n)?ras\s*(wild[- ]?type|wt)|wild[- ]?type\s*(k|n)?ras",
+                    r"(k|n)?ras\s*(mutat|mutant|mutated)|\bg12[cdvrs]?\b|\bg13d?\b|\bq61\b")
+    braf = _coh_pick("wt", "mutant", inc2, exc, r"braf\s*(wild[- ]?type|wt)",
+                     r"braf\s*(mutat|mutant|mutated|v600)|\bv600e?\b")
+    her2 = _coh_pick("+", "-", inc2, exc, r"her2\s*(positive|\+|amplif|overexpress|ihc\s*3)",
+                     r"her2\s*(negative|non[- ]amplif)")
+    ntrk = "+" if _coh_hits(inc2, r"ntrk|trk\s*fusion") else "NR"
+
+    if _coh_hits(full, r"left[- ]?sided|left[- ]?colon|sigmoid|descending colon|splenic flexure"):
+        side = "left"
+    elif _coh_hits(full, r"right[- ]?sided|right[- ]?colon|ascending colon|cecum|caecum|hepatic flexure"):
+        side = "right"
+    else:
+        side = "NR"
+    liver = "yes" if _coh_hits(full, r"liver metasta|hepatic metasta|liver[- ]limited|liver[- ]only|"
+                                     r"colorectal liver metasta|liver-?confined|resectable liver") else "NR"
+
+    adj = _coh_hits(full, r"adjuvant|neoadjuvant|resected|curative (surgery|operation|resection)|after surgery")
+    nums = []
+    for mm in re.finditer(r"stages?\s*([1-4]|iv|iii|ii|i)(?:\s*[-–~]+\s*(?:to\s*)?([1-4]|iv|iii|ii|i))?", full, re.IGNORECASE):
+        for g in mm.groups():
+            if g:
+                nums.append(_ROMAN2NUM[g.lower()])
+    metastatic = _coh_hits(full, r"stage\s*iv|\bm1\b|\bmetastatic\b|\bmetastases\b|\bmetastasis\b")
+    if metastatic and not adj:
+        stage = "4"
+    elif nums:
+        cand = [n for n in nums if not (adj and n == 4)] or nums
+        stage = str(max(cand))
+    elif metastatic:
+        stage = "4"
+    else:
+        stage = "NR"
+
+    basket = bool(re.search(r"non[- ]small cell lung|nsclc|breast cancer|melanoma|pancrea|gastric|ovarian|"
+                            r"solid tumou?rs?\b", f"{title} {conditions}", re.IGNORECASE)) \
+        and "colorectal" not in title.lower()
+    return {"sidedness": side, "stage": stage, "liver_met": liver, "msi": msi,
+            "ras": ras, "braf": braf, "her2": her2, "ntrk": ntrk, "basket": basket}
+
+
 def _safe_get(obj: dict, *keys, default=""):
     for key in keys:
         if not isinstance(obj, dict):
@@ -732,6 +832,9 @@ def extract_study_fields(study: dict) -> dict | None:
     )
     # 비종양/보조요법(CINV·호중구감소·근무력증 등) 식별 — 프론트에서 걸러내는 데 사용.
     is_oncology = is_oncology_indication(conditions, cancer_categories)
+    # 대장암 코호트 세분화(규칙기반, eligibility 전문) — MSI/RAS/BRAF/HER2/NTRK/side/stage/liver.
+    cohort_rules = (extract_cohort_rules(brief_title, brief_summary, " ".join(conditions), eligibility_text)
+                    if "Colorectal" in cancer_categories else None)
 
     partnership_status = "partnered" if collaborators else "solo"
     moa = f"{modality} targeting {target}" if target != "Unknown" else modality
@@ -762,6 +865,7 @@ def extract_study_fields(study: dict) -> dict | None:
         "condition_normalized": condition_normalized,
         "cancer_category": cancer_category,
         "cancer_categories": cancer_categories,
+        "cohort_rules": cohort_rules,
         "indication_needs_review": indication_needs_review,
         "is_oncology": is_oncology,
         "phase": phase,

@@ -143,7 +143,7 @@ DRUG_KEEP = [
     "investigational_drugs", "backbone_drugs", "exp_regimen", "control_regimen",
     "indication_needs_review",
     # LLM 전문 검토: 환자군(+구조화) + 치료라인 + 드럭 검증 출처
-    "cohort", "cohort_struct", "cohort_src", "line_of_therapy", "line_src",
+    "cohort", "cohort_struct", "cohort_src", "cohort_rules", "line_of_therapy", "line_src",
     "drug_name_src", "drug_name_rule", "target_note",
 ]
 

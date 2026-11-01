@@ -172,6 +172,15 @@ export function applyDrugFilters(drugs, f = {}) {
         d.brief_title, d.moa, d.overall_status, d.cohort, d.line_of_therapy, d.stop_reason, d.why_stopped,
         ...(d.conditions ?? []), ...(d.cancer_categories ?? []),
         ...(d.cohort_struct?.selection_biomarkers ?? []),
+        ...(d.cohort_rules ? [
+          d.cohort_rules.msi !== 'NR' && d.cohort_rules.msi,
+          d.cohort_rules.ras !== 'NR' && `RAS ${d.cohort_rules.ras}`,
+          d.cohort_rules.braf !== 'NR' && `BRAF ${d.cohort_rules.braf}`,
+          d.cohort_rules.her2 !== 'NR' && `HER2 ${d.cohort_rules.her2}`,
+          d.cohort_rules.ntrk !== 'NR' && 'NTRK',
+          d.cohort_rules.sidedness !== 'NR' && d.cohort_rules.sidedness,
+          d.cohort_rules.liver_met === 'yes' && 'liver metastases',
+        ].filter(Boolean) : []),
         ...(d.biomarker_list ?? []), ...(d.collaborators ?? []),
         ...(d.primary_outcomes ?? []), ...(d.nct_ids ?? []),
       ].filter(Boolean).join(' ').toLowerCase()
