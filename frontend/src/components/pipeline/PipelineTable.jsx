@@ -349,7 +349,21 @@ function makeColumns(nctIndex) {
 
   col.accessor('overall_status', {
     header: 'Status',
-    cell: ({ getValue }) => <StatusDot status={getValue()} />,
+    cell: ({ getValue, row }) => {
+      const d = row.original
+      return (
+        <div>
+          <StatusDot status={getValue()} />
+          {d.stop_reason && (
+            <div className="mt-0.5" title={d.why_stopped || d.stop_reason}>
+              <span className="text-[9px] font-semibold bg-red-50 text-red-600 px-1 rounded">
+                ■ {d.stop_reason}
+              </span>
+            </div>
+          )}
+        </div>
+      )
+    },
     size: 140,
   }),
 

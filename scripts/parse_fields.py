@@ -578,6 +578,37 @@ def resolve_indication(
 # ClinicalTrials.gov 응답 → 구조화 필드 추출
 # ---------------------------------------------------------------------------
 
+# 중단 사유(whyStopped 자유텍스트) → 범주. 조기중단 상태에서만 의미.
+_STOP_TERMINAL = {"TERMINATED", "SUSPENDED", "WITHDRAWN"}
+_STOP_REASON_RULES = [
+    ("Safety",             r"safet|toxic|adverse|\bae\b|\bsae\b|tolerab|death|died|risk[- ]benefit|side effect"),
+    ("Efficacy/Futility",  r"futil|efficac|lack of (response|benefit|activity)|no (response|benefit)|"
+                           r"did not meet|insufficient (response|benefit|activity)|interim analysis|"
+                           r"lack of clinical|not effective|poor response"),
+    ("Enrollment",         r"enroll|accru|recruit|low (accrual|recruitment)|slow (accrual|recruitment)|"
+                           r"insufficient (accrual|enrollment|recruitment|patient)|unable to (enroll|recruit)|"
+                           r"lack of (patient|subject|accrual)|competing (trial|enrollment)"),
+    ("Supply/Feasibility", r"supply|manufactur|feasib|logistic|covid|pandemic|drug (availab|shortage)|"
+                           r"formulation|device|study drug"),
+    ("Business/Strategic", r"business|sponsor|financ|fund|budget|portfolio|strateg|commercial|company|"
+                           r"\bbd\b|decision (by|of) (the )?sponsor|prioriti|merger|acqui|resource"),
+    ("Regulatory",         r"regulatory|\bfda\b|\bema\b|authorit|\bihub\b|clinical hold|hold placed|irb"),
+]
+_STOP_REASON_COMPILED = [(name, re.compile(pat, re.IGNORECASE)) for name, pat in _STOP_REASON_RULES]
+
+
+def classify_stop_reason(why_stopped: str, overall_status: str) -> str:
+    """조기중단 사유 범주. 중단상태가 아니면 '' , whyStopped가 비면 'Not reported'."""
+    if (overall_status or "").upper() not in _STOP_TERMINAL:
+        return ""
+    if not why_stopped:
+        return "Not reported"
+    for name, rx in _STOP_REASON_COMPILED:
+        if rx.search(why_stopped):
+            return name
+    return "Other"
+
+
 def _safe_get(obj: dict, *keys, default=""):
     for key in keys:
         if not isinstance(obj, dict):
@@ -666,6 +697,8 @@ def extract_study_fields(study: dict) -> dict | None:
     condition = conditions[0] if conditions else ""
 
     overall_status = status_mod.get("overallStatus", "")
+    why_stopped = (status_mod.get("whyStopped", "") or "").strip()
+    stop_reason = classify_stop_reason(why_stopped, overall_status)
     phase_list = proto.get("designModule", {}).get("phases", [])
     phase = "/".join(phase_list) if phase_list else "UNKNOWN"
 
@@ -734,6 +767,8 @@ def extract_study_fields(study: dict) -> dict | None:
         "phase": phase,
         "phases": phase_list,
         "overall_status": overall_status,
+        "why_stopped": why_stopped,
+        "stop_reason": stop_reason,
         "primary_completion_date": primary_completion,
         "start_date": start_date,
         "last_update_date": last_update,

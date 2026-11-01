@@ -134,7 +134,7 @@ AUTHOR_KEEP = ["name", "affiliation", "affiliations", "country", "role"]
 DRUG_KEEP = [
     "drug_name", "combo_drugs", "company", "company_normalized", "collaborators", "countries",
     "partnership_status", "condition", "conditions", "cancer_category", "cancer_categories", "is_oncology", "phase", "phases",
-    "overall_status", "primary_completion_date", "start_date",
+    "overall_status", "why_stopped", "stop_reason", "primary_completion_date", "start_date",
     "modality", "modality_src", "modality_rule", "target", "target_src", "target_rule",
     "moa", "biomarker_mentioned", "biomarker_list", "biomarker_src", "nct_ids", "clinicaltrials_url",
     "official_title", "brief_title", "primary_outcomes",

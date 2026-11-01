@@ -19,6 +19,7 @@ const AXES = [
   { key: 'lines', label: 'Line' },
   { key: 'statuses', label: 'Status', render: statusLabel,
     sort: (a, b) => STATUS_ORDER.indexOf(a) - STATUS_ORDER.indexOf(b) },
+  { key: 'stopReasons', label: 'Stop reason' },
   { key: 'targets', label: 'Target', searchable: true },
   { key: 'biomarkers', label: 'Biomarker', searchable: true },
 ]

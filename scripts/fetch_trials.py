@@ -24,6 +24,7 @@ FIELDS = [
     "InterventionType",
     "Phase",
     "OverallStatus",
+    "WhyStopped",
     "LeadSponsorName",
     "CollaboratorName",
     "LocationCountry",

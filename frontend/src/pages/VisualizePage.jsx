@@ -41,6 +41,7 @@ const CHIP_META = {
   biomarkers: { label: 'Biomarker', render: (v) => v },
   statuses: { label: 'Status', render: statusLabel },
   lines: { label: 'Line', render: (v) => v },
+  stopReasons: { label: 'Stop reason', render: (v) => v },
 }
 // include/exclude 양쪽 축 모두 칩 라벨 해석 (알 수 없는 키는 안전 폴백)
 function chipMeta(key) {

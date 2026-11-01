@@ -18,7 +18,7 @@ export const drugCancers = (d) =>
 export const DRUG_FILTER_DEFAULT = {
   // 다중선택 축
   companies: [], drugs: [], cancers: [], phases: [], modalities: [],
-  targets: [], biomarkers: [], statuses: [], lines: [], countries: [],
+  targets: [], biomarkers: [], statuses: [], lines: [], countries: [], stopReasons: [],
   // 연도 범위
   startYear: { from: 'all', to: 'all' },
   completionYear: { from: 'all', to: 'all' },
@@ -67,6 +67,7 @@ export function getDrugFilterOptions(drugs) {
     .sort((a, b) => LINE_ORDER.indexOf(a) - LINE_ORDER.indexOf(b))
 
   const countries = byFrequency(drugs, (d) => d.countries ?? [])
+  const stopReasons = byFrequency(drugs, (d) => (d.stop_reason ? [d.stop_reason] : []))
 
   const startYears = [...new Set(
     drugs.map((d) => parseInt(d.start_date?.slice(0, 4))).filter((y) => y > 2000 && y < 2040),
@@ -76,7 +77,7 @@ export function getDrugFilterOptions(drugs) {
   )].sort((a, b) => a - b)
 
   // 키 = 필터 축 키와 동일 (FilterBar config가 options[key]로 참조)
-  return { companies, drugs: drugNames, cancers, phases, modalities, targets, biomarkers, statuses, lines, countries, startYears, completionYears }
+  return { companies, drugs: drugNames, cancers, phases, modalities, targets, biomarkers, statuses, lines, countries, stopReasons, startYears, completionYears }
 }
 
 // 표준 필터 적용. 파이프라인 전용 필드는 기본값이면 무해(Visualize 호환).
@@ -91,6 +92,7 @@ export function applyDrugFilters(drugs, f = {}) {
   const statuses = new Set(f.statuses ?? [])
   const lines = new Set(f.lines ?? [])
   const countries = new Set(f.countries ?? [])
+  const stopReasons = new Set(f.stopReasons ?? [])
   // exclude(제외) 세트 — 어느 하나라도 매치되면 행 제거
   const ex = {
     companies: new Set(f.companiesExcl ?? []),
@@ -103,6 +105,7 @@ export function applyDrugFilters(drugs, f = {}) {
     statuses: new Set(f.statusesExcl ?? []),
     lines: new Set(f.linesExcl ?? []),
     phases: new Set(f.phasesExcl ?? []),
+    stopReasons: new Set(f.stopReasonsExcl ?? []),
   }
   const sFrom = yr(f.startYear?.from), sTo = yr(f.startYear?.to)
   const cFrom = yr(f.completionYear?.from), cTo = yr(f.completionYear?.to)
@@ -122,6 +125,7 @@ export function applyDrugFilters(drugs, f = {}) {
     if (statuses.size > 0 && !statuses.has(d.overall_status)) return false
     if (lines.size > 0 && !lines.has(d.line_of_therapy)) return false
     if (countries.size > 0 && !(d.countries ?? []).some((c) => countries.has(c))) return false
+    if (stopReasons.size > 0 && !stopReasons.has(d.stop_reason)) return false
     if (phases.size > 0) {
       const dp = d.phases ?? []
       const isUn = dp.length === 0 || dp.every((p) => p === 'UNKNOWN')
@@ -139,6 +143,7 @@ export function applyDrugFilters(drugs, f = {}) {
     if (ex.statuses.size && ex.statuses.has(d.overall_status)) return false
     if (ex.lines.size && ex.lines.has(d.line_of_therapy)) return false
     if (ex.countries.size && (d.countries ?? []).some((c) => ex.countries.has(c))) return false
+    if (ex.stopReasons.size && ex.stopReasons.has(d.stop_reason)) return false
     if (ex.phases.size && (d.phases ?? []).some((p) => ex.phases.has(p))) return false
 
     if (partnership !== 'all' && d.partnership_status !== partnership) return false
@@ -164,7 +169,7 @@ export function applyDrugFilters(drugs, f = {}) {
       const blob = [
         d.drug_name, ...(d.combo_drugs ?? []), d.company, d.company_normalized,
         d.target, d.modality, d.condition, d.cancer_category, d.official_title,
-        d.brief_title, d.moa, d.overall_status, d.cohort, d.line_of_therapy,
+        d.brief_title, d.moa, d.overall_status, d.cohort, d.line_of_therapy, d.stop_reason, d.why_stopped,
         ...(d.conditions ?? []), ...(d.cancer_categories ?? []),
         ...(d.cohort_struct?.selection_biomarkers ?? []),
         ...(d.biomarker_list ?? []), ...(d.collaborators ?? []),
